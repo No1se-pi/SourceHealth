@@ -1,15 +1,11 @@
-import subprocess
+"""Compatibility entry point for the original Git collection prototype."""
 
-def save_log(path: str) -> None:
+from pathlib import Path
 
-    subprocess.run(
-        ["git", "log"],
-        cwd=path,
-        stdout=f
-    )
+from sourcehealth.git import Commit, GitCollector
 
-    # Открываем файл для записи ('w' - перезапись, 'a' - добавление в конец)
-    with open("temp/git_log.txt", "w", encoding="utf-8") as f:
-        subprocess.run(["git", "log"], stdout=f)
 
-save_log("D:\\Программирование\\VPNyasha")
+def collect_commits(path: str | Path) -> list[Commit]:
+    """Collect structured commits directly in memory."""
+
+    return GitCollector().collect(path)

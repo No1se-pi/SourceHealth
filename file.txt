@@ -1,5 +1,0 @@
-commit 57614be596c93744f08954ccb1420d548e1f94f7
-Author: Yaroslav Boykov <skillday450@gmail.com>
-Date:   Mon Aug 17 17:59:23 2026 +0300
-
-    Initial commit
