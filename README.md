@@ -1,46 +1,259 @@
 # SourceHealth
 
-SourceHealth collects Git history once and passes structured commits to
-independent analyzers:
+**SourceHealth** — проект для анализа состояния и активности программных репозиториев.
+
+Сейчас в ветке `Dev-No1se` реализована базовая подсистема работы с Git: она один раз получает историю коммитов, преобразует её в структурированные объекты и передаёт независимому анализатору временной активности.
+
+> Текущая реализация — фундамент проекта. Она не пытается оценивать «качество репозитория» только по Git-активности и не смешивает сбор данных с итоговым рейтингом.
+
+## Что уже умеет проект
+
+- получать историю локального Git-репозитория без промежуточных файлов;
+- сохранять SHA, автора, email, дату и полное сообщение каждого коммита;
+- корректно работать с многострочными commit message;
+- учитывать часовые пояса и нормализовать время для сравнения;
+- считать активность за 7, 30, 90, 180 и 365 дней;
+- считать активные дни и месяцы;
+- вычислять интервалы между коммитами;
+- считать среднее и медианное расстояние между коммитами;
+- определять самый длинный период без коммитов;
+- сериализовать результаты в обычный словарь для JSON;
+- обрабатывать пустые Git-репозитории;
+- проверять основную логику автоматическими тестами.
+
+## Архитектура
 
 ```text
-Git repository -> GitCollector -> list[Commit] -> GitActivityAnalyzer
+Локальный Git-репозиторий
+          │
+          ▼
+     GitCollector
+          │
+          │ list[Commit]
+          ▼
+ GitActivityAnalyzer
+          │
+          ▼
+ GitActivityMetrics
+          │
+          ▼
+      dict / JSON
 ```
 
-`GitCollector` runs Git with `cwd=repo_path` and a NUL-delimited custom
-`git log --format`. It returns `Commit` dataclasses containing the hash, author
-name and email, timezone-aware author datetime, and full commit message. It
-does not calculate metrics or create an intermediate log file.
+Ключевой принцип: **сбор данных и их анализ разделены**.
 
-`GitActivityAnalyzer` never starts Git. It sorts collector output by absolute
-time and returns `GitActivityMetrics`. Dates use ISO 8601 in UTC; all duration
-and gap fields use days. Both `Commit` and `GitActivityMetrics` provide
-`to_dict()` for JSON serialization.
+`GitCollector` знает, как разговаривать с Git, но не считает метрики.  
+`GitActivityAnalyzer` считает метрики, но не запускает Git и не читает файловую систему.
 
-## Example
+Подробнее: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-Run from the project root and replace the path with any local repository:
+## Требования
+
+- Python **3.11+**;
+- установленный Git, доступный через команду `git`;
+- локальный репозиторий, который нужно проанализировать.
+
+Сторонние Python-зависимости для текущей реализации не требуются.
+
+## Быстрый старт
+
+Запускайте пример из корня проекта.
 
 ```python
 import json
 
 from sourcehealth.git import GitActivityAnalyzer, GitCollector
 
-commits = GitCollector().collect(r"D:\path\to\repository")
-metrics = GitActivityAnalyzer().analyze(commits)
+collector = GitCollector()
+analyzer = GitActivityAnalyzer()
 
-print(json.dumps(metrics.to_dict(), ensure_ascii=False, indent=2))
+commits = collector.collect(r"D:\path\to\repository")
+metrics = analyzer.analyze(commits)
+
+print(
+    json.dumps(
+        metrics.to_dict(),
+        ensure_ascii=False,
+        indent=2,
+    )
+)
 ```
 
-The analyzer reports commit totals, first and last dates, repository age,
-time since the last commit, min/max/mean/median gaps, rolling commit counts,
-active days and months, per-active-day and per-month averages, and the longest
-gap without commits.
+На Linux/macOS путь может выглядеть так:
 
-## Tests
+```python
+commits = collector.collect("/home/user/project")
+```
 
-The suite uses only the Python standard library plus a locally installed Git:
+## Как работает сбор Git-истории
+
+Коллектор выполняет `git log` внутри анализируемого репозитория.
+
+Используется специальный формат:
+
+```text
+%H%x00%an%x00%ae%x00%aI%x00%B
+```
+
+Поля разделяются байтом **NUL (`0x00`)**, а не переносами строк. Это важно, потому что commit message может быть многострочным.
+
+Собираются:
+
+| Поле | Что хранится |
+|---|---|
+| `%H` | полный SHA коммита |
+| `%an` | имя автора |
+| `%ae` | email автора |
+| `%aI` | дата автора в строгом ISO 8601 с часовым поясом |
+| `%B` | полное сообщение коммита |
+
+Результат преобразуется в объекты `Commit`.
+
+## Модель Commit
+
+```python
+Commit(
+    hash="...",
+    author_name="...",
+    author_email="...",
+    datetime=...,
+    message="...",
+)
+```
+
+Дата обязана содержать информацию о часовом поясе. Это защищает анализатор от неоднозначного сравнения времени.
+
+Для передачи в JSON:
+
+```python
+commit.to_dict()
+```
+
+## Метрики активности
+
+`GitActivityAnalyzer` принимает уже собранные `Commit` и возвращает `GitActivityMetrics`.
+
+Основные группы метрик:
+
+- общее количество коммитов;
+- первый и последний коммит;
+- длительность истории репозитория;
+- время с последнего коммита;
+- минимальный, максимальный, средний и медианный интервал между коммитами;
+- количество коммитов за последние 7/30/90/180/365 дней;
+- количество уникальных активных дней;
+- активные дни за 30/90/365 дней;
+- активные месяцы за последние 12 календарных месяцев;
+- среднее количество коммитов на активный день;
+- среднее количество коммитов на календарный месяц;
+- самый длинный период неактивности.
+
+Полное описание и нюансы расчёта: [docs/METRICS.md](docs/METRICS.md).
+
+## Важное про время
+
+Входные даты могут иметь разные часовые пояса.
+
+Перед сравнением анализатор приводит их к UTC. Например:
+
+```text
+15:00 UTC+3 == 12:00 UTC
+08:00 UTC-5 == 13:00 UTC
+```
+
+Поэтому порядок коммитов определяется по реальному моменту времени, а не по отображаемым часам.
+
+## Пустой репозиторий
+
+`git init` без единого коммита считается корректным сценарием:
+
+```python
+commits = collector.collect(path)
+# []
+```
+
+Анализатор вернёт нулевые счётчики и `None` для метрик, которые невозможно вычислить без коммитов.
+
+## Ошибки
+
+Для проблем со сбором используется:
+
+```python
+GitCollectionError
+```
+
+Она может возникнуть, если:
+
+- путь не существует;
+- путь не является каталогом;
+- каталог не является Git-репозиторием;
+- Git не установлен или не найден;
+- `git log` завершился с ошибкой;
+- Git вернул данные неожиданного формата;
+- дата коммита не распарсилась.
+
+## Структура проекта
+
+```text
+SourceHealth/
+├── sourcehealth/
+│   ├── __init__.py
+│   └── git/
+│       ├── __init__.py
+│       ├── activity.py      # расчёт временных метрик
+│       ├── collector.py     # запуск Git и сбор истории
+│       └── models.py        # модель Commit
+├── tests/
+│   ├── test_git_activity.py
+│   └── test_git_collector.py
+├── test/
+│   └── GitActivity/         # совместимость с ранним прототипом
+├── docs/
+│   ├── ARCHITECTURE.md
+│   └── METRICS.md
+├── LICENSE
+└── README.md
+```
+
+## Тесты
+
+Из корня проекта:
 
 ```powershell
 python -m unittest discover -s tests -v
 ```
+
+Тесты проверяют:
+
+- пустой репозиторий;
+- реальный временный Git-репозиторий;
+- многострочные commit message;
+- сохранение часового пояса;
+- сортировку коммитов перед анализом;
+- один и несколько коммитов;
+- большие интервалы между коммитами;
+- корректное сравнение разных UTC offset;
+- запрет `datetime` без часового пояса;
+- JSON-сериализацию результата.
+
+## Ограничения текущей версии
+
+На этом этапе SourceHealth анализирует только временную активность Git.
+
+Пока здесь нет:
+
+- итогового рейтинга здоровья репозитория;
+- нормализации метрик в общий балл;
+- анализа README и лицензии;
+- SAST;
+- поиска секретов;
+- оценки дублирования кода;
+- анализа линтеров и тестового покрытия;
+- анализа GitHub Issues / Pull Requests;
+- сетевого клонирования репозиториев.
+
+Эти возможности могут строиться поверх текущей архитектуры как отдельные коллекторы и анализаторы.
+
+## Лицензия
+
+Проект распространяется по лицензии MIT. См. [LICENSE](LICENSE).

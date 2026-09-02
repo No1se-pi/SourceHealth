@@ -1,1 +1,1 @@
-"""SourceHealth test suite."""
+"""Набор автоматических тестов проекта SourceHealth."""

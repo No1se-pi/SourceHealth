@@ -1,3 +1,5 @@
+"""Интеграционные тесты ``GitCollector`` на временных Git-репозиториях."""
+
 from __future__ import annotations
 
 import os
@@ -10,26 +12,40 @@ from sourcehealth.git import GitCollectionError, GitCollector
 
 
 class GitCollectorTests(unittest.TestCase):
+    """Проверка запуска Git, парсинга истории и обработки ошибок."""
+
     def setUp(self) -> None:
         self.collector = GitCollector()
 
     def test_empty_repository_returns_empty_list(self) -> None:
+        """Инициализированный репозиторий без HEAD не является ошибкой."""
+
         with tempfile.TemporaryDirectory() as directory:
             self._git(Path(directory), "init")
-
             self.assertEqual(self.collector.collect(directory), [])
 
     def test_collects_structured_commit_with_multiline_message(self) -> None:
+        """Коллектор должен сохранять автора, timezone и многострочный message."""
+
         with tempfile.TemporaryDirectory() as directory:
             repository = Path(directory)
+
+            # Создаём полностью самостоятельный временный репозиторий.
             self._git(repository, "init")
             self._git(repository, "config", "user.name", "Collector Test")
             self._git(repository, "config", "user.email", "collector@example.com")
+
+            # Добавляем файл, чтобы Git позволил создать настоящий коммит.
             (repository / "sample.txt").write_text("content", encoding="utf-8")
             self._git(repository, "add", "sample.txt")
+
+            # Фиксируем дату через переменные окружения Git, чтобы тест
+            # не зависел от времени запуска и локального часового пояса.
             environment = os.environ.copy()
             environment["GIT_AUTHOR_DATE"] = "2026-08-18T10:30:00+03:00"
             environment["GIT_COMMITTER_DATE"] = "2026-08-18T10:30:00+03:00"
+
+            # Два -m создают заголовок и отдельное тело сообщения.
             self._git(
                 repository,
                 "commit",
@@ -52,8 +68,11 @@ class GitCollectorTests(unittest.TestCase):
             self.assertEqual(commit.to_dict()["datetime"], "2026-08-18T10:30:00+03:00")
 
     def test_invalid_path_and_non_repository_are_reported(self) -> None:
+        """Некорректный путь и обычный каталог должны приводить к ошибке сбора."""
+
         with tempfile.TemporaryDirectory() as directory:
             missing = Path(directory) / "missing"
+
             with self.assertRaises(GitCollectionError):
                 self.collector.collect(missing)
 
@@ -66,10 +85,14 @@ class GitCollectorTests(unittest.TestCase):
         *arguments: str,
         environment: dict[str, str] | None = None,
     ) -> None:
+        """Выполнить Git-команду для подготовки тестового репозитория."""
+
         subprocess.run(
             ["git", *arguments],
             cwd=repository,
             env=environment,
+            # Здесь check=True уместен: ошибка подготовки тестовых данных
+            # должна немедленно уронить тест, а не маскироваться.
             check=True,
             capture_output=True,
             text=True,
