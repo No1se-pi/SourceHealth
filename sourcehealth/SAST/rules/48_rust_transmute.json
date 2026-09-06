@@ -1,0 +1,21 @@
+{
+  "id": "RUST-TRANSMUTE",
+  "engine": "code_regex",
+  "language": "rust",
+  "pattern": "\\b(?:mem\\s{0,128}::\\s{0,128})?transmute(?:_copy)?\\s{0,128}(?:::\\s{0,128}<[^;\\n]{1,128}>\\s{0,128})?\\(",
+  "keywords": [
+    "transmute"
+  ],
+  "suffixes": [
+    ".rs"
+  ],
+  "message": "Низкоуровневое преобразование типов требует проверки представления и времени жизни.",
+  "recommendation": "По возможности используйте безопасные преобразования; проверьте размер, валидность значения и lifetime. Сам вызов не доказывает уязвимость.",
+  "cwe": "CWE-843",
+  "category": "memory",
+  "severity": "low",
+  "confidence": "low",
+  "references": [
+    "https://doc.rust-lang.org/std/mem/fn.transmute.html"
+  ]
+}

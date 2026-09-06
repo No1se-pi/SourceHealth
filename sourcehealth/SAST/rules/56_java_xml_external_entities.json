@@ -1,0 +1,22 @@
+{
+  "id": "JAVA-XML-EXTERNAL-ENTITIES",
+  "engine": "code_regex",
+  "language": "java",
+  "pattern": "\\bsetFeature\\s{0,128}\\(\\s{0,128}\"http://(?:xml.org/sax/features/(?:external-general-entities|external-parameter-entities)|apache.org/xml/features/nonvalidating/load-external-dtd)\"\\s{0,128},\\s{0,128}true\\b",
+  "keywords": [
+    "setfeature"
+  ],
+  "suffixes": [
+    ".java"
+  ],
+  "message": "XML-парсеру явно разрешены внешние сущности или загрузка внешнего DTD.",
+  "recommendation": "Отключите внешние сущности/DTD и ограничьте ACCESS_EXTERNAL_DTD/SCHEMA для недоверенного XML.",
+  "cwe": "CWE-611",
+  "category": "configuration",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://docs.oracle.com/en/java/javase/26/security/java-api-xml-processing-jaxp-security-guide.html"
+  ],
+  "prefilter": "true"
+}

@@ -1,0 +1,21 @@
+{
+  "id": "JAVA-WEAK-CIPHER",
+  "engine": "code_regex",
+  "language": "java",
+  "pattern": "\\bCipher\\s{0,128}\\.\\s{0,128}getInstance\\s{0,128}\\(\\s{0,128}\"(?i:DES|DESede|RC2|RC4|ARCFOUR)(?:/[^\"\\n]{1,64})?\"",
+  "keywords": [
+    "cipher"
+  ],
+  "suffixes": [
+    ".java"
+  ],
+  "message": "Выбран устаревший шифр.",
+  "recommendation": "Перейдите на современное аутентифицированное шифрование, например AES-GCM.",
+  "cwe": "CWE-327",
+  "category": "crypto",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://cwe.mitre.org/data/definitions/327.html"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "id": "RUST-WEAK-MD5",
+  "engine": "code_regex",
+  "language": "rust",
+  "pattern": "\\b(?:md5\\s{0,128}::\\s{0,128}(?:compute|Md5\\s{0,128}::\\s{0,128}(?:new|digest))|Md5\\s{0,128}::\\s{0,128}(?:new|digest))\\s{0,128}\\(",
+  "keywords": [
+    "md5"
+  ],
+  "suffixes": [
+    ".rs"
+  ],
+  "message": "Используется MD5, неустойчивый к коллизиям.",
+  "recommendation": "Для криптографической целостности используйте SHA-256/512; контрольные суммы требуют отдельной оценки.",
+  "cwe": "CWE-328",
+  "category": "crypto",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://docs.rs/md-5/latest/md5/"
+  ]
+}

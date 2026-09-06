@@ -1,0 +1,24 @@
+{
+  "id": "PY-UNSAFE-YAML",
+  "engine": "python_call",
+  "suffixes": [
+    ".py",
+    ".pyw"
+  ],
+  "calls": [
+    "yaml.load",
+    "yaml.load_all",
+    "yaml.unsafe_load",
+    "yaml.unsafe_load_all"
+  ],
+  "category": "deserialization",
+  "cwe": "CWE-502",
+  "references": [
+    "https://pyyaml.org/wiki/PyYAMLDocumentation"
+  ],
+  "message": "Используется загрузчик YAML, способный конструировать Python-объекты.",
+  "recommendation": "Для недоверенных YAML используйте yaml.safe_load или SafeLoader.",
+  "check": "unsafe_yaml",
+  "confidence": "medium",
+  "severity": "medium"
+}

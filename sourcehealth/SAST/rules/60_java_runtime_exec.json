@@ -1,0 +1,21 @@
+{
+  "id": "JAVA-RUNTIME-EXEC",
+  "engine": "code_regex",
+  "language": "java",
+  "pattern": "\\bRuntime\\s{0,128}\\.\\s{0,128}getRuntime\\s{0,128}\\(\\s{0,128}\\)\\s{0,128}\\.\\s{0,128}exec\\s{0,128}\\(\\s{0,128}(?=[A-Za-z_]\\w{0,127})(?!new\\b)",
+  "keywords": [
+    "getruntime"
+  ],
+  "suffixes": [
+    ".java"
+  ],
+  "message": "Runtime.exec получает динамическую команду; требуется проверка запускаемой программы и аргументов.",
+  "recommendation": "Используйте фиксированную программу и массив аргументов с проверкой значений. Runtime.exec сам по себе не запускает shell.",
+  "cwe": "CWE-88",
+  "category": "injection",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://docs.oracle.com/en/java/javase/26/docs/api/java.base/java/lang/Runtime.html#exec(java.lang.String)"
+  ]
+}

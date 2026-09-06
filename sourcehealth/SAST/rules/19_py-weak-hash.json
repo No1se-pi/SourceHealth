@@ -1,0 +1,23 @@
+{
+  "id": "PY-WEAK-HASH",
+  "engine": "python_call",
+  "suffixes": [
+    ".py",
+    ".pyw"
+  ],
+  "calls": [
+    "hashlib.md5",
+    "hashlib.sha1",
+    "hashlib.new"
+  ],
+  "category": "crypto",
+  "cwe": "CWE-328",
+  "references": [
+    "https://docs.python.org/3/library/hashlib.html"
+  ],
+  "message": "Используется MD5/SHA-1 без явного отказа от security-применения.",
+  "recommendation": "Проверьте назначение: для защиты целостности используйте SHA-256; для паролей — специальную password KDF. Для незащитной суммы явно укажите usedforsecurity=False.",
+  "check": "weak_hash",
+  "confidence": "medium",
+  "severity": "medium"
+}

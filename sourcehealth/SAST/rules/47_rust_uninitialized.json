@@ -1,0 +1,21 @@
+{
+  "id": "RUST-UNINITIALIZED",
+  "engine": "code_regex",
+  "language": "rust",
+  "pattern": "\\b(?:mem\\s{0,128}::\\s{0,128})?uninitialized\\s{0,128}(?:::\\s{0,128}<[^;\\n]{1,128}>\\s{0,128})?\\(",
+  "keywords": [
+    "uninitialized"
+  ],
+  "suffixes": [
+    ".rs"
+  ],
+  "message": "Создаётся неинициализированное значение через устаревший mem::uninitialized.",
+  "recommendation": "Используйте MaybeUninit и вызывайте assume_init только после доказанной полной инициализации.",
+  "cwe": "CWE-457",
+  "category": "memory",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://doc.rust-lang.org/std/mem/fn.uninitialized.html"
+  ]
+}

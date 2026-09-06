@@ -1,0 +1,21 @@
+{
+  "id": "JAVA-AES-ECB",
+  "engine": "code_regex",
+  "language": "java",
+  "pattern": "\\bCipher\\s{0,128}\\.\\s{0,128}getInstance\\s{0,128}\\(\\s{0,128}\"AES(?:/ECB/[^\"\\n]{1,64})?\"",
+  "keywords": [
+    "cipher"
+  ],
+  "suffixes": [
+    ".java"
+  ],
+  "message": "Для AES выбран ECB либо не указан режим, и выбор зависит от провайдера.",
+  "recommendation": "Явно используйте аутентифицированный режим AES/GCM/NoPadding с уникальным nonce.",
+  "cwe": "CWE-327",
+  "category": "crypto",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://docs.oracle.com/en/java/javase/26/security/java-cryptography-architecture-jca-reference-guide.html"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "id": "CPP-SHELL-COMMAND",
+  "engine": "code_regex",
+  "language": "cpp",
+  "pattern": "\\b(?:system|popen|_popen)\\s{0,128}\\(\\s{0,128}(?=[A-Za-z_]\\w{0,127})",
+  "keywords": [
+    "system",
+    "popen"
+  ],
+  "suffixes": [
+    ".c",
+    ".h",
+    ".cc",
+    ".hh",
+    ".cpp",
+    ".hpp",
+    ".cxx",
+    ".hxx",
+    ".ipp",
+    ".tpp"
+  ],
+  "message": "Shell получает динамическую строку команды.",
+  "recommendation": "Используйте запуск фиксированной программы с отдельными аргументами без shell.",
+  "cwe": "CWE-78",
+  "category": "injection",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://cwe.mitre.org/data/definitions/78.html"
+  ]
+}

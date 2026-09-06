@@ -1,0 +1,21 @@
+{
+  "id": "SH-INSECURE-CURL",
+  "pattern": "^[^\\S\\n]*curl\\b[^\\r\\n]{0,512}[^\\S\\n](?:--insecure|-k)(?=[^\\S\\n]|$)",
+  "keywords": [
+    "curl"
+  ],
+  "suffixes": [
+    ".sh",
+    ".bash"
+  ],
+  "message": "curl вызывается с отключённой проверкой TLS.",
+  "recommendation": "Удалите --insecure/-k и настройте CA; проверьте доверие к загружаемому содержимому.",
+  "category": "configuration",
+  "cwe": "CWE-295",
+  "references": [
+    "https://curl.se/docs/manpage.html#-k"
+  ],
+  "confidence": "low",
+  "severity": "medium",
+  "engine": "text_regex"
+}

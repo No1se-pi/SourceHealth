@@ -1,0 +1,24 @@
+{
+  "id": "PY-PICKLE-LOAD",
+  "message": "Десериализация pickle может выполнить код.",
+  "recommendation": "Не передавайте недоверенные данные; рассмотрите JSON с проверкой структуры.",
+  "severity": "medium",
+  "suffixes": [
+    ".py",
+    ".pyw"
+  ],
+  "engine": "python_call",
+  "calls": [
+    "pickle.load",
+    "pickle.loads",
+    "dill.load",
+    "dill.loads",
+    "pandas.read_pickle"
+  ],
+  "category": "deserialization",
+  "cwe": "CWE-502",
+  "references": [
+    "https://docs.python.org/3/library/pickle.html"
+  ],
+  "confidence": "medium"
+}

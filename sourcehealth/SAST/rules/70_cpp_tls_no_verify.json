@@ -1,0 +1,30 @@
+{
+  "id": "CPP-TLS-NO-VERIFY",
+  "engine": "code_regex",
+  "language": "cpp",
+  "pattern": "\\bSSL(?:_CTX)?_set_verify\\s{0,128}\\([^,;\\n]{1,128},\\s{0,128}SSL_VERIFY_NONE\\b",
+  "keywords": [
+    "set_verify"
+  ],
+  "suffixes": [
+    ".c",
+    ".h",
+    ".cc",
+    ".hh",
+    ".cpp",
+    ".hpp",
+    ".cxx",
+    ".hxx",
+    ".ipp",
+    ".tpp"
+  ],
+  "message": "В OpenSSL выбран режим без проверки сертификата узла.",
+  "recommendation": "Для TLS-клиента включите SSL_VERIFY_PEER и проверку имени; на сервере оцените необходимость клиентских сертификатов.",
+  "cwe": "CWE-295",
+  "category": "configuration",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://docs.openssl.org/master/man3/SSL_CTX_set_verify/"
+  ]
+}

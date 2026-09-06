@@ -1,0 +1,21 @@
+{
+  "id": "CONFIG-PRIVILEGED-CONTAINER",
+  "pattern": "(?i)^[^\\S\\n]*privileged[^\\S\\n]*:[^\\S\\n]*true\\b",
+  "keywords": [
+    "privileged"
+  ],
+  "suffixes": [
+    ".yml",
+    ".yaml"
+  ],
+  "message": "Контейнеру запрошен privileged-режим.",
+  "recommendation": "Уберите privileged и предоставляйте только необходимые capabilities.",
+  "category": "configuration",
+  "cwe": "CWE-250",
+  "references": [
+    "https://docs.docker.com/reference/compose-file/services/#privileged"
+  ],
+  "confidence": "low",
+  "severity": "medium",
+  "engine": "text_regex"
+}

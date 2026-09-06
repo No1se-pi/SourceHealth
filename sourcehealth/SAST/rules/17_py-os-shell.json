@@ -1,0 +1,23 @@
+{
+  "id": "PY-OS-SHELL",
+  "engine": "python_call",
+  "suffixes": [
+    ".py",
+    ".pyw"
+  ],
+  "calls": [
+    "os.system",
+    "os.popen"
+  ],
+  "category": "injection",
+  "cwe": "CWE-78",
+  "references": [
+    "https://docs.python.org/3/library/os.html#os.system"
+  ],
+  "message": "Динамическая строка передаётся командной оболочке.",
+  "recommendation": "Используйте subprocess.run со списком аргументов и shell=False; проверьте источник данных.",
+  "check": "dynamic",
+  "argument": 0,
+  "confidence": "medium",
+  "severity": "medium"
+}

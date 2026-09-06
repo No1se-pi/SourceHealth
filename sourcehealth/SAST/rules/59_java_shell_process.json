@@ -1,0 +1,21 @@
+{
+  "id": "JAVA-SHELL-PROCESS",
+  "engine": "code_regex",
+  "language": "java",
+  "pattern": "\\bnew\\s{0,128}ProcessBuilder\\s{0,128}\\(\\s{0,128}\"(?:/(?:usr/)?bin/)?(?:ba|da|z|k)?sh\"\\s{0,128},\\s{0,128}\"-c\"",
+  "keywords": [
+    "processbuilder"
+  ],
+  "suffixes": [
+    ".java"
+  ],
+  "message": "ProcessBuilder запускает shell с интерпретацией команды.",
+  "recommendation": "Передавайте программу и аргументы отдельно; исключите внешние данные из shell-строки.",
+  "cwe": "CWE-78",
+  "category": "injection",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://docs.oracle.com/en/java/javase/26/docs/api/java.base/java/lang/ProcessBuilder.html"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "id": "PY-FLASK-DEBUG",
+  "engine": "python_call",
+  "suffixes": [
+    ".py",
+    ".pyw"
+  ],
+  "calls": [
+    "flask.Flask.run"
+  ],
+  "category": "configuration",
+  "cwe": "CWE-489",
+  "references": [
+    "https://flask.palletsprojects.com/en/stable/debugging/"
+  ],
+  "message": "Flask запускается с debug=True.",
+  "recommendation": "Отключите debug вне локальной разработки; используйте production WSGI-сервер.",
+  "check": "equals",
+  "argument": "debug",
+  "value": true,
+  "confidence": "medium",
+  "severity": "medium"
+}

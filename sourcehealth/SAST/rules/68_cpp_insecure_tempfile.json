@@ -1,0 +1,32 @@
+{
+  "id": "CPP-INSECURE-TEMPFILE",
+  "engine": "code_regex",
+  "language": "cpp",
+  "pattern": "\\b(?:mktemp|tmpnam|tempnam)\\s{0,128}\\(",
+  "keywords": [
+    "mktemp",
+    "tmpnam",
+    "tempnam"
+  ],
+  "suffixes": [
+    ".c",
+    ".h",
+    ".cc",
+    ".hh",
+    ".cpp",
+    ".hpp",
+    ".cxx",
+    ".hxx",
+    ".ipp",
+    ".tpp"
+  ],
+  "message": "Имя временного файла создаётся отдельно от его безопасного открытия.",
+  "recommendation": "Используйте атомарное создание mkstemp/tmpfile и ограничивайте права доступа.",
+  "cwe": "CWE-377",
+  "category": "security",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://cwe.mitre.org/data/definitions/377.html"
+  ]
+}

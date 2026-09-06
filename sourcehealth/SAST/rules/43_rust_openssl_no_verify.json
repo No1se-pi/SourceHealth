@@ -1,0 +1,21 @@
+{
+  "id": "RUST-OPENSSL-NO-VERIFY",
+  "engine": "code_regex",
+  "language": "rust",
+  "pattern": "\\bset_verify\\s{0,128}\\(\\s{0,128}SslVerifyMode\\s{0,128}::\\s{0,128}NONE\\b",
+  "keywords": [
+    "set_verify"
+  ],
+  "suffixes": [
+    ".rs"
+  ],
+  "message": "В OpenSSL отключена проверка сертификата узла.",
+  "recommendation": "Для TLS-клиента используйте проверку PEER и корректное имя сервера; на сервере оцените требования к клиентским сертификатам.",
+  "cwe": "CWE-295",
+  "category": "configuration",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://docs.rs/openssl/latest/openssl/ssl/struct.SslContextBuilder.html#method.set_verify"
+  ]
+}

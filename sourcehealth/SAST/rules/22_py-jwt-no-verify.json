@@ -1,0 +1,22 @@
+{
+  "id": "PY-JWT-NO-VERIFY",
+  "engine": "python_call",
+  "suffixes": [
+    ".py",
+    ".pyw"
+  ],
+  "calls": [
+    "jwt.decode",
+    "jwt.api_jwt.decode"
+  ],
+  "category": "configuration",
+  "cwe": "CWE-347",
+  "references": [
+    "https://pyjwt.readthedocs.io/en/stable/usage.html#reading-the-claimset-without-validation"
+  ],
+  "message": "Проверка подписи JWT явно отключена.",
+  "recommendation": "Проверяйте подпись доверенным ключом и явно ограничивайте алгоритмы перед использованием claims для авторизации.",
+  "check": "jwt_verification",
+  "confidence": "medium",
+  "severity": "medium"
+}

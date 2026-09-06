@@ -1,0 +1,21 @@
+{
+  "id": "JAVA-OBJECT-DESERIALIZATION",
+  "engine": "code_regex",
+  "language": "java",
+  "pattern": "\\bnew\\s{0,128}(?:java\\s{0,128}\\.\\s{0,128}(?:io|beans)\\s{0,128}\\.\\s{0,128})?ObjectInputStream\\s{0,128}\\(",
+  "keywords": [
+    "objectinputstream"
+  ],
+  "suffixes": [
+    ".java"
+  ],
+  "message": "Используется десериализация Java-объектов; внешние данные могут быть опасны.",
+  "recommendation": "Не десериализуйте недоверенные объекты. Предпочитайте данные с явной схемой; для ObjectInputStream настройте строгий ObjectInputFilter.",
+  "cwe": "CWE-502",
+  "category": "deserialization",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://docs.oracle.com/en/java/javase/26/docs/api/java.base/java/io/ObjectInputStream.html"
+  ]
+}

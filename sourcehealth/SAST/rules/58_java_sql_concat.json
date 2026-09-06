@@ -1,0 +1,24 @@
+{
+  "id": "JAVA-SQL-CONCAT",
+  "engine": "code_regex",
+  "language": "java",
+  "pattern": "\\b(?:executeQuery|executeUpdate|execute|prepareStatement)\\s{0,128}\\(\\s{0,128}\"(?i:SELECT|INSERT|UPDATE|DELETE)\\b(?:\\\\[^\\n]|[^\"\\\\\\n]){0,2048}\"\\s{0,128}\\+",
+  "keywords": [
+    "select",
+    "insert",
+    "update",
+    "delete"
+  ],
+  "suffixes": [
+    ".java"
+  ],
+  "message": "SQL-запрос содержит конкатенацию со значением.",
+  "recommendation": "Используйте PreparedStatement и bind-параметры; проверьте происхождение подставляемых данных.",
+  "cwe": "CWE-89",
+  "category": "injection",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://docs.oracle.com/javase/tutorial/jdbc/basics/prepared.html"
+  ]
+}

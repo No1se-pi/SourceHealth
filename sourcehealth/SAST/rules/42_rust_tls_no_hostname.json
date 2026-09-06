@@ -1,0 +1,22 @@
+{
+  "id": "RUST-TLS-NO-HOSTNAME",
+  "engine": "code_regex",
+  "language": "rust",
+  "pattern": "\\bdanger_accept_invalid_hostnames\\s{0,128}\\(\\s{0,128}true\\s{0,128}\\)",
+  "keywords": [
+    "danger_accept_invalid_hostnames"
+  ],
+  "suffixes": [
+    ".rs"
+  ],
+  "message": "Клиент разрешает недействительный TLS-сертификат или имя сервера.",
+  "recommendation": "Сохраните стандартную проверку TLS; добавляйте доверенный CA вместо её отключения.",
+  "cwe": "CWE-295",
+  "category": "configuration",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://docs.rs/reqwest/latest/reqwest/struct.ClientBuilder.html"
+  ],
+  "prefilter": "true"
+}

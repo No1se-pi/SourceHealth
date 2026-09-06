@@ -1,0 +1,22 @@
+{
+  "id": "PY-FORMATTED-SQL",
+  "engine": "python_call",
+  "suffixes": [
+    ".py",
+    ".pyw"
+  ],
+  "calls": [
+    "*.execute",
+    "*.executemany"
+  ],
+  "category": "injection",
+  "cwe": "CWE-89",
+  "references": [
+    "https://docs.python.org/3/library/sqlite3.html#sqlite3-placeholders"
+  ],
+  "message": "SQL формируется вставкой выражения прямо в вызове execute.",
+  "recommendation": "Передавайте значения параметрами драйвера: execute(\"SELECT ... WHERE id = ?\", [value]); синтаксис placeholder зависит от драйвера.",
+  "check": "formatted_sql",
+  "confidence": "low",
+  "severity": "medium"
+}

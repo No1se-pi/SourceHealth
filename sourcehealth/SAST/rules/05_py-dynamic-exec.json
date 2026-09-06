@@ -1,0 +1,25 @@
+{
+  "id": "PY-DYNAMIC-EXEC",
+  "message": "Возможное выполнение строки как Python-кода.",
+  "recommendation": "Проверьте источник аргумента; для данных используйте безопасный парсер.",
+  "severity": "medium",
+  "suffixes": [
+    ".py",
+    ".pyw"
+  ],
+  "engine": "python_call",
+  "calls": [
+    "eval",
+    "exec",
+    "builtins.eval",
+    "builtins.exec"
+  ],
+  "check": "dynamic",
+  "argument": 0,
+  "category": "injection",
+  "cwe": "CWE-95",
+  "references": [
+    "https://docs.python.org/3/library/functions.html#eval"
+  ],
+  "confidence": "medium"
+}

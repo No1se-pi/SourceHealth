@@ -1,0 +1,22 @@
+{
+  "id": "GO-TLS-NO-VERIFY",
+  "engine": "code_regex",
+  "language": "go",
+  "pattern": "\\bInsecureSkipVerify\\s{0,128}[:=]\\s{0,128}true\\b",
+  "keywords": [
+    "insecureskipverify"
+  ],
+  "suffixes": [
+    ".go"
+  ],
+  "message": "Отключена стандартная проверка TLS-сертификата и имени сервера.",
+  "recommendation": "Уберите InsecureSkipVerify; для собственного CA задайте RootCAs. Проверьте наличие корректной отдельной верификации.",
+  "cwe": "CWE-295",
+  "category": "configuration",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://pkg.go.dev/crypto/tls#Config"
+  ],
+  "prefilter": "true"
+}

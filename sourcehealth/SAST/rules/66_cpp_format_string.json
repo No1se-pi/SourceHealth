@@ -1,0 +1,31 @@
+{
+  "id": "CPP-FORMAT-STRING",
+  "engine": "code_regex",
+  "language": "cpp",
+  "pattern": "\\b(?:printf\\s{0,128}\\(\\s{0,128}|fprintf\\s{0,128}\\([^,;\\n]{1,128},\\s{0,128})(?=[A-Za-z_]\\w{0,127})(?!nullptr\\b)",
+  "keywords": [
+    "printf"
+  ],
+  "suffixes": [
+    ".c",
+    ".h",
+    ".cc",
+    ".hh",
+    ".cpp",
+    ".hpp",
+    ".cxx",
+    ".hxx",
+    ".ipp",
+    ".tpp"
+  ],
+  "message": "В качестве форматной строки передаётся выражение вместо строкового литерала.",
+  "recommendation": "Используйте фиксированный формат, например printf(\"%s\", value); проверьте, может ли формат поступать извне.",
+  "cwe": "CWE-134",
+  "category": "injection",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://cwe.mitre.org/data/definitions/134.html"
+  ],
+  "prefilter": "(?:printf(?<!\\wprintf)(?:\\s|/\\*[^*]*+(?:\\*(?!/)[^*]*+)*+\\*/|//[^\\n]*+(?:\\n|$))*+\\((?:\\s|/\\*[^*]*+(?:\\*(?!/)[^*]*+)*+\\*/|//[^\\n]*+(?:\\n|$))*+[A-Za-z_]|fprintf(?<!\\wfprintf)\\b)"
+}

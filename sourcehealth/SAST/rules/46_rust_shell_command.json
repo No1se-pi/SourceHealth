@@ -1,0 +1,21 @@
+{
+  "id": "RUST-SHELL-COMMAND",
+  "engine": "code_regex",
+  "language": "rust",
+  "pattern": "\\bCommand\\s{0,128}::\\s{0,128}new\\s{0,128}\\(\\s{0,128}\"(?:/(?:usr/)?bin/)?(?:ba|da|z|k)?sh\"\\s{0,128}\\)\\s{0,128}\\.\\s{0,128}(?:arg\\s{0,128}\\(\\s{0,128}\"-c\"|args\\s{0,128}\\(\\s{0,128}&?\\s{0,128}\\[\\s{0,128}\"-c\")",
+  "keywords": [
+    "command"
+  ],
+  "suffixes": [
+    ".rs"
+  ],
+  "message": "Процесс запускается через shell с интерпретацией команды.",
+  "recommendation": "Передавайте исполняемый файл и аргументы отдельно; не включайте внешние данные в shell-команду.",
+  "cwe": "CWE-78",
+  "category": "injection",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://doc.rust-lang.org/std/process/struct.Command.html"
+  ]
+}
