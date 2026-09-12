@@ -1,0 +1,22 @@
+{
+  "id": "JAVA-WEAK-HASH",
+  "engine": "code_regex",
+  "language": "java",
+  "pattern": "\\bMessageDigest\\s{0,128}\\.\\s{0,128}getInstance\\s{0,128}\\(\\s{0,128}\"(?i:MD5|SHA-?1)\"",
+  "keywords": [
+    "getinstance"
+  ],
+  "suffixes": [
+    ".java"
+  ],
+  "message": "Выбран хеш MD5/SHA-1, неустойчивый к коллизиям.",
+  "recommendation": "Для криптографической целостности используйте SHA-256/512.",
+  "cwe": "CWE-328",
+  "category": "crypto",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://docs.oracle.com/en/java/javase/26/docs/api/java.base/java/security/MessageDigest.html"
+  ],
+  "prefilter": "\"(?i:MD5|SHA-?1)\""
+}

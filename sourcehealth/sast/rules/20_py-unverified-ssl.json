@@ -1,0 +1,20 @@
+{
+  "id": "PY-UNVERIFIED-SSL",
+  "engine": "python_call",
+  "suffixes": [
+    ".py",
+    ".pyw"
+  ],
+  "calls": [
+    "ssl._create_unverified_context"
+  ],
+  "category": "configuration",
+  "cwe": "CWE-295",
+  "references": [
+    "https://docs.python.org/3/library/ssl.html"
+  ],
+  "message": "Создаётся SSL-контекст без проверки сертификата.",
+  "recommendation": "Используйте ssl.create_default_context и настройте доверенные CA.",
+  "confidence": "medium",
+  "severity": "medium"
+}

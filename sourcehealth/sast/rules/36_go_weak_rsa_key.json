@@ -1,0 +1,21 @@
+{
+  "id": "GO-WEAK-RSA-KEY",
+  "engine": "code_regex",
+  "language": "go",
+  "pattern": "\\brsa\\s{0,128}\\.\\s{0,128}GenerateKey\\s{0,128}\\([^,;\\n]{1,128},\\s{0,128}(?:512|768|1024|1536)\\s{0,128}\\)",
+  "keywords": [
+    "generatekey"
+  ],
+  "suffixes": [
+    ".go"
+  ],
+  "message": "Создаётся RSA-ключ короче 2048 бит.",
+  "recommendation": "Используйте RSA минимум 2048 бит или подходящий современный алгоритм.",
+  "cwe": "CWE-326",
+  "category": "crypto",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://pkg.go.dev/crypto/rsa"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "id": "GO-WEAK-SHA1",
+  "engine": "code_regex",
+  "language": "go",
+  "pattern": "\\bsha1\\s{0,128}\\.\\s{0,128}(?:New|Sum)\\s{0,128}\\(",
+  "keywords": [
+    "sha1"
+  ],
+  "suffixes": [
+    ".go"
+  ],
+  "message": "Используется SHA1; алгоритм непригоден для защиты от коллизий.",
+  "recommendation": "Для криптографической целостности используйте SHA-256/512; отдельно оцените допустимость некриптографической контрольной суммы.",
+  "cwe": "CWE-328",
+  "category": "crypto",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://pkg.go.dev/crypto/sha1"
+  ]
+}

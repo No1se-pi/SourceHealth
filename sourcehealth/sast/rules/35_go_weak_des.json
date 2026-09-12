@@ -1,0 +1,21 @@
+{
+  "id": "GO-WEAK-DES",
+  "engine": "code_regex",
+  "language": "go",
+  "pattern": "\\bdes\\s{0,128}\\.\\s{0,128}New(?:TripleDES)?Cipher\\s{0,128}\\(",
+  "keywords": [
+    "des"
+  ],
+  "suffixes": [
+    ".go"
+  ],
+  "message": "Используется устаревшее шифрование DES/3DES.",
+  "recommendation": "Перейдите на аутентифицированное шифрование AES-GCM.",
+  "cwe": "CWE-327",
+  "category": "crypto",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://pkg.go.dev/crypto/des"
+  ]
+}

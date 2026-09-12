@@ -1,0 +1,32 @@
+{
+  "id": "CPP-WEAK-CRYPTO",
+  "engine": "code_regex",
+  "language": "cpp",
+  "pattern": "\\b(?:MD5(?:_Init|_Update|_Final)?|SHA1(?:_Init|_Update|_Final)?|DES_set_key(?:_checked|_unchecked)?|EVP_(?:md5|sha1|des_cbc|des_ecb))\\s{0,128}\\(",
+  "keywords": [
+    "md5",
+    "sha1",
+    "des_"
+  ],
+  "suffixes": [
+    ".c",
+    ".h",
+    ".cc",
+    ".hh",
+    ".cpp",
+    ".hpp",
+    ".cxx",
+    ".hxx",
+    ".ipp",
+    ".tpp"
+  ],
+  "message": "Используется устаревший криптографический примитив MD5/SHA-1/DES.",
+  "recommendation": "Для защиты целостности используйте SHA-256/512, для шифрования — аутентифицированный современный алгоритм.",
+  "cwe": "CWE-327",
+  "category": "crypto",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://docs.openssl.org/master/man3/EVP_DigestInit/"
+  ]
+}

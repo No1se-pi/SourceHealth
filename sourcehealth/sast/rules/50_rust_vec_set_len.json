@@ -1,0 +1,21 @@
+{
+  "id": "RUST-VEC-SET-LEN",
+  "engine": "code_regex",
+  "language": "rust",
+  "pattern": "\\bset_len\\s{0,128}\\(",
+  "keywords": [
+    "set_len"
+  ],
+  "suffixes": [
+    ".rs"
+  ],
+  "message": "Длина коллекции меняется низкоуровневым set_len.",
+  "recommendation": "Для Vec проверьте capacity и инициализацию всех новых элементов; предпочитайте resize/extend. Тип получателя требует ручной проверки.",
+  "cwe": "CWE-119",
+  "category": "memory",
+  "severity": "low",
+  "confidence": "low",
+  "references": [
+    "https://doc.rust-lang.org/std/vec/struct.Vec.html#method.set_len"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "id": "CONFIG-DOCKER-SOCKET",
+  "pattern": "^[^\\S\\n]*-[^\\S\\n]*[\\\"\\x27]?/var/run/docker\\.sock[^\\S\\n]*:",
+  "keywords": [
+    "docker.sock"
+  ],
+  "suffixes": [
+    ".yml",
+    ".yaml"
+  ],
+  "message": "Docker socket монтируется в контейнер.",
+  "recommendation": "Проверьте необходимость доступа к Docker API; read-only mount сокета не делает API только для чтения.",
+  "category": "configuration",
+  "cwe": "CWE-250",
+  "references": [
+    "https://docs.docker.com/engine/security/#docker-daemon-attack-surface"
+  ],
+  "confidence": "low",
+  "severity": "medium",
+  "engine": "text_regex"
+}

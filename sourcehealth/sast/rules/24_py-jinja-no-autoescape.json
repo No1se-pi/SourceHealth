@@ -1,0 +1,23 @@
+{
+  "id": "PY-JINJA-NO-AUTOESCAPE",
+  "engine": "python_call",
+  "suffixes": [
+    ".py",
+    ".pyw"
+  ],
+  "calls": [
+    "jinja2.Environment"
+  ],
+  "category": "configuration",
+  "cwe": "CWE-79",
+  "references": [
+    "https://jinja.palletsprojects.com/en/stable/api/#autoescaping"
+  ],
+  "message": "Автоматическое экранирование Jinja явно отключено.",
+  "recommendation": "Если шаблоны формируют HTML, включите select_autoescape; для обычного текста отключение может быть намеренным.",
+  "check": "equals",
+  "argument": "autoescape",
+  "value": false,
+  "confidence": "low",
+  "severity": "medium"
+}

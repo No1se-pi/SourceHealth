@@ -1,0 +1,23 @@
+{
+  "id": "GO-WORLD-WRITABLE",
+  "engine": "code_regex",
+  "language": "go",
+  "pattern": "\\bos\\s{0,128}\\.\\s{0,128}(?:Chmod|Mkdir|MkdirAll|WriteFile)\\s{0,128}\\([^;\\n]{1,512},\\s{0,128}0(?:o)?777\\s{0,128}\\)",
+  "keywords": [
+    "chmod",
+    "mkdir",
+    "writefile"
+  ],
+  "suffixes": [
+    ".go"
+  ],
+  "message": "Файл или каталог получает права записи для всех пользователей.",
+  "recommendation": "Выдавайте минимально необходимые права; учитывайте назначение каталога и umask.",
+  "cwe": "CWE-732",
+  "category": "configuration",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://pkg.go.dev/os#Chmod"
+  ]
+}

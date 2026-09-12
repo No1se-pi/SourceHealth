@@ -1,0 +1,30 @@
+{
+  "id": "CPP-SCANF-UNBOUNDED",
+  "engine": "code_regex",
+  "language": "cpp",
+  "pattern": "\\b(?:scanf\\s{0,128}\\(\\s{0,128}|(?:fscanf|sscanf)\\s{0,128}\\([^,;\\n]{1,128},\\s{0,128})\"(?:\\\\[^\\n]|[^\"\\\\%\\n]|%%|%\\*?[0-9]{0,8}[hlLjzt]{0,2}[diouxXfFeEgGaAcpn]|%\\*?[0-9]{1,8}s){0,512}%(?:s|\\[)",
+  "keywords": [
+    "scanf"
+  ],
+  "suffixes": [
+    ".c",
+    ".h",
+    ".cc",
+    ".hh",
+    ".cpp",
+    ".hpp",
+    ".cxx",
+    ".hxx",
+    ".ipp",
+    ".tpp"
+  ],
+  "message": "scanf читает строку или набор символов без ограничения ширины.",
+  "recommendation": "Задайте ширину меньше размера буфера с учётом завершающего нуля либо используйте безопасное чтение строки.",
+  "cwe": "CWE-120",
+  "category": "memory",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://cwe.mitre.org/data/definitions/120.html"
+  ]
+}

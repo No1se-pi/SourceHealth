@@ -1,0 +1,23 @@
+{
+  "id": "JS-DYNAMIC-EVAL",
+  "pattern": "^(?![^\\S\\n]*//)[^\\r\\n]{0,256}\\beval[^\\S\\n]*\\([^\\S\\n]*[A-Za-z_$]",
+  "keywords": [
+    "eval"
+  ],
+  "suffixes": [
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx"
+  ],
+  "message": "Возможный eval с выражением вместо строкового литерала.",
+  "recommendation": "Проверьте источник аргумента; для JSON используйте JSON.parse.",
+  "category": "injection",
+  "cwe": "CWE-95",
+  "references": [
+    "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/eval"
+  ],
+  "confidence": "low",
+  "severity": "medium",
+  "engine": "text_regex"
+}

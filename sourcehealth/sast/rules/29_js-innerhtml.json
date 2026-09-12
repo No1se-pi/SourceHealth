@@ -1,0 +1,23 @@
+{
+  "id": "JS-INNERHTML",
+  "pattern": "^(?![^\\S\\n]*//)[^\\r\\n]{0,256}\\.innerHTML[^\\S\\n]*=[^\\S\\n]*[A-Za-z_$]",
+  "keywords": [
+    "innerhtml"
+  ],
+  "suffixes": [
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx"
+  ],
+  "message": "В innerHTML передаётся выражение; возможна HTML-инъекция.",
+  "recommendation": "Используйте textContent для текста; если нужен HTML, применяйте проверенный sanitizer.",
+  "category": "injection",
+  "cwe": "CWE-79",
+  "references": [
+    "https://developer.mozilla.org/en-US/docs/Web/API/Element/innerHTML"
+  ],
+  "confidence": "low",
+  "severity": "medium",
+  "engine": "text_regex"
+}

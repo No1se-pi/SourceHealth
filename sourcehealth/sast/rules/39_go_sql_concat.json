@@ -1,0 +1,24 @@
+{
+  "id": "GO-SQL-CONCAT",
+  "engine": "code_regex",
+  "language": "go",
+  "pattern": "\\b(?:Query|QueryRow|Exec)\\s{0,128}\\(\\s{0,128}(?:\"(?i:SELECT|INSERT|UPDATE|DELETE)\\b(?:\\\\[^\\n]|[^\"\\\\\\n]){0,2048}\"\\s{0,128}\\+|fmt\\s{0,128}\\.\\s{0,128}Sprintf\\s{0,128}\\(\\s{0,128}\"(?i:SELECT|INSERT|UPDATE|DELETE)\\b)",
+  "keywords": [
+    "select",
+    "insert",
+    "update",
+    "delete"
+  ],
+  "suffixes": [
+    ".go"
+  ],
+  "message": "SQL собирается конкатенацией или форматированием около вызова базы данных.",
+  "recommendation": "Используйте параметры SQL и передавайте значения отдельно от текста запроса.",
+  "cwe": "CWE-89",
+  "category": "injection",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://go.dev/doc/database/sql-injection"
+  ]
+}

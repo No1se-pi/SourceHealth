@@ -1,0 +1,20 @@
+{
+  "id": "PY-INSECURE-TEMPFILE",
+  "engine": "python_call",
+  "suffixes": [
+    ".py",
+    ".pyw"
+  ],
+  "calls": [
+    "tempfile.mktemp"
+  ],
+  "category": "security",
+  "cwe": "CWE-377",
+  "references": [
+    "https://docs.python.org/3/library/tempfile.html#tempfile.mktemp"
+  ],
+  "message": "mktemp создаёт только имя временного файла и допускает гонку.",
+  "recommendation": "Используйте tempfile.NamedTemporaryFile или mkstemp и управляйте временем жизни дескриптора.",
+  "confidence": "medium",
+  "severity": "medium"
+}

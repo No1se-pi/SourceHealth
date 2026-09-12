@@ -1,0 +1,21 @@
+{
+  "id": "RUST-UNCHECKED-INDEX",
+  "engine": "code_regex",
+  "language": "rust",
+  "pattern": "\\bget_unchecked(?:_mut)?\\s{0,128}\\(",
+  "keywords": [
+    "get_unchecked"
+  ],
+  "suffixes": [
+    ".rs"
+  ],
+  "message": "Доступ к элементу выполняется без проверки границ.",
+  "recommendation": "Используйте get/get_mut либо докажите границы индекса для каждого пути выполнения; это точка ручного аудита.",
+  "cwe": "CWE-125",
+  "category": "memory",
+  "severity": "low",
+  "confidence": "low",
+  "references": [
+    "https://doc.rust-lang.org/std/primitive.slice.html#method.get_unchecked"
+  ]
+}

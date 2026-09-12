@@ -1,0 +1,27 @@
+{
+  "id": "PY-SHELL-TRUE",
+  "message": "Возможный запуск команды через shell.",
+  "recommendation": "Передавайте аргументы списком и проверьте возможность shell=False.",
+  "severity": "medium",
+  "suffixes": [
+    ".py",
+    ".pyw"
+  ],
+  "engine": "python_call",
+  "calls": [
+    "subprocess.run",
+    "subprocess.call",
+    "subprocess.check_call",
+    "subprocess.check_output",
+    "subprocess.Popen"
+  ],
+  "check": "equals",
+  "argument": "shell",
+  "value": true,
+  "category": "injection",
+  "cwe": "CWE-78",
+  "references": [
+    "https://docs.python.org/3/library/subprocess.html#security-considerations"
+  ],
+  "confidence": "medium"
+}

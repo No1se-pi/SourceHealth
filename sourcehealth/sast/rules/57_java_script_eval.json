@@ -1,0 +1,21 @@
+{
+  "id": "JAVA-SCRIPT-EVAL",
+  "engine": "code_regex",
+  "language": "java",
+  "pattern": "\\b(?:engine|scriptEngine|jsEngine)\\s{0,128}\\.\\s{0,128}eval\\s{0,128}\\(\\s{0,128}(?=[A-Za-z_]\\w{0,127})",
+  "keywords": [
+    "eval"
+  ],
+  "suffixes": [
+    ".java"
+  ],
+  "message": "В scripting engine передаётся динамический код.",
+  "recommendation": "Не исполняйте внешние строки; используйте ограниченную модель данных и явные операции.",
+  "cwe": "CWE-95",
+  "category": "injection",
+  "severity": "medium",
+  "confidence": "low",
+  "references": [
+    "https://docs.oracle.com/en/java/javase/26/docs/api/java.scripting/javax/script/ScriptEngine.html"
+  ]
+}

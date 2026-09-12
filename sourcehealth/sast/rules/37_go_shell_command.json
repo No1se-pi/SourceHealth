@@ -1,0 +1,21 @@
+{
+  "id": "GO-SHELL-COMMAND",
+  "engine": "code_regex",
+  "language": "go",
+  "pattern": "\\bexec\\s{0,128}\\.\\s{0,128}Command(?:Context)?\\s{0,128}\\(\\s{0,128}(?:[^,\\n]{1,128},\\s{0,128})?\"(?:/(?:usr/)?bin/)?(?:ba|da|z|k)?sh\"\\s{0,128},\\s{0,128}\"-[ce]{1,2}\"",
+  "keywords": [
+    "command"
+  ],
+  "suffixes": [
+    ".go"
+  ],
+  "message": "Команда запускается через shell; подстановка внешних данных может привести к инъекции.",
+  "recommendation": "Передавайте программу и аргументы отдельно. Проверьте происхождение строки команды.",
+  "cwe": "CWE-78",
+  "category": "injection",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://pkg.go.dev/os/exec"
+  ]
+}

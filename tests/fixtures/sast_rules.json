@@ -1,0 +1,385 @@
+{
+  "SECRET-PRIVATE-KEY": {
+    "filename": "sample.env",
+    "positive": [
+      "-----BEGIN PR",
+      "IVATE KEY-----"
+    ],
+    "negative": "-----BEGIN PUBLIC KEY-----"
+  },
+  "SECRET-AWS-ACCESS-KEY": {
+    "filename": "sample.env",
+    "positive": [
+      "AKIAA1B2A1",
+      "B2A1B2A1B2"
+    ],
+    "negative": "AKIAA1B2A1B2A1B2"
+  },
+  "SECRET-GITHUB-TOKEN": {
+    "filename": "sample.env",
+    "positive": [
+      "ghp_Ab3DAb3DAb3DAb3D",
+      "Ab3DAb3DAb3DAb3DAb3D"
+    ],
+    "negative": "ghp_Ab3DAb3DAb3DAb3DAb3DAb3DAb3DAb3D"
+  },
+  "SECRET-HIGH-ENTROPY": {
+    "filename": "sample.env",
+    "positive": [
+      "API_KEY=aB3dE5fG",
+      "7hJ9kL2mN4pQ6rS8"
+    ],
+    "negative": "API_KEY=${MY_SECRET_ENVIRONMENT_VARIABLE}"
+  },
+  "PY-DYNAMIC-EXEC": {
+    "filename": "sample.py",
+    "positive": "from builtins import eval as evaluate\nevaluate(user_input)",
+    "negative": "# eval(data)\ntext=\"exec(data)\"\neval(\"1 + 1\")"
+  },
+  "PY-SHELL-TRUE": {
+    "filename": "sample.py",
+    "positive": "import subprocess as sp\nsp.run(\n command,\n shell=True\n)",
+    "negative": "import subprocess\nsubprocess.run([\"echo\", data], shell=False)\nother(shell=True)"
+  },
+  "PY-PICKLE-LOAD": {
+    "filename": "sample.py",
+    "positive": "from pickle import loads as decode\ndecode(data)",
+    "negative": "import json\njson.loads(data)\ntext=\"pickle.loads(data)\""
+  },
+  "PY-TLS-VERIFY-DISABLED": {
+    "filename": "sample.py",
+    "positive": "import requests as client\nclient.get(url, verify=False)",
+    "negative": "import requests\nrequests.get(url, verify=True)\ncustom(verify=False)"
+  },
+  "SECRET-GITLAB-TOKEN": {
+    "filename": "sample.txt",
+    "positive": [
+      "glpat-Ab3DAb3",
+      "DAb3DAb3DAb3D"
+    ],
+    "negative": "glpat-TOO_SHORT"
+  },
+  "SECRET-NPM-TOKEN": {
+    "filename": "sample.txt",
+    "positive": [
+      "npm_Ab3DAb3DAb3DAb3D",
+      "Ab3DAb3DAb3DAb3DAb3D"
+    ],
+    "negative": "npm_public_package_name"
+  },
+  "SECRET-PYPI-TOKEN": {
+    "filename": "sample.txt",
+    "positive": [
+      "pypi-Ab3DAb3DAb3DAb3DAb3DAb3DAb3",
+      "DAb3DAb3DAb3DAb3DAb3DAb3DAb3DAb3D"
+    ],
+    "negative": "pypi-package-name"
+  },
+  "SECRET-SLACK-TOKEN": {
+    "filename": "sample.txt",
+    "positive": [
+      "xoxb-123456789012-123456789",
+      "012-Ab3DAb3DAb3DAb3DAb3DAb3D"
+    ],
+    "negative": "xoxb-short"
+  },
+  "SECRET-SLACK-WEBHOOK": {
+    "filename": "sample.txt",
+    "positive": [
+      "https://hooks.slack.com/services/T1234",
+      "5678/B12345678/Ab3DAb3DAb3DAb3DAb3DAb3D"
+    ],
+    "negative": "https://hooks.slack.com/services/TEAM/CHANNEL/PLACEHOLDER"
+  },
+  "SECRET-TELEGRAM-TOKEN": {
+    "filename": "sample.txt",
+    "positive": [
+      "123456789:Ab3D_b3D_b3D",
+      "_b3D_b3D_b3D_b3D_b3D_ef"
+    ],
+    "negative": "123456789:TOO_SHORT"
+  },
+  "SECRET-URL-CREDENTIALS": {
+    "filename": "sample.txt",
+    "positive": [
+      "postgresql://user:passw",
+      "ord123@database.local/db"
+    ],
+    "negative": "postgresql://user:${DB_PASSWORD}@database.local/db"
+  },
+  "PY-UNSAFE-YAML": {
+    "filename": "sample.py",
+    "positive": "import yaml as y\ny.load(data, Loader=y.Loader)",
+    "negative": "import yaml\nyaml.load(data, Loader=y.SafeLoader)\nyaml.safe_load(data)"
+  },
+  "PY-OS-SHELL": {
+    "filename": "sample.py",
+    "positive": "import os\nos.system(command)",
+    "negative": "import subprocess\nsubprocess.run([\"echo\", name], shell=False)"
+  },
+  "PY-INSECURE-TEMPFILE": {
+    "filename": "sample.py",
+    "positive": "from tempfile import mktemp\nmktemp()",
+    "negative": "from tempfile import NamedTemporaryFile\nNamedTemporaryFile()"
+  },
+  "PY-WEAK-HASH": {
+    "filename": "sample.py",
+    "positive": "import hashlib\nhashlib.new(\"md5\", data)",
+    "negative": "import hashlib\nhashlib.md5(data, usedforsecurity=False)\nhashlib.sha256(data)"
+  },
+  "PY-UNVERIFIED-SSL": {
+    "filename": "sample.py",
+    "positive": "import ssl\nssl._create_unverified_context()",
+    "negative": "import ssl\nssl.create_default_context()"
+  },
+  "PY-FORMATTED-SQL": {
+    "filename": "sample.py",
+    "positive": "cursor.execute(f\"SELECT * FROM users WHERE name = {name}\")",
+    "negative": "cursor.execute(\"SELECT * FROM users WHERE name = ?\", [name])"
+  },
+  "PY-JWT-NO-VERIFY": {
+    "filename": "sample.py",
+    "positive": "import jwt\njwt.decode(token, options={\"verify_signature\": False})",
+    "negative": "import jwt\njwt.decode(token, key, algorithms=[\"HS256\"])"
+  },
+  "PY-FLASK-DEBUG": {
+    "filename": "sample.py",
+    "positive": "from flask import Flask\napp = Flask(__name__)\napp.run(debug=True)",
+    "negative": "from flask import Flask\napp = Flask(__name__)\napp.run(debug=False)"
+  },
+  "PY-JINJA-NO-AUTOESCAPE": {
+    "filename": "sample.py",
+    "positive": "from jinja2 import Environment\nEnvironment(autoescape=False)",
+    "negative": "from jinja2 import Environment, select_autoescape\nEnvironment(autoescape=select_autoescape())"
+  },
+  "CONFIG-PRIVILEGED-CONTAINER": {
+    "filename": "sample.yml",
+    "positive": "    privileged: true",
+    "negative": "    privileged: false"
+  },
+  "CONFIG-DOCKER-SOCKET": {
+    "filename": "sample.yml",
+    "positive": "  - /var/run/docker.sock:/var/run/docker.sock:ro",
+    "negative": "  - ./data:/data:ro"
+  },
+  "SH-INSECURE-CURL": {
+    "filename": "sample.sh",
+    "positive": "curl --insecure https://example.com",
+    "negative": "curl https://example.com"
+  },
+  "JS-DYNAMIC-EVAL": {
+    "filename": "sample.js",
+    "positive": "eval(userInput);",
+    "negative": "// eval(userInput);"
+  },
+  "JS-INNERHTML": {
+    "filename": "sample.js",
+    "positive": "element.innerHTML = userInput;",
+    "negative": "element.textContent = userInput;"
+  },
+  "PHP-DYNAMIC-EVAL": {
+    "filename": "sample.php",
+    "positive": "<?php eval($input);",
+    "negative": "<?php echo $input;"
+  },
+  "GO-TLS-NO-VERIFY": {
+    "filename": "sample.go",
+    "positive": "cfg := &tls.Config{InsecureSkipVerify: true}",
+    "negative": "cfg := &tls.Config{InsecureSkipVerify: false}"
+  },
+  "GO-TLS-LEGACY-VERSION": {
+    "filename": "sample.go",
+    "positive": "cfg := tls.Config{MinVersion: tls.VersionTLS10}",
+    "negative": "cfg := tls.Config{MinVersion: tls.VersionTLS12}"
+  },
+  "GO-WEAK-MD5": {
+    "filename": "sample.go",
+    "positive": "digest := md5.Sum(data)",
+    "negative": "digest := sha256.Sum256(data)"
+  },
+  "GO-WEAK-SHA1": {
+    "filename": "sample.go",
+    "positive": "digest := sha1.Sum(data)",
+    "negative": "digest := sha256.Sum256(data)"
+  },
+  "GO-WEAK-DES": {
+    "filename": "sample.go",
+    "positive": "block, err := des.NewCipher(key)",
+    "negative": "block, err := aes.NewCipher(key)"
+  },
+  "GO-WEAK-RSA-KEY": {
+    "filename": "sample.go",
+    "positive": "key, err := rsa.GenerateKey(rand.Reader, 1024)",
+    "negative": "key, err := rsa.GenerateKey(rand.Reader, 3072)"
+  },
+  "GO-SHELL-COMMAND": {
+    "filename": "sample.go",
+    "positive": "exec.Command(\"sh\", \"-c\", command).Run()",
+    "negative": "exec.Command(\"echo\", value).Run()"
+  },
+  "GO-TEMPLATE-HTML-BYPASS": {
+    "filename": "sample.go",
+    "positive": "value := template.HTML(userInput)",
+    "negative": "value := template.HTML(\"<b>fixed</b>\")"
+  },
+  "GO-SQL-CONCAT": {
+    "filename": "sample.go",
+    "positive": "db.Query(\"SELECT * FROM users WHERE name=\" + input)",
+    "negative": "db.Query(\"SELECT * FROM users WHERE name=?\", input)"
+  },
+  "GO-WORLD-WRITABLE": {
+    "filename": "sample.go",
+    "positive": "os.Chmod(path, 0777)",
+    "negative": "os.Chmod(path, 0600)"
+  },
+  "RUST-TLS-NO-VERIFY": {
+    "filename": "sample.rs",
+    "positive": "client.danger_accept_invalid_certs(true);",
+    "negative": "client.danger_accept_invalid_certs(false);"
+  },
+  "RUST-TLS-NO-HOSTNAME": {
+    "filename": "sample.rs",
+    "positive": "client.danger_accept_invalid_hostnames(true);",
+    "negative": "client.danger_accept_invalid_hostnames(false);"
+  },
+  "RUST-OPENSSL-NO-VERIFY": {
+    "filename": "sample.rs",
+    "positive": "builder.set_verify(SslVerifyMode::NONE);",
+    "negative": "builder.set_verify(SslVerifyMode::PEER);"
+  },
+  "RUST-WEAK-MD5": {
+    "filename": "sample.rs",
+    "positive": "let digest = Md5::digest(data);",
+    "negative": "let digest = Sha256::digest(data);"
+  },
+  "RUST-WEAK-SHA1": {
+    "filename": "sample.rs",
+    "positive": "let digest = Sha1::digest(data);",
+    "negative": "let digest = Sha256::digest(data);"
+  },
+  "RUST-SHELL-COMMAND": {
+    "filename": "sample.rs",
+    "positive": "Command::new(\"sh\").arg(\"-c\").arg(input).spawn();",
+    "negative": "Command::new(\"echo\").arg(input).spawn();"
+  },
+  "RUST-UNINITIALIZED": {
+    "filename": "sample.rs",
+    "positive": "let item: String = std::mem::uninitialized();",
+    "negative": "let item = std::mem::MaybeUninit::<String>::uninit();"
+  },
+  "RUST-TRANSMUTE": {
+    "filename": "sample.rs",
+    "positive": "let value = std::mem::transmute::<u64, *const u8>(raw);",
+    "negative": "let value = u64::from_le_bytes(raw);"
+  },
+  "RUST-UNCHECKED-INDEX": {
+    "filename": "sample.rs",
+    "positive": "let item = data.get_unchecked(index);",
+    "negative": "let item = data.get(index);"
+  },
+  "RUST-VEC-SET-LEN": {
+    "filename": "sample.rs",
+    "positive": "values.set_len(count);",
+    "negative": "values.resize(count, 0);"
+  },
+  "JAVA-WEAK-HASH": {
+    "filename": "sample.java",
+    "positive": "MessageDigest.getInstance(\"MD5\");",
+    "negative": "MessageDigest.getInstance(\"SHA-256\");"
+  },
+  "JAVA-AES-ECB": {
+    "filename": "sample.java",
+    "positive": "Cipher.getInstance(\"AES/ECB/PKCS5Padding\");",
+    "negative": "Cipher.getInstance(\"AES/GCM/NoPadding\");"
+  },
+  "JAVA-WEAK-CIPHER": {
+    "filename": "sample.java",
+    "positive": "Cipher.getInstance(\"DES/CBC/PKCS5Padding\");",
+    "negative": "Cipher.getInstance(\"AES/GCM/NoPadding\");"
+  },
+  "JAVA-OBJECT-DESERIALIZATION": {
+    "filename": "sample.java",
+    "positive": "new ObjectInputStream(input);",
+    "negative": "new BufferedInputStream(input);"
+  },
+  "JAVA-XML-DESERIALIZATION": {
+    "filename": "sample.java",
+    "positive": "new XMLDecoder(input);",
+    "negative": "new BufferedInputStream(input);"
+  },
+  "JAVA-XML-EXTERNAL-ENTITIES": {
+    "filename": "sample.java",
+    "positive": "factory.setFeature(\"http://xml.org/sax/features/external-general-entities\", true);",
+    "negative": "factory.setFeature(\"http://xml.org/sax/features/external-general-entities\", false);"
+  },
+  "JAVA-SCRIPT-EVAL": {
+    "filename": "sample.java",
+    "positive": "scriptEngine.eval(userInput);",
+    "negative": "scriptEngine.eval(\"1 + 1\");"
+  },
+  "JAVA-SQL-CONCAT": {
+    "filename": "sample.java",
+    "positive": "statement.executeQuery(\"SELECT * FROM users WHERE id=\" + input);",
+    "negative": "conn.prepareStatement(\"SELECT * FROM users WHERE id=?\");"
+  },
+  "JAVA-SHELL-PROCESS": {
+    "filename": "sample.java",
+    "positive": "new ProcessBuilder(\"sh\", \"-c\", input).start();",
+    "negative": "new ProcessBuilder(\"echo\", input).start();"
+  },
+  "JAVA-RUNTIME-EXEC": {
+    "filename": "sample.java",
+    "positive": "Runtime.getRuntime().exec(command);",
+    "negative": "Runtime.getRuntime().exec(new String[]{\"echo\", input});"
+  },
+  "CPP-GETS": {
+    "filename": "sample.c",
+    "positive": "gets(buffer);",
+    "negative": "fgets(buffer, sizeof(buffer), stdin);"
+  },
+  "CPP-STRCPY": {
+    "filename": "sample.c",
+    "positive": "strcpy(dest, input);",
+    "negative": "snprintf(dest, sizeof(dest), \"%s\", input);"
+  },
+  "CPP-STRCAT": {
+    "filename": "sample.c",
+    "positive": "strcat(dest, input);",
+    "negative": "result.append(input);"
+  },
+  "CPP-SPRINTF": {
+    "filename": "sample.c",
+    "positive": "sprintf(dest, input);",
+    "negative": "snprintf(dest, sizeof(dest), \"%s\", input);"
+  },
+  "CPP-SCANF-UNBOUNDED": {
+    "filename": "sample.c",
+    "positive": "scanf(\"%s\", buffer);",
+    "negative": "scanf(\"%31s\", buffer);"
+  },
+  "CPP-FORMAT-STRING": {
+    "filename": "sample.c",
+    "positive": "printf(userInput);",
+    "negative": "printf(\"%s\", userInput);"
+  },
+  "CPP-SHELL-COMMAND": {
+    "filename": "sample.c",
+    "positive": "system(command);",
+    "negative": "system(\"echo fixed\");"
+  },
+  "CPP-INSECURE-TEMPFILE": {
+    "filename": "sample.c",
+    "positive": "mktemp(pattern);",
+    "negative": "mkstemp(pattern);"
+  },
+  "CPP-WEAK-CRYPTO": {
+    "filename": "sample.c",
+    "positive": "EVP_md5();",
+    "negative": "EVP_sha256();"
+  },
+  "CPP-TLS-NO-VERIFY": {
+    "filename": "sample.c",
+    "positive": "SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, nullptr);",
+    "negative": "SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, nullptr);"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "GO-TEMPLATE-HTML-BYPASS",
+  "engine": "code_regex",
+  "language": "go",
+  "pattern": "\\btemplate\\s{0,128}\\.\\s{0,128}(?:HTML|JS|URL)\\s{0,128}\\(\\s{0,128}(?=[A-Za-z_]\\w{0,127})",
+  "keywords": [
+    "template"
+  ],
+  "suffixes": [
+    ".go"
+  ],
+  "message": "Динамическое значение объявляется доверенным для шаблона.",
+  "recommendation": "Передавайте обычную строку с автоматическим экранированием; проверяйте и очищайте действительно необходимый HTML.",
+  "cwe": "CWE-79",
+  "category": "injection",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://pkg.go.dev/html/template#HTML"
+  ]
+}

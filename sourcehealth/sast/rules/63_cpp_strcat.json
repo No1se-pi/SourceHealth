@@ -1,0 +1,30 @@
+{
+  "id": "CPP-STRCAT",
+  "engine": "code_regex",
+  "language": "cpp",
+  "pattern": "\\bstrcat\\s{0,128}\\(",
+  "keywords": [
+    "strcat"
+  ],
+  "suffixes": [
+    ".c",
+    ".h",
+    ".cc",
+    ".hh",
+    ".cpp",
+    ".hpp",
+    ".cxx",
+    ".hxx",
+    ".ipp",
+    ".tpp"
+  ],
+  "message": "Вызов strcat не задаёт размер буфера назначения.",
+  "recommendation": "Используйте std::string или API с явным размером; проверяйте доступную ёмкость и результат операции.",
+  "cwe": "CWE-120",
+  "category": "memory",
+  "severity": "medium",
+  "confidence": "medium",
+  "references": [
+    "https://cwe.mitre.org/data/definitions/120.html"
+  ]
+}
