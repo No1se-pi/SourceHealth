@@ -8,14 +8,14 @@ Regex компилируется один раз при создании Rule. �
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import re
-import json
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Pattern
-import hashlib
 
 
 def shannon_entropy(value: str) -> float:

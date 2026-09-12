@@ -1,4 +1,4 @@
-"""CLI: python -m sourcehealth.SAST PATH --output report.json.
+"""Общий CLI: python -m sourcehealth PATH --output report.json.
 
 Exit codes: 0 — проверка завершена; 1 — превышен --fail-on;
 2 — ошибка или неполная проверка. Код 2 приоритетнее найденных проблем.
@@ -14,8 +14,9 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from . import DEFAULT_RULES, SASTScanError, SASTScanner, ScanConfig, load_rules
-from .sarif import to_sarif
+from sourcehealth.reporting import analyze_repository, to_legacy_report
+from sourcehealth.sast import DEFAULT_RULES, SASTScanError, SASTScanner, ScanConfig, load_rules
+from sourcehealth.sast.sarif import to_sarif
 
 
 def write_report(report: dict[str, Any], output: Path | None) -> None:
@@ -43,39 +44,15 @@ def write_report(report: dict[str, Any], output: Path | None) -> None:
             temporary.unlink(missing_ok=True)
 
 
-def build_report(path: str | Path, scanner: SASTScanner, *, with_git: bool = False) -> dict[str, Any]:
-    """Объединить доступные анализаторы в ``checks`` без выдуманного Health Score.
-
-    GitCollector используется без изменения его API. Он читает всю историю
-    HEAD в память; для неизвестных больших репозиториев запускайте --with-git
-    в контейнере с лимитами. Коммиты/сообщения в итоговый JSON не копируются.
-    """
-    result = scanner.scan(path)
-    checks: dict[str, Any] = {"sast": result.to_dict()}
-    report: dict[str, Any] = {
-        "schema_version": "1.0", "checks": checks, "complete": result.complete,
-    }
-    if with_git:
-        from sourcehealth.git import GitActivityAnalyzer, GitCollectionError, GitCollector
-
-        try:
-            commits = GitCollector().collect(path)
-            checks["git_activity"] = {
-                "status": "ok", "metrics": GitActivityAnalyzer().analyze(commits).to_dict(),
-            }
-        except (GitCollectionError, ValueError):
-            # stderr Git может содержать пути и данные из репозитория.
-            checks["git_activity"] = {"status": "error", "error": "git_collection_failed"}
-            report["complete"] = False
-    return report
-
-
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, legacy: bool = False,
+         with_git_default: bool = True) -> int:
     """Разобрать параметры и вернуть машинно-читаемый код завершения."""
     parser = argparse.ArgumentParser(description="Лёгкий SAST рабочей копии; код проекта не запускается.")
     parser.add_argument("path", nargs="?", help="Папка с исходным кодом")
     parser.add_argument("--output", type=Path, help="JSON-файл; по умолчанию stdout")
-    parser.add_argument("--with-git", action="store_true", help="Добавить существующий анализ Git-активности")
+    parser.add_argument("--with-git", action="store_true", default=with_git_default,
+                        help="Добавить анализ Git-активности")
+    parser.add_argument("--no-git", dest="with_git", action="store_false", help="Не собирать Git-историю")
     parser.add_argument("--exclude", action="append", default=[], help="Исключение fnmatch для относительного пути")
     parser.add_argument("--timeout", type=float, default=30, help="Лимит времени SAST, секунды")
     parser.add_argument("--max-file-bytes", type=int, default=1_048_576)
@@ -112,7 +89,8 @@ def main(argv: list[str] | None = None) -> int:
         config = ScanConfig(timeout_seconds=args.timeout, max_file_bytes=args.max_file_bytes,
                             max_findings=args.max_findings, exclude_globs=tuple(exclusions),
                             max_total_bytes=args.max_total_bytes, max_files=args.max_files)
-        report = build_report(args.path, SASTScanner(config, rules), with_git=args.with_git)
+        analysis = analyze_repository(args.path, SASTScanner(config, rules), with_git=args.with_git)
+        report = to_legacy_report(analysis) if legacy or args.format == "sarif" else analysis.to_dict()
         write_report(to_sarif(report, rules) if args.format == "sarif" else report, args.output)
     except (SASTScanError, OSError, ValueError):
         print("SAST: не удалось прочитать каталог, применить параметры или записать отчёт.", file=sys.stderr)

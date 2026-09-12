@@ -9,7 +9,6 @@ from typing import Any, Iterable
 
 from sourcehealth.git.models import Commit
 
-
 # Все интервалы в публичных метриках выражаются в днях как float.
 # Константа нужна для точного перевода секунд timedelta в дни.
 _SECONDS_PER_DAY = 86_400

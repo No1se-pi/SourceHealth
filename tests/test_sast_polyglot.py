@@ -10,7 +10,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from sourcehealth.SAST import DEFAULT_RULES, Rule, SASTScanner, ScanConfig
+from sourcehealth.sast import DEFAULT_RULES, Rule, SASTScanner, ScanConfig
 
 
 class PolyglotTests(unittest.TestCase):
@@ -175,7 +175,7 @@ class PolyglotTests(unittest.TestCase):
                 self.assertEqual(len(result.findings), count)
 
     def test_benchmark_validates_volume_and_planted_controls(self):
-        from sourcehealth.SAST.benchmark import benchmark_polyglot
+        from sourcehealth.sast.benchmark import benchmark_polyglot
         for hot in (False, True):
             with self.subTest(hot=hot):
                 report = benchmark_polyglot(mib=4, repeat=1, hot=hot)

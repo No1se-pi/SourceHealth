@@ -1,268 +1,141 @@
 # SourceHealth
 
-Добавлен [лёгкий SAST-сканер](sourcehealth/SAST/README.md): 70 правил в отдельных
-JSON-файлах, поиск возможных секретов, AST-анализ Python, лексические проверки Go/Rust/Java/C/C++
-и текстовые проверки JS/PHP/YAML/shell. Поддерживаются общий JSON с Git-метриками, SARIF и одноразовый
-контейнерный запуск для открытых репозиториев SourceCraft.
+Анализ репозиториев для хакатона ЛЦТ / SourceCraft: временные метрики Git и лёгкий
+SAST с 70 редактируемыми JSON-правилами. Python 3.11+, Git для сбора истории;
+runtime-зависимостей Python нет.
+
+## Установка и запуск
 
 ```powershell
-python -m sourcehealth.SAST . --with-git --output temp/health-report.json
+python -m venv .venv
+.venv/Scripts/Activate.ps1
+python -m pip install -e ".[dev]"
+python -m sourcehealth . --exclude "temp/*" --output temp/health-report.json
 ```
 
-**SourceHealth** — проект для анализа состояния и активности программных репозиториев.
+На Linux/macOS: `source .venv/bin/activate`. После установки также доступна
+команда `sourcehealth PATH --output report.json`. Общий CLI запускает Git и SAST,
+возвращает **AnalysisReport 2.0**. Для папки без Git добавьте `--no-git`.
+Собственный выходной файл исключается автоматически; другие отчёты исключайте
+через `--exclude` или сохраняйте вне проверяемой папки.
 
-Сейчас в ветке `Dev-No1se` реализована базовая подсистема работы с Git: она один раз получает историю коммитов, преобразует её в структурированные объекты и передаёт независимому анализатору временной активности.
+Специализированный CLI сохраняет JSON **1.0**:
 
-> Текущая реализация — фундамент проекта. Она не пытается оценивать «качество репозитория» только по Git-активности и не смешивает сбор данных с итоговым рейтингом.
+```powershell
+python -m sourcehealth.sast . --output temp/sast.json
+python -m sourcehealth.sast . --with-git --output temp/legacy-health.json
+python -m sourcehealth.sast . --format sarif --output temp/sast.sarif
+```
 
-## Что уже умеет проект
-
-- получать историю локального Git-репозитория без промежуточных файлов;
-- сохранять SHA, автора, email, дату и полное сообщение каждого коммита;
-- корректно работать с многострочными commit message;
-- учитывать часовые пояса и нормализовать время для сравнения;
-- считать активность за 7, 30, 90, 180 и 365 дней;
-- считать активные дни и месяцы;
-- вычислять интервалы между коммитами;
-- считать среднее и медианное расстояние между коммитами;
-- определять самый длинный период без коммитов;
-- сериализовать результаты в обычный словарь для JSON;
-- обрабатывать пустые Git-репозитории;
-- проверять основную логику автоматическими тестами.
+Коды выхода: `0` — проверка завершена, `1` — превышен `--fail-on high|medium|low`,
+`2` — ошибка или неполная проверка. Код `2` приоритетнее находок.
+Все параметры: `python -m sourcehealth --help`.
 
 ## Архитектура
 
 ```text
-Локальный Git-репозиторий
-          │
-          ▼
-     GitCollector
-          │
-          │ list[Commit]
-          ▼
- GitActivityAnalyzer
-          │
-          ▼
- GitActivityMetrics
-          │
-          ▼
-      dict / JSON
+Repository → Collectors → AnalysisContext → независимые Analyzers
+                                              ↓
+                                       AnalyzerResult
+                                              ↓
+                         AnalysisRunner → AnalysisReport → будущие Scoring / API / UI
 ```
 
-Ключевой принцип: **сбор данных и их анализ разделены**.
-
-`GitCollector` знает, как разговаривать с Git, но не считает метрики.  
-`GitActivityAnalyzer` считает метрики, но не запускает Git и не читает файловую систему.
-
-Подробнее: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## Требования
-
-- Python **3.11+**;
-- установленный Git, доступный через команду `git`;
-- локальный репозиторий, который нужно проанализировать.
-
-Сторонние Python-зависимости для текущей реализации не требуются.
-
-## Быстрый старт
-
-Запускайте пример из корня проекта.
+Модульный монолит: runner последовательно вызывает переданный список анализаторов,
+собирает историю один раз и изолирует ошибки отдельных проверок. Git и SAST
+остаются самостоятельными библиотеками с небольшими адаптерами общего контракта.
+Итоговый рейтинг внутри анализаторов не вычисляется.
 
 ```python
 import json
 
-from sourcehealth.git import GitActivityAnalyzer, GitCollector
+from sourcehealth.analyzers import GitActivityAnalyzerAdapter, SASTAnalyzerAdapter
+from sourcehealth.runner import AnalysisRunner
 
-collector = GitCollector()
-analyzer = GitActivityAnalyzer()
-
-commits = collector.collect(r"D:\path\to\repository")
-metrics = analyzer.analyze(commits)
-
-print(
-    json.dumps(
-        metrics.to_dict(),
-        ensure_ascii=False,
-        indent=2,
-    )
-)
+runner = AnalysisRunner([GitActivityAnalyzerAdapter(), SASTAnalyzerAdapter()])
+report = runner.analyze(".")
+print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
 ```
 
-На Linux/macOS путь может выглядеть так:
+## Как добавить новый анализатор
+
+Создайте, например, `sourcehealth/analyzers/documentation.py`:
 
 ```python
-commits = collector.collect("/home/user/project")
+from sourcehealth.core import AnalysisContext, AnalyzerResult
+
+
+class DocumentationAnalyzer:
+    name = "documentation"
+
+    def analyze(self, context: AnalysisContext) -> AnalyzerResult:
+        return AnalyzerResult(
+            analyzer=self.name,
+            metrics={"has_readme": (context.repo_path / "README.md").is_file()},
+        )
 ```
 
-## Как работает сбор Git-истории
+Добавьте `DocumentationAnalyzer()` в список своего `AnalysisRunner` и тест в
+`tests/`. Для стандартного CLI регистрация находится в
+`sourcehealth/reporting.py:analyze_repository`. Git, SAST и runner менять не нужно.
+Общие внешние данные готовьте через `context_factory`. Подробности и пример JSON —
+в [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-Коллектор выполняет `git log` внутри анализируемого репозитория.
-
-Используется специальный формат:
+## Структура и работа втроём
 
 ```text
-%H%x00%an%x00%ae%x00%aI%x00%B
+sourcehealth/
+├── core/                # контекст, Protocol, модели результатов
+├── analyzers/           # адаптеры Git/SAST и будущие проверки
+├── git/                 # прежние collector.py, activity.py, models.py
+├── sast/                # сканер, движки, rules/*.json, SARIF, Docker
+├── runner.py            # контекст и последовательная orchestration
+├── reporting.py         # стандартный набор проверок и совместимость JSON 1.0
+├── cli.py               # аргументы, вывод, exit code
+├── __main__.py          # python -m sourcehealth
+├── scoring/             # документированная граница будущего Health Score
+└── ml/                  # документированная граница будущих features/моделей
+tests/                   # все автоматические тесты
+examples/legacy/          # обёртки раннего прототипа GitActivity
+docs/                    # архитектура и описание Git-метрик
+pyproject.toml           # установка, dev-зависимости и Ruff
+.github/workflows/tests.yml
 ```
 
-Поля разделяются байтом **NUL (`0x00`)**, а не переносами строк. Это важно, потому что commit message может быть многострочным.
+| Участник | Область | Контракт |
+|---|---|---|
+| Frontend / UI | Будущий интерфейс | JSON AnalysisReport 2.0 |
+| Анализаторы | analyzers, git, sast | `analyze(context) → AnalyzerResult` |
+| Integration / Backend / Scoring / ML | runner, reporting, будущие интеграции | AnalysisContext и AnalysisReport |
 
-Собираются:
-
-| Поле | Что хранится |
-|---|---|
-| `%H` | полный SHA коммита |
-| `%an` | имя автора |
-| `%ae` | email автора |
-| `%aI` | дата автора в строгом ISO 8601 с часовым поясом |
-| `%B` | полное сообщение коммита |
-
-Результат преобразуется в объекты `Commit`.
-
-## Модель Commit
-
-```python
-Commit(
-    hash="...",
-    author_name="...",
-    author_email="...",
-    datetime=...,
-    message="...",
-)
-```
-
-Дата обязана содержать информацию о часовом поясе. Это защищает анализатор от неоднозначного сравнения времени.
-
-Для передачи в JSON:
-
-```python
-commit.to_dict()
-```
-
-## Метрики активности
-
-`GitActivityAnalyzer` принимает уже собранные `Commit` и возвращает `GitActivityMetrics`.
-
-Основные группы метрик:
-
-- общее количество коммитов;
-- первый и последний коммит;
-- длительность истории репозитория;
-- время с последнего коммита;
-- минимальный, максимальный, средний и медианный интервал между коммитами;
-- количество коммитов за последние 7/30/90/180/365 дней;
-- количество уникальных активных дней;
-- активные дни за 30/90/365 дней;
-- активные месяцы за последние 12 календарных месяцев;
-- среднее количество коммитов на активный день;
-- среднее количество коммитов на календарный месяц;
-- самый длинный период неактивности.
-
-Полное описание и нюансы расчёта: [docs/METRICS.md](docs/METRICS.md).
-
-## Важное про время
-
-Входные даты могут иметь разные часовые пояса.
-
-Перед сравнением анализатор приводит их к UTC. Например:
-
-```text
-15:00 UTC+3 == 12:00 UTC
-08:00 UTC-5 == 13:00 UTC
-```
-
-Поэтому порядок коммитов определяется по реальному моменту времени, а не по отображаемым часам.
-
-## Пустой репозиторий
-
-`git init` без единого коммита считается корректным сценарием:
-
-```python
-commits = collector.collect(path)
-# []
-```
-
-Анализатор вернёт нулевые счётчики и `None` для метрик, которые невозможно вычислить без коммитов.
-
-## Ошибки
-
-Для проблем со сбором используется:
-
-```python
-GitCollectionError
-```
-
-Она может возникнуть, если:
-
-- путь не существует;
-- путь не является каталогом;
-- каталог не является Git-репозиторием;
-- Git не установлен или не найден;
-- `git log` завершился с ошибкой;
-- Git вернул данные неожиданного формата;
-- дата коммита не распарсилась.
-
-## Структура проекта
-
-```text
-SourceHealth/
-├── sourcehealth/
-│   ├── __init__.py
-│   ├── SAST/               # правила, движки, JSON/SARIF и Docker (см. SAST/README.md)
-│   └── git/
-│       ├── __init__.py
-│       ├── activity.py      # расчёт временных метрик
-│       ├── collector.py     # запуск Git и сбор истории
-│       └── models.py        # модель Commit
-├── tests/
-│   ├── test_git_activity.py
-│   └── test_git_collector.py
-├── test/
-│   └── GitActivity/         # совместимость с ранним прототипом
-├── docs/
-│   ├── ARCHITECTURE.md
-│   └── METRICS.md
-├── LICENSE
-└── README.md
-```
-
-## Тесты
-
-Из корня проекта:
+## Проверки
 
 ```powershell
-python -m unittest discover -s tests -v
+python -B -m unittest discover -s tests -v
+python -m ruff check .
 ```
 
-Тесты проверяют:
+Тесты используют локальные временные репозитории и не требуют интернета.
+CI выполняет эти команды на Windows и Ubuntu, Python 3.11 и 3.13.
+Форматирование всего проекта не навязывается.
 
-- пустой репозиторий;
-- реальный временный Git-репозиторий;
-- многострочные commit message;
-- сохранение часового пояса;
-- сортировку коммитов перед анализом;
-- один и несколько коммитов;
-- большие интервалы между коммитами;
-- корректное сравнение разных UTC offset;
-- запрет `datetime` без часового пояса;
-- JSON-сериализацию результата.
+## Совместимость и ограничения
 
-## Ограничения текущей версии
+- Пакет `sourcehealth.SAST` переименован в `sourcehealth.sast`: обновите импорты,
+  команды `python -m` и путь Dockerfile. Старое имя больше не поддерживается;
+  на Linux регистр важен. Методы сканера, модели и Git API сохранены.
+- `test/GitActivity` перенесён в `examples/legacy/GitActivity`; это прототипы,
+  не автоматические тесты. Новый код использует `sourcehealth.git`.
+- JSON 2.0 унифицирует результаты: прежнее `checks.sast.files_scanned` теперь
+  `checks.sast.metrics.files_scanned`. Старый формат доступен через SAST CLI
+  и `build_report`.
+- `complete=false` означает неполное покрытие. GitCollector по-прежнему
+  загружает всю историю HEAD в память.
+- SAST анализирует текст без запуска проекта; находки эвристические.
+  Правила из проверяемого репозитория автоматически не загружаются.
+- Пока нет frontend, API-сервера, формулы scoring, ML-моделей и SourceCraft API
+  client. Следующие шаги: новые анализаторы, scoring/features, внешний коллектор
+  SourceCraft и тонкий API поверх runner.
 
-На этом этапе SourceHealth анализирует временную активность Git и выполняет лёгкий SAST.
-Для публичных репозиториев SourceCraft доступен изолированный контейнерный запуск.
-
-Пока здесь нет:
-
-- итогового рейтинга здоровья репозитория;
-- нормализации метрик в общий балл;
-- анализа README и лицензии;
-- оценки дублирования кода;
-- анализа линтеров и тестового покрытия;
-- анализа GitHub Issues / Pull Requests;
-- объединённого веб-дашборда и публичного рейтинга.
-
-Эти возможности могут строиться поверх текущей архитектуры как отдельные коллекторы и анализаторы.
-
-## Лицензия
-
-Проект распространяется по лицензии MIT. См. [LICENSE](LICENSE).
+Подробнее: [Git-метрики](docs/METRICS.md),
+[SAST, лимиты, правила и контейнерный запуск](sourcehealth/sast/README.md).

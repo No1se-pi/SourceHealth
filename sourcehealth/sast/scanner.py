@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import io
 import os
 import stat
 import time
-import io
 import tokenize
 from contextlib import closing
 from dataclasses import asdict
@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Iterable, Iterator
 
 from .models import Finding, ScanConfig, ScanResult
-from .rules import DEFAULT_RULES, Rule, ruleset_digest
 from .python_analysis import analyze_python
+from .rules import DEFAULT_RULES, Rule, ruleset_digest
 from .text_analysis import scan_text
 
 

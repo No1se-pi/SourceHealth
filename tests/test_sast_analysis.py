@@ -13,9 +13,9 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from sourcehealth.SAST import DEFAULT_RULES, SASTScanner, ScanConfig, load_rules
-from sourcehealth.SAST.rules import ruleset_digest
-from sourcehealth.SAST.__main__ import main
+from sourcehealth.sast import DEFAULT_RULES, SASTScanner, ScanConfig, load_rules
+from sourcehealth.sast.__main__ import main
+from sourcehealth.sast.rules import ruleset_digest
 
 
 class AnalysisTests(unittest.TestCase):
@@ -160,7 +160,7 @@ class AnalysisTests(unittest.TestCase):
             load_rules(self.root)
 
     def test_no_ast_parse_for_file_without_supported_symbols(self):
-        with patch("sourcehealth.SAST.python_analysis.ast.parse", side_effect=AssertionError("unnecessary parse")):
+        with patch("sourcehealth.sast.python_analysis.ast.parse", side_effect=AssertionError("unnecessary parse")):
             result = self.scan('def add(a, b):\n    return a + b\n')
         self.assertTrue(result.complete)
         self.assertEqual(result.python_files_parsed, 0)

@@ -1,5 +1,10 @@
 # Лёгкий SAST для SourceHealth
 
+Пакет переименован из `sourcehealth.SAST` в `sourcehealth.sast`; обновите импорты
+и команды запуска. Описанный здесь SAST CLI сохраняет JSON 1.0. Новый общий
+`python -m sourcehealth PATH` возвращает AnalysisReport 2.0 с Git и SAST;
+миграция полей описана в [архитектуре](../../docs/ARCHITECTURE.md).
+
 SAST (Static Application Security Testing) ищет подозрительные места **в тексте
 исходников, без запуска приложения**. Этот модуль — заготовка для хакатона:
 70 правил: поиск возможных секретов, AST-анализ Python, проверки Go/Rust/Java/C/C++
@@ -11,7 +16,7 @@ SAST (Static Application Security Testing) ищет подозрительные
 Откройте PowerShell в корне SourceHealth и выполните:
 
 ```powershell
-python -m sourcehealth.SAST . --output temp/sast-report.json
+python -m sourcehealth.sast . --output temp/sast-report.json
 Get-Content -Raw temp/sast-report.json | ConvertFrom-Json
 ```
 
@@ -19,7 +24,7 @@ Get-Content -Raw temp/sast-report.json | ConvertFrom-Json
 Сканер работает и без Git. Чтобы добавить **уже существующие** метрики Git-активности:
 
 ```powershell
-python -m sourcehealth.SAST . --with-git --output temp/health-report.json
+python -m sourcehealth.sast . --with-git --output temp/health-report.json
 ```
 
 Собственный выходной файл автоматически исключается из повторного сканирования.
@@ -36,17 +41,17 @@ python -m sourcehealth.SAST . --with-git --output temp/health-report.json
 | `1` | Есть находка уровня `--fail-on` или выше |
 | `2` | Ошибка, сработал лимит или часть поддерживаемых файлов не проверена |
 
-Для CI: `python -m sourcehealth.SAST . --fail-on high --output temp/sast.json`.
+Для CI: `python -m sourcehealth.sast . --fail-on high --output temp/sast.json`.
 Если есть и находки, и неполнота, приоритет имеет код `2`.
-Список параметров: `python -m sourcehealth.SAST --help`.
+Список параметров: `python -m sourcehealth.sast --help`.
 
 Каталог правил, выбор проверок и SARIF для CI/редакторов:
 
 ```powershell
-python -m sourcehealth.SAST --list-rules --output temp/rules.json
-python -m sourcehealth.SAST . --disable-rule PY-WEAK-HASH --output temp/sast.json
-python -m sourcehealth.SAST . --rules-dir my-trusted-rules --output temp/custom.json
-python -m sourcehealth.SAST . --format sarif --output temp/sast.sarif
+python -m sourcehealth.sast --list-rules --output temp/rules.json
+python -m sourcehealth.sast . --disable-rule PY-WEAK-HASH --output temp/sast.json
+python -m sourcehealth.sast . --rules-dir my-trusted-rules --output temp/custom.json
+python -m sourcehealth.sast . --format sarif --output temp/sast.sarif
 ```
 
 `--disable-rule` можно повторять; неизвестный ID вызывает ошибку. CLI запрещает
@@ -64,7 +69,7 @@ SARIF сохраняет находки, координаты и полноту 
 
 ```python
 import json
-from sourcehealth.SAST import SASTScanner, ScanConfig
+from sourcehealth.sast import SASTScanner, ScanConfig
 from sourcehealth.git import GitActivityAnalyzer, GitCollector
 
 path = "."
@@ -217,7 +222,7 @@ Generic-правило не дублирует уже найденный ток�
 
 ## Добавить своё правило отдельным файлом
 
-В `sourcehealth/SAST/rules/` лежит **один JSON-файл на правило**. Создайте, например,
+В `sourcehealth/sast/rules/` лежит **один JSON-файл на правило**. Создайте, например,
 `71_js_new_function.json` со следующим содержимым:
 
 ```json
@@ -264,7 +269,7 @@ Generic-правило не дублирует уже найденный ток�
 Для доверенного набора правил в другой папке:
 
 ```python
-from sourcehealth.SAST import SASTScanner, load_rules
+from sourcehealth.sast import SASTScanner, load_rules
 
 scanner = SASTScanner(rules=load_rules("my-trusted-rules"))
 ```
@@ -434,13 +439,13 @@ CRLF, CR и LF распознаются как переводы строк. Ар
 Сначала один раз соберите доверенный образ из корня **SourceHealth**:
 
 ```powershell
-docker build -f sourcehealth/SAST/Dockerfile -t sourcehealth-sast .
+docker build -f sourcehealth/sast/Dockerfile -t sourcehealth-sast .
 ```
 
 Затем запустите проверку публичного репозитория:
 
 ```powershell
-python -m sourcehealth.SAST.container https://sourcecraft.dev/examples/self-hosted-worker --output temp/sourcecraft-health.json
+python -m sourcehealth.sast.container https://sourcecraft.dev/examples/self-hosted-worker --output temp/sourcecraft-health.json
 ```
 
 Можно передать и ссылку клонирования вида
@@ -531,12 +536,12 @@ python -B -m unittest discover -s tests -v
 ### Замер скорости и цель 500 МиБ за 10 секунд
 
 ```powershell
-python -m sourcehealth.SAST.benchmark --profile polyglot --mib 500 --repeat 3 --output temp/benchmark.json
-python -m sourcehealth.SAST.benchmark --profile polyglot-hot --mib 500 --repeat 3 --output temp/benchmark-hot.json
-python -m sourcehealth.SAST.benchmark --profile polyglot --mib 500 --file-kib 64 --repeat 3
-python -m sourcehealth.SAST.benchmark --files 1000 --repeat 3
-python -m sourcehealth.SAST.benchmark --files 300 --repeat 2 --profile python
-python -m sourcehealth.SAST.benchmark --files 200 --repeat 2 --profile adversarial
+python -m sourcehealth.sast.benchmark --profile polyglot --mib 500 --repeat 3 --output temp/benchmark.json
+python -m sourcehealth.sast.benchmark --profile polyglot-hot --mib 500 --repeat 3 --output temp/benchmark-hot.json
+python -m sourcehealth.sast.benchmark --profile polyglot --mib 500 --file-kib 64 --repeat 3
+python -m sourcehealth.sast.benchmark --files 1000 --repeat 3
+python -m sourcehealth.sast.benchmark --files 300 --repeat 2 --profile python
+python -m sourcehealth.sast.benchmark --files 200 --repeat 2 --profile adversarial
 ```
 
 `polyglot` создаёт ровно 524 288 000 байт исходников четырёх языков, по умолчанию

@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
-from .rules import Rule
 from .models import ANALYZER_VERSION
+from .rules import Rule
 
 
 def to_sarif(report: dict, rules: tuple[Rule, ...]) -> dict:

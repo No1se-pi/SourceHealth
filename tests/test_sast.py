@@ -16,9 +16,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from sourcehealth.SAST import DEFAULT_RULES, Rule, SASTScanner, ScanConfig, load_rules, shannon_entropy
-from sourcehealth.SAST.__main__ import main, write_report
-from sourcehealth.SAST.container import ContainerError, run_repository, sourcecraft_clone_url
+from sourcehealth.sast import DEFAULT_RULES, Rule, SASTScanner, ScanConfig, load_rules, shannon_entropy
+from sourcehealth.sast.__main__ import main, write_report
+from sourcehealth.sast.container import ContainerError, run_repository, sourcecraft_clone_url
 
 
 class SASTTests(unittest.TestCase):
@@ -117,7 +117,7 @@ class SASTTests(unittest.TestCase):
         self.write("nested/deeper/app.py", "eval(data)")
         result = SASTScanner(ScanConfig(max_depth=1)).scan(self.root)
         self.assertIn("depth_limit", result.skipped)
-        with patch("sourcehealth.SAST.scanner.time.monotonic", side_effect=[0, 31, 32]):
+        with patch("sourcehealth.sast.scanner.time.monotonic", side_effect=[0, 31, 32]):
             result = SASTScanner().scan(self.root)
         self.assertEqual(result.skipped, {"timeout": 1})
         self.assertFalse(result.complete)
@@ -153,7 +153,7 @@ class SASTTests(unittest.TestCase):
 
     def test_read_error_is_not_a_clean_scan(self) -> None:
         self.write("app.py", "eval(data)")
-        with patch("sourcehealth.SAST.scanner.os.open", side_effect=PermissionError):
+        with patch("sourcehealth.sast.scanner.os.open", side_effect=PermissionError):
             result = SASTScanner().scan(self.root)
         self.assertFalse(result.complete)
         self.assertEqual(result.skipped["read_error"], 1)
@@ -205,7 +205,7 @@ class SASTTests(unittest.TestCase):
 
     def test_atomic_write_preserves_old_report_on_failure(self) -> None:
         output = self.write("report.json", '{"old": true}')
-        with patch("sourcehealth.SAST.__main__.os.replace", side_effect=OSError):
+        with patch("sourcehealth.sast.__main__.os.replace", side_effect=OSError):
             with self.assertRaises(OSError):
                 write_report({"new": True}, output)
         self.assertEqual(json.loads(output.read_text()), {"old": True})
@@ -263,7 +263,7 @@ class ContainerWorkflowTests(unittest.TestCase):
                 raise ContainerError("container_timeout")
             return ""
 
-        with patch("sourcehealth.SAST.container._docker", side_effect=fake_docker):
+        with patch("sourcehealth.sast.container._docker", side_effect=fake_docker):
             report = run_repository("https://sourcecraft.dev/team/repo")
         self.assertFalse(report["complete"])
         self.assertEqual(report["error"], {"stage": "clone", "code": "container_timeout"})
@@ -273,8 +273,8 @@ class ContainerWorkflowTests(unittest.TestCase):
     def test_scan_runs_offline_and_partial_json_survives(self) -> None:
         candidate = {"schema_version": "1.0", "checks": {"sast": {"complete": False, "findings": []}}, "complete": False}
         completed = subprocess.CompletedProcess([], 2, json.dumps(candidate), "")
-        with patch("sourcehealth.SAST.container._docker", return_value="") as docker:
-            with patch("sourcehealth.SAST.container.subprocess.run", return_value=completed):
+        with patch("sourcehealth.sast.container._docker", return_value="") as docker:
+            with patch("sourcehealth.sast.container.subprocess.run", return_value=completed):
                 report = run_repository("https://sourcecraft.dev/team/repo")
         creates = [call.args[0] for call in docker.call_args_list if call.args[0][0] == "create"]
         self.assertIn("--network=none", creates[1])
@@ -289,14 +289,14 @@ class ContainerWorkflowTests(unittest.TestCase):
                 raise ContainerError("docker_command_failed")
             return ""
 
-        with patch("sourcehealth.SAST.container._docker", side_effect=fake_docker):
+        with patch("sourcehealth.sast.container._docker", side_effect=fake_docker):
             report = run_repository("https://sourcecraft.dev/team/repo")
         self.assertEqual(len(report["cleanup_pending"]), 1)
         self.assertFalse(report["complete"])
 
     def test_scan_timeout_cleans_both_containers_and_volume(self) -> None:
-        with patch("sourcehealth.SAST.container._docker", return_value="") as docker:
-            with patch("sourcehealth.SAST.container.subprocess.run", side_effect=subprocess.TimeoutExpired("docker", 1)):
+        with patch("sourcehealth.sast.container._docker", return_value="") as docker:
+            with patch("sourcehealth.sast.container.subprocess.run", side_effect=subprocess.TimeoutExpired("docker", 1)):
                 report = run_repository("https://sourcecraft.dev/team/repo")
         self.assertEqual(report["error"], {"stage": "analyze", "code": "container_timeout"})
         arguments = [call.args[0] for call in docker.call_args_list]
@@ -306,8 +306,8 @@ class ContainerWorkflowTests(unittest.TestCase):
     def test_inconsistent_container_report_cannot_claim_success(self) -> None:
         candidate = {"schema_version": "1.0", "checks": {"sast": {"complete": False, "findings": []}}, "complete": True}
         completed = subprocess.CompletedProcess([], 2, json.dumps(candidate), "")
-        with patch("sourcehealth.SAST.container._docker", return_value=""):
-            with patch("sourcehealth.SAST.container.subprocess.run", return_value=completed):
+        with patch("sourcehealth.sast.container._docker", return_value=""):
+            with patch("sourcehealth.sast.container.subprocess.run", return_value=completed):
                 report = run_repository("https://sourcecraft.dev/team/repo")
         self.assertFalse(report["complete"])
         self.assertEqual(report["error"]["code"], "inconsistent_report")

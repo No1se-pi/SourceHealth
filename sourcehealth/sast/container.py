@@ -1,6 +1,6 @@
 """Одноразовый Docker workflow для публичного репозитория SourceCraft.
 
-    python -m sourcehealth.SAST.container https://sourcecraft.dev/owner/repo \
+    python -m sourcehealth.sast.container https://sourcecraft.dev/owner/repo \
         --output reports/health.json
 
 Оркестратор запускается на хосте. Сначала контейнер Git скачивает репозиторий

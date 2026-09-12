@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=65"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sourcehealth"
+version = "0.4.0"
+description = "Modular repository analysis: Git activity and lightweight SAST"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {file = "LICENSE"}
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["ruff==0.15.7"]
+
+[project.scripts]
+sourcehealth = "sourcehealth.cli:main"
+sourcehealth-sast = "sourcehealth.sast.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["sourcehealth*"]
+
+[tool.setuptools.package-data]
+"sourcehealth.sast" = ["rules/*.json", "Dockerfile", "README.md"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = ["temp"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

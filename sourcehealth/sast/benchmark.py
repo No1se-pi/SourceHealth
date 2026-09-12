@@ -1,6 +1,6 @@
 """Воспроизводимый локальный benchmark; создание файлов не входит в замер.
 
-    python -m sourcehealth.SAST.benchmark --files 1000 --repeat 3
+    python -m sourcehealth.sast.benchmark --files 1000 --repeat 3
 
 Профили: clean (обычный код без опасных вызовов), python (нужен AST, но аргументы
 безопасны), secrets (искусственные credentials), adversarial (длинные строки
@@ -8,11 +8,10 @@
 """
 
 import argparse
-import json
+import os
 import platform
 import statistics
 import tempfile
-import os
 from pathlib import Path
 
 from . import DEFAULT_RULES, SASTScanner, ScanConfig

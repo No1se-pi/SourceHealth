@@ -9,9 +9,9 @@ AST устраняет совпадения в комментариях и ст�
 from __future__ import annotations
 
 import ast
+import re
 import time
 import warnings
-import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 
