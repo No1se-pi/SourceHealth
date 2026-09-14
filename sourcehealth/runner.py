@@ -1,6 +1,7 @@
 """Последовательное выполнение независимых анализаторов с общим контекстом."""
 
 from collections.abc import Callable, Iterable
+from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -42,6 +43,10 @@ class AnalysisRunner:
         if not path.is_dir():
             raise ValueError("repository must be an existing directory")
         context = self.context_factory(path)
+        return self.analyze_context(context)
+
+    def analyze_context(self, context: AnalysisContext) -> AnalysisReport:
+        """Выполнить API-only или смешанный анализ по уже собранным фактам."""
         checks: dict[str, AnalyzerResult] = {}
         for analyzer in self.analyzers:
             try:
@@ -50,11 +55,13 @@ class AnalysisRunner:
                     raise ValueError("analyzer returned an invalid result")
                 # Проверяем и копируем результат до следующего анализатора:
                 # ошибка сериализации тоже не должна разрушать весь отчёт.
-                result = AnalyzerResult(**result.to_dict())
+                result.to_dict()
+                result = deepcopy(result)
             except Exception:
                 # Не перехватываем KeyboardInterrupt/SystemExit и не выводим
                 # произвольный текст исключения в публичный JSON.
                 result = AnalyzerResult(analyzer.name, status="error", error="analyzer_failed")
             checks[analyzer.name] = result
-        return AnalysisReport(repository={"path": str(path)}, started_at=context.started_at,
+        repository = context.repository.to_dict() if context.repository else {"path": str(context.repo_path)}
+        return AnalysisReport(repository=repository, started_at=context.started_at,
                               completed_at=datetime.now(UTC), checks=checks)
