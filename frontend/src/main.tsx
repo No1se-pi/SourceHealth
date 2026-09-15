@@ -49,7 +49,7 @@ function RepositoryView() {
     try { const run = await api.start(id); navigate(`/analyses/${run.id}`); }
     catch (e) { setError(e); } finally { setStarting(false); }
   }
-  return <section>{error ? <Failure error={error} /> : null}{!repo ? <p>Загрузка репозитория…</p> : <>
+  return <section>{error ? <Failure error={error} /> : null}{!repo ? (!error && <p>Загрузка репозитория…</p>) : <>
     <h1>{repo.organization_slug}/{repo.repository_slug}</h1><a href={repo.canonical_url}>Открыть в SourceCraft</a>
     <p>Repo Health Score: {repo.health_score ?? 'Нет оценки'}</p>
     {repo.latest_analysis_id && <p><Link to={`/analyses/${repo.latest_analysis_id}`}>Последний завершённый анализ</Link></p>}
