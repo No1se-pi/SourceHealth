@@ -1,0 +1,14 @@
+:root { font-family: system-ui, sans-serif; color: #17243b; background: #f5f7fa; line-height: 1.6; }
+body { margin: 0; }
+header { display: flex; justify-content: space-between; gap: 2rem; padding: 1.2rem 5%; background: white; border-bottom: 1px solid #dce3ed; }
+main { max-width: 1000px; margin: 3rem auto; padding: 0 1.5rem; }
+section { background: white; border: 1px solid #dce3ed; border-radius: 12px; padding: 2rem; }
+h1 { font-size: clamp(1.5rem, 3vw, 2rem); line-height: 1.25; }
+a { color: #214cc5; }
+ul { padding: 0; list-style: none; }
+li { padding: 1rem 0; border-bottom: 1px solid #e4e8ef; }
+li span { margin-left: 1rem; }
+button, select { padding: .65rem 1rem; margin: .5rem .5rem .5rem 0; border: 1px solid #aab8ce; border-radius: 6px; background: white; font: inherit; }
+button:not(:disabled) { cursor: pointer; }
+[role=alert] { color: #a02727; }
+@media (max-width: 600px) { section { padding: 1rem; } li span { display: block; margin-left: 0; } }

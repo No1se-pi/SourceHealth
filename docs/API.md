@@ -1,0 +1,88 @@
+# REST API v1
+
+Машиночитаемый контракт: [openapi.json](openapi.json), генерируется из `api/schemas.py`
+и FastAPI routes. При запущенном API: `/docs` и `/openapi.json`. TypeScript types
+генерируются из этого файла; Python dataclass internals frontend не использует.
+
+## Endpoints
+
+| Метод и URL | Результат | Доступ / примечание |
+|---|---|---|
+| GET `/api/v1/health` | HealthResponse, 200 | Liveness, без соединения с БД |
+| GET `/api/v1/repositories` | RepositoryPage, 200 | Только visibility=public |
+| GET `/api/v1/repositories/{repository_id}` | RepositoryDetails, 200 | Private/unknown/nonexistent → 404 |
+| GET `/api/v1/repositories/{repository_id}/analyses/latest` | AnalysisSummary, 200 | Последний законченный run; если нет → 404 |
+| POST `/api/v1/repositories/{repository_id}/analyses` | AnalysisSummary, 202 | Сессия Я ID + exact Origin; public repo |
+| GET `/api/v1/analyses/{analysis_id}` | AnalysisDetails, 200 | Повторная проверка visibility repo |
+| GET `/api/v1/analyses/{analysis_id}/report.md` | text/markdown, attachment | completed/partial; иначе 409 |
+| GET `/api/v1/auth/yandex/login` | 302 к Я ID + opaque state cookie | Без настройки 503 |
+| GET `/api/v1/auth/yandex/callback?code=…&state=…` | 303 `/auth/callback` + session cookie | State/PKCE + OAuth exchange |
+| POST `/api/v1/auth/logout` | 204 | Exact Origin; удаляет серверную сессию |
+| GET `/api/v1/me` | UserDTO, 200 | Без сессии 401 |
+
+Нет 501 endpoints с выдуманными результатами. HTTP import, private listing/analysis,
+пользовательские PAT, админка и history endpoint пока отсутствуют.
+
+## Pagination и сортировка
+
+`GET repositories?limit=20&offset=0&sort=health_score&language=Python`.
+`limit=1..100`, `offset=0..100000`, language — точное совпадение, optional.
+`sort=health_score|likes|last_activity`; descending, NULLS LAST, затем UUID ascending.
+По умолчанию Health. Ответ `{items, limit, offset, has_more}`. Total не вычисляется.
+Offset pagination может сдвигаться при конкурентном изменении рейтинга: frozen
+snapshot не обещается. Для массового каталога оценить cursor pagination через ADR.
+
+## DTO
+
+- RepositorySummary: UUID id; org/repo slugs; canonical_url; visibility; nullable
+  health_score/language/likes/last_activity_at/latest_analysis_id.
+- RepositoryDetails: Summary + sourcecraft_id/default_branch/head_sha.
+- AnalysisSummary: UUID id/repository_id; status/trigger; queued_at/started_at/completed_at;
+  nullable head_sha/health_score; scoring_policy_version/analyzer_contract_version/error_code.
+- AnalysisDetails: Summary + category_scores/data_coverage/recommendations/checks.
+- CategoryScore: category, nullable score, availability, explanation, evidence_refs.
+- AnalyzerResult: analyzer, status, availability, source, category, versions, metrics,
+  findings, metadata, safe error, evidence. Metrics имеют свой analyzer contract.
+- Evidence: id/source/type/reference/summary + nullable url/location/timestamp.
+- Recommendation: id/category/title/description/priority/evidence_refs/suggested_action/expected_impact.
+- UserDTO: внутренний UUID id; без email, OAuth token и SourceCraft PAT.
+
+Timestamps — UTC ISO-8601. Nullable время означает ещё не наступивший этап.
+`health_score=null` нельзя превращать в `0` через `value || 0` или `Number(null)`.
+Проверять `value === null`, показывать отдельную подпись.
+
+## POST и polling
+
+POST body: `{"force_refresh": false}`, `Content-Type: application/json`, session
+cookie и Origin, точно совпадающий с PUBLIC_ORIGIN. Ответ 202 с реальным run,
+включая cached terminal result. completed/partial/failed — terminal; остальные
+frontend опрашивает раз в 2 секунды. Повторный POST возвращает активный run.
+`force_refresh=true` сейчас 403: Я ID не подтверждает права SourceCraft. Операторский
+force существует в application, HTTP policy предстоит согласовать.
+
+## Ошибки и приватность
+
+```json
+{"code":"analysis_not_found","message":"analysis_not_found","request_id":"UUID"}
+```
+
+Message сейчас равен code; UI локализует по нему. 400 — OAuth state; 401 — сессия;
+403 — Origin/permissions; 404 — недоступная сущность; 409 — report not ready;
+422 — validation; 503 — зависимость/config; 500 — безопасная внутренняя ошибка.
+`X-Request-ID` есть в ответах. API использует `Cache-Control: no-store`.
+
+Запрещены абсолютные filesystem paths, PAT, OAuth token, исходные строки/секреты,
+tracebacks и raw exception text. DTO не очищает произвольные metrics автоматически:
+allowlist на collector/analyzer boundary обязателен и проверяется тестами.
+
+## Изменение API
+
+```powershell
+python scripts/export_openapi.py
+npm run types --prefix frontend
+npm run build --prefix frontend
+```
+
+OpenAPI, generated.ts, docs и tests меняются в одном PR. Новые analyzer metrics
+обычно не требуют изменения DTO. Breaking HTTP change требует согласования и новой
+версии либо явной миграции до первого общего deployment.

@@ -13,38 +13,18 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import subprocess
 import sys
 import uuid
 from pathlib import Path
-from urllib.parse import urlsplit
+
+from sourcehealth.core.domain import sourcecraft_clone_url
 
 from .__main__ import write_report
 
 
 class ContainerError(RuntimeError):
     """Короткий код ошибки без вывода Git и без содержимого репозитория."""
-
-
-def sourcecraft_clone_url(value: str) -> str:
-    """Нормализовать web/clone URL; принимать только HTTPS SourceCraft.
-
-    Запрещены произвольные хосты, порты, пароли, query, fragment и сложные пути.
-    ``git@`` из официальной HTTPS-ссылки допустим и удаляется. Это не универсальный
-    URL-fetcher: добавление других хостов требует отдельного анализа SSRF.
-    """
-    parsed = urlsplit(value)
-    if (parsed.scheme != "https" or parsed.hostname not in {"sourcecraft.dev", "git.sourcecraft.dev"}
-            or parsed.port is not None or parsed.password is not None
-            or parsed.username not in {None, "git"} or parsed.query or parsed.fragment):
-        raise ValueError("Expected a public SourceCraft HTTPS repository URL")
-    path = parsed.path.rstrip("/")
-    if path.endswith(".git"):
-        path = path[:-4]
-    if not re.fullmatch(r"/[A-Za-z0-9][A-Za-z0-9_-]{0,99}/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", path):
-        raise ValueError("Expected /organization/repository")
-    return f"https://git.sourcecraft.dev{path}.git"
 
 
 def _docker(arguments: list[str], *, timeout: float = 30) -> str:

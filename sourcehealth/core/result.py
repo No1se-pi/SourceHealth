@@ -5,6 +5,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any, Literal
 
+from .domain import Category, DataAvailability, Evidence, Recommendation
+
 AnalysisStatus = Literal["ok", "partial", "error"]
 
 
@@ -16,6 +18,21 @@ class AnalyzerResult:
     findings: list[dict[str, Any]] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
+    availability: DataAvailability = DataAvailability.AVAILABLE
+    category: str | None = None
+    source: str = "unspecified"
+    analyzer_version: str = "1"
+    contract_version: str = "3.0"
+    evidence: list[Evidence] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        # Старые анализаторы передают только status; не изображаем доступность
+        # полных данных при их ошибке/частичном выполнении.
+        if self.availability == DataAvailability.AVAILABLE:
+            if self.status == "error":
+                self.availability = DataAvailability.ERROR
+            elif self.status == "partial":
+                self.availability = DataAvailability.PARTIAL
 
     def to_dict(self) -> dict[str, Any]:
         """Проверить контракт до включения результата в общий отчёт.
@@ -33,6 +50,13 @@ class AnalyzerResult:
             raise ValueError("findings must be a list of dictionaries")
         if self.error is not None and not isinstance(self.error, str):
             raise ValueError("error must be a string or null")
+        DataAvailability(self.availability)
+        if self.category is not None:
+            Category(self.category)
+        if any(not isinstance(item, Evidence) for item in self.evidence):
+            raise ValueError("evidence must contain Evidence objects")
+        if len({item.id for item in self.evidence}) != len(self.evidence):
+            raise ValueError("duplicate evidence id")
         result = asdict(self)
         json.dumps(result, allow_nan=False)
         return result
@@ -45,6 +69,26 @@ class AnalysisReport:
     completed_at: datetime
     checks: dict[str, AnalyzerResult] = field(default_factory=dict)
     schema_version: str = field(default="2.0", init=False)
+    scoring_policy_version: str = "unconfigured-v1"
+    health_score: float | None = None
+    category_scores: dict[str, Any] = field(default_factory=dict)
+    recommendations: list[Recommendation] = field(default_factory=list)
+
+    def to_public_dict(self) -> dict[str, Any]:
+        """JSON 3.0 для persistence/API: локальный CLI JSON 2.0 остаётся совместимым.
+
+        Публичный report возможен только с RepositoryRef, никогда с workspace.
+        Доверенные адаптеры обязаны публиковать безопасные metrics/evidence.
+        """
+        from .domain import RepositoryRef
+
+        RepositoryRef(**self.repository)
+        result = self.to_dict()
+        result.update(schema_version="3.0", scoring_policy_version=self.scoring_policy_version,
+                      health_score=self.health_score, category_scores=self.category_scores,
+                      recommendations=[asdict(item) for item in self.recommendations])
+        json.dumps(result, allow_nan=False)
+        return result
 
     @property
     def complete(self) -> bool:

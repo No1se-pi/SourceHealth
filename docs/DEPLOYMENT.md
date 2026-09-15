@@ -1,0 +1,107 @@
+# Локальный запуск и модель deployment
+
+## Требования
+
+Python ≥3.11, Git, Docker Engine/Desktop с Compose v2 (поддержка optional env_file),
+Node 22.12+ для frontend. Проверенная среда разработки: Windows/PowerShell, Python 3.11,
+Node 24. Worker production/development запускается Linux-контейнером: RQ Worker использует fork.
+Compose credentials предназначены только для loopback development.
+
+## Первый запуск
+
+Из корня repository:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements-server.lock
+python -m pip install -e ".[dev,server]"
+Copy-Item .env.example .env
+docker compose config --quiet
+docker compose up -d --build
+npm ci --prefix frontend
+npm run dev --prefix frontend
+```
+
+Не копировать .env.example поверх своего заполненного .env. Linux/macOS activation:
+`source .venv/bin/activate`. `requirements-server.lock` фиксирует runtime dependency
+snapshot; npm ci использует package-lock.json. Обновление lock — отдельный проверяемый PR.
+
+Адреса: frontend http://127.0.0.1:5173, backend http://127.0.0.1:8000, API docs
+http://127.0.0.1:8000/docs. PostgreSQL доступен локально на 15432 (POSTGRES_PORT),
+Redis на 6379. Внутри сети Compose — postgres:5432 и redis:6379.
+15432 выбран, чтобы обходить часто занятый/зарезервированный 5432 на Windows.
+
+Сначала migrate применяет Alembic; backend/worker ждут его успешного завершения.
+Первая БД пуста — это нормально. Нет fake leaderboard или dummy users.
+
+## Backend на хосте
+
+```powershell
+docker compose up -d postgres redis
+python -m alembic upgrade head
+python -m uvicorn sourcehealth.api.app:create_app --factory --host 127.0.0.1 --port 8000 --no-access-log
+```
+
+Не запускать одновременно второй backend на том же порту. На Windows URL БД использует
+127.0.0.1:15432: localhost может сначала пытаться подключиться к недоступному IPv6.
+Подключения БД ограничены connect_timeout=10 секунд.
+
+## Добавить настоящий публичный SourceCraft repo
+
+Если API требует PAT, заполнить SOURCECRAFT_PAT локально; не добавлять его в Git.
+Операторская команда проверяет visibility через настоящий SourceCraft API:
+
+```powershell
+python -m sourcehealth.application register https://sourcecraft.dev/ORGANIZATION/REPOSITORY
+```
+
+Подставить существующие slugs. Команда печатает repository_id и analysis_id.
+Сейчас фоновый анализ собирает metadata, выдаёт partial и null Score из-за неподключённой
+методики/AppSec. Это ожидаемый foundation outcome. Непубличный/unverified repo не принимается.
+
+## Scheduler и восстановление доставки
+
+```powershell
+docker compose run --rm scheduler
+docker compose exec worker python -m sourcehealth.application dispatch
+```
+
+One-shot scheduler нужно вызывать регулярно. Linux cron из каталога deployment,
+например раз в минуту: `* * * * * cd /srv/sourcehealth && docker compose run --rm scheduler`.
+Не вставлять scheduler loop в FastAPI. По умолчанию repository refresh раз в сутки,
+command раз в минуту обеспечивает due selection/recovery/dispatch.
+
+## Я ID для локального браузера
+
+Реально зарегистрировать OAuth приложение с callback:
+`http://127.0.0.1:5173/api/v1/auth/yandex/callback`. В .env для этого dev-сценария:
+PUBLIC_ORIGIN=http://127.0.0.1:5173, YANDEX_REDIRECT_URI с этим callback,
+COOKIE_SECURE=false, клиентские credentials и случайный SESSION_SECRET ≥32 символов.
+Vite проксирует callback в backend, затем /auth/callback показывает результат.
+После изменений перезапустить backend. Это явная локальная настройка; публичный
+стенд использует HTTPS и COOKIE_SECURE=true. SourceCraft bridge отдельно не реализован.
+
+## Диагностика
+
+```powershell
+docker compose ps
+docker compose logs --tail 100 backend worker migrate
+python -m alembic current
+python -m alembic check
+Invoke-RestMethod http://127.0.0.1:8000/api/v1/health
+```
+
+Health подтверждает живой HTTP процесс; доступ БД/Redis и миграции проверять отдельно.
+Сопоставлять request_id/analysis_id в безопасных логах. Не выводить .env/credentials.
+`docker compose down` останавливает сервисы, сохраняет named volumes; `down -v`
+удаляет данные и не является обычной командой обновления.
+
+## Scale / production
+
+API можно масштабировать stateless, workers — через `docker compose up -d --scale worker=2`.
+DB/Redis shared; PG locks удерживают single-flight. Соблюдать лимиты внешнего API и
+ресурсов workers. Compose не является готовой production cloud конфигурацией:
+нужны HTTPS reverse proxy, секреты, DB roles/backups, private network, rate limits,
+cron, monitoring и restore drill. Не монтировать Docker socket в web API или обычный
+platform worker. Code workers выделять по [SECURITY](SECURITY.md).

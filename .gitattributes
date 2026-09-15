@@ -1,0 +1,3 @@
+docs/openapi.json text eol=lf
+requirements-server.lock text eol=lf
+frontend/src/api/generated.ts text eol=lf
