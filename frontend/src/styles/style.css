@@ -205,6 +205,26 @@ select:focus-visible {
   width: 100%;
 }
 
+@media (max-width: 640px) {
+  .app-header-content {
+    padding: 0.65rem 0.85rem;
+    gap: 0.5rem;
+  }
+  .brand-logo-link {
+    font-size: 1.05rem;
+    gap: 0.4rem;
+  }
+  .brand-logo-badge {
+    display: none;
+  }
+  .app-nav {
+    display: none;
+  }
+  .page-container {
+    padding: 0 0.85rem;
+  }
+}
+
 /* Responsive Table / Horizontal Scroll Container */
 .table-responsive-wrapper {
   width: 100%;
