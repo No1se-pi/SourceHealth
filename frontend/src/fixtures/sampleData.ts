@@ -1,11 +1,12 @@
 import type {
   Repository,
   RepositoryDetails,
+  RepositoryPage,
   Analysis,
 } from '../api/client';
 
 /**
- * Typed sample fixtures for development and UI component testing.
+ * Typed sample fixtures for development and UI acceptance testing.
  * Uses OpenAPI schema types directly via TypeScript satisfies.
  *
  * NOTE: Production API client never falls back to these mocks.
@@ -32,8 +33,8 @@ export const mockNoDataRepo = {
   visibility: 'public',
   health_score: null, // NO_DATA: not calculated yet, NOT zero!
   language: 'Python',
-  likes: 0,
-  last_activity_at: '2026-09-10T11:00:00Z',
+  likes: null,
+  last_activity_at: null,
   latest_analysis_id: null,
 } satisfies Repository;
 
@@ -52,6 +53,13 @@ export const mockRepoDetails = {
   default_branch: 'main',
   head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
 } satisfies RepositoryDetails;
+
+export const mockEmptyRepositoryPage = {
+  items: [],
+  limit: 20,
+  offset: 0,
+  has_more: false,
+} satisfies RepositoryPage;
 
 export const mockCompletedAnalysis = {
   id: 'b0000001-0000-0000-0000-000000000001',
@@ -129,7 +137,196 @@ export const mockCompletedAnalysis = {
       suggested_action: 'Создать diagrams/architecture.md',
       expected_impact: '+2 Health Score',
     },
+    {
+      id: 'rec-2',
+      category: 'security',
+      title: 'Устранить обнаруженные чувствительные токены в тестах',
+      description: 'В фикстурах обнаружен тестовый API-ключ с высокой энтропией.',
+      priority: 1,
+      evidence_refs: ['ev-sec-1'],
+      suggested_action: 'Заменить реальное тестовое значение на нейтральный шаблон.',
+      expected_impact: '+5 Health Score',
+    },
   ],
+  checks: {
+    documentation: {
+      analyzer: 'docs_analyzer',
+      status: 'ok',
+      availability: 'available',
+      source: 'repository_tree',
+      category: 'documentation',
+      analyzer_version: '1.0.0',
+      contract_version: '1.0.0',
+      metrics: { readme_words: 1200 },
+      findings: [],
+      metadata: {},
+      error: null,
+      evidence: [
+        {
+          id: 'ev-doc-1',
+          source: 'docs_analyzer',
+          type: 'file_presence',
+          reference: 'README.md',
+          summary: 'README.md найден в корне репозитория (1200 слов, разделы Quickstart и API)',
+          url: 'https://sourcecraft.tech/demo-org/fast-service/src/branch/main/README.md',
+          location: 'README.md:1',
+          timestamp: '2026-09-16T14:28:10Z',
+        },
+      ],
+    },
+    security: {
+      analyzer: 'sast_scanner',
+      status: 'ok',
+      availability: 'available',
+      source: 'sast_engine',
+      category: 'security',
+      analyzer_version: '1.0.0',
+      contract_version: '1.0.0',
+      metrics: { rules_checked: 24, issues_found: 1 },
+      findings: [
+        { rule_id: 'secret-high-entropy', path: 'tests/fixtures.py' },
+      ],
+      metadata: {},
+      error: null,
+      evidence: [
+        {
+          id: 'ev-sec-1',
+          source: 'sast_scanner',
+          type: 'pattern_match',
+          reference: 'tests/fixtures.py',
+          summary: 'Потенциальный токен в тестовом файле tests/fixtures.py',
+          url: null,
+          location: 'tests/fixtures.py:42',
+          timestamp: '2026-09-16T14:28:15Z',
+        },
+      ],
+    },
+  },
+} satisfies Analysis;
+
+export const mockQueuedAnalysis = {
+  id: 'b0000003-0000-0000-0000-000000000003',
+  repository_id: 'a0000001-0000-0000-0000-000000000001',
+  status: 'queued',
+  trigger: 'manual',
+  queued_at: '2026-09-16T16:00:00Z',
+  started_at: null,
+  completed_at: null,
+  head_sha: null,
+  health_score: null,
+  scoring_policy_version: 'v1',
+  analyzer_contract_version: 'v1',
+  error_code: null,
+  category_scores: {},
+  data_coverage: {},
+  recommendations: [],
+  checks: {},
+} satisfies Analysis;
+
+export const mockRunningAnalysis = {
+  id: 'b0000004-0000-0000-0000-000000000004',
+  repository_id: 'a0000001-0000-0000-0000-000000000001',
+  status: 'analyzing',
+  trigger: 'manual',
+  queued_at: '2026-09-16T16:01:00Z',
+  started_at: '2026-09-16T16:01:02Z',
+  completed_at: null,
+  head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
+  health_score: null,
+  scoring_policy_version: 'v1',
+  analyzer_contract_version: 'v1',
+  error_code: null,
+  category_scores: {},
+  data_coverage: {},
+  recommendations: [],
+  checks: {},
+} satisfies Analysis;
+
+export const mockFailedAnalysis = {
+  id: 'b0000005-0000-0000-0000-000000000005',
+  repository_id: 'a0000001-0000-0000-0000-000000000001',
+  status: 'failed',
+  trigger: 'manual',
+  queued_at: '2026-09-16T16:05:00Z',
+  started_at: '2026-09-16T16:05:02Z',
+  completed_at: '2026-09-16T16:05:15Z',
+  head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
+  health_score: null,
+  scoring_policy_version: 'v1',
+  analyzer_contract_version: 'v1',
+  error_code: 'SOURCE_CRAFT_TIMEOUT',
+  category_scores: {},
+  data_coverage: {},
+  recommendations: [],
+  checks: {},
+} satisfies Analysis;
+
+export const mockNoDataAnalysis = {
+  id: 'b0000006-0000-0000-0000-000000000006',
+  repository_id: 'a0000002-0000-0000-0000-000000000002',
+  status: 'completed',
+  trigger: 'manual',
+  queued_at: '2026-09-16T16:10:00Z',
+  started_at: '2026-09-16T16:10:02Z',
+  completed_at: '2026-09-16T16:10:15Z',
+  head_sha: 'abcdef1234567890abcdef1234567890abcdef12',
+  health_score: null, // NO_DATA != 0
+  scoring_policy_version: 'v1',
+  analyzer_contract_version: 'v1',
+  error_code: null,
+  category_scores: {
+    documentation: {
+      category: 'documentation',
+      score: null,
+      availability: 'no_data',
+      explanation: 'Файлы документации не найдены в репозитории.',
+      evidence_refs: [],
+    },
+    cicd: {
+      category: 'cicd',
+      score: null,
+      availability: 'not_configured',
+      explanation: 'Конфигурации CI/CD пайплайнов не обнаружены.',
+      evidence_refs: [],
+    },
+    security: {
+      category: 'security',
+      score: null,
+      availability: 'not_configured',
+      explanation: 'AppSec проверки не настроены.',
+      evidence_refs: [],
+    },
+    activity: {
+      category: 'activity',
+      score: null,
+      availability: 'no_data',
+      explanation: 'Недостаточно данных об активности за период анализа.',
+      evidence_refs: [],
+    },
+    issues: {
+      category: 'issues',
+      score: null,
+      availability: 'not_configured',
+      explanation: 'Трекер задач не подключён.',
+      evidence_refs: [],
+    },
+    code_health: {
+      category: 'code_health',
+      score: null,
+      availability: 'no_data',
+      explanation: 'Метрики исходного кода не рассчитаны.',
+      evidence_refs: [],
+    },
+  },
+  data_coverage: {
+    documentation: 'no_data',
+    cicd: 'not_configured',
+    security: 'not_configured',
+    activity: 'no_data',
+    issues: 'not_configured',
+    code_health: 'no_data',
+  },
+  recommendations: [],
   checks: {},
 } satisfies Analysis;
 
