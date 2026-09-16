@@ -221,3 +221,49 @@ select:focus-visible {
 .animate-spin {
   animation: spin 1s linear infinite;
 }
+
+/* Leaderboard Table & Mobile Styles */
+.leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.leaderboard-table th {
+  padding: var(--sh-space-3) var(--sh-space-4);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--sh-text-muted);
+  border-bottom: 1px solid var(--sh-border-default);
+}
+
+.leaderboard-table td {
+  padding: var(--sh-space-3) var(--sh-space-4);
+  border-bottom: 1px solid var(--sh-border-subtle);
+  vertical-align: middle;
+}
+
+.leaderboard-table tr:hover td {
+  background-color: var(--sh-bg-surface-hover);
+}
+
+.leaderboard-desktop {
+  display: block;
+}
+
+.leaderboard-mobile {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .leaderboard-desktop {
+    display: none;
+  }
+  .leaderboard-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sh-space-3);
+  }
+}

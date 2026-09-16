@@ -10,6 +10,8 @@ export type DataAvailability = components['schemas']['DataAvailability'];
 export type RunStatus = components['schemas']['RunStatus'];
 export type Category = components['schemas']['Category'];
 export type Recommendation = components['schemas']['RecommendationDTO'];
+export type AnalyzerResult = components['schemas']['AnalyzerResultDTO'];
+export type Evidence = components['schemas']['EvidenceDTO'];
 export type User = components['schemas']['UserDTO'];
 export type ErrorResponse = components['schemas']['ErrorResponse'];
 
@@ -37,6 +39,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       error.request_id ?? '',
     );
   }
+  if (response.status === 204 || response.headers.get('content-length') === '0') {
+    return undefined as T;
+  }
   return response.json() as Promise<T>;
 }
 
@@ -51,6 +56,8 @@ export const api = {
     ),
   repository: (id: string) =>
     request<RepositoryDetails>(`/repositories/${encodeURIComponent(id)}`),
+  latestAnalysis: (repositoryId: string) =>
+    request<AnalysisSummary>(`/repositories/${encodeURIComponent(repositoryId)}/analyses/latest`),
   analysis: (id: string) =>
     request<Analysis>(`/analyses/${encodeURIComponent(id)}`),
   start: (id: string) =>
@@ -58,6 +65,10 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ force_refresh: false }),
+    }),
+  logout: () =>
+    request<void>('/auth/logout', {
+      method: 'POST',
     }),
   me: () => request<User>('/me'),
 };
