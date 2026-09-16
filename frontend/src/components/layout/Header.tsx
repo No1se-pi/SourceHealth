@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api, type User } from '../../api/client';
+import { Button } from '../common/Button';
 
 export const Header: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
 
   // Run session check once on mount. Unauthenticated visitors get 401, which is handled gracefully.
   useEffect(() => {
@@ -22,6 +25,20 @@ export const Header: React.FC = () => {
       active = false;
     };
   }, []);
+
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await api.logout();
+    } catch {
+      // Regardless of error response, clear local session state
+    } finally {
+      setUser(null);
+      setLoggingOut(false);
+      navigate('/');
+    }
+  };
 
   return (
     <header className="app-header">
@@ -46,33 +63,44 @@ export const Header: React.FC = () => {
           </nav>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           {user ? (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                fontSize: '0.85rem',
-                color: 'var(--sh-text-secondary)',
-                backgroundColor: 'var(--sh-bg-surface-elevated)',
-                padding: '0.3rem 0.75rem',
-                borderRadius: 'var(--sh-radius-full)',
-                border: '1px solid var(--sh-border-default)',
-              }}
-              title={`ID пользователя: ${user.id}`}
-            >
-              <span
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div
                 style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  backgroundColor: 'var(--sh-health-good)',
-                  display: 'inline-block',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  fontSize: '0.85rem',
+                  color: 'var(--sh-text-secondary)',
+                  backgroundColor: 'var(--sh-bg-surface-elevated)',
+                  padding: '0.3rem 0.75rem',
+                  borderRadius: 'var(--sh-radius-full)',
+                  border: '1px solid var(--sh-border-default)',
                 }}
-                aria-hidden="true"
-              />
-              <span>Сессия активна</span>
+                title={`ID пользователя: ${user.id}`}
+              >
+                <span
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--sh-health-good)',
+                    display: 'inline-block',
+                  }}
+                  aria-hidden="true"
+                />
+                <span>Авторизован</span>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLogout}
+                disabled={loggingOut}
+                aria-label="Выйти из аккаунта"
+              >
+                {loggingOut ? 'Выход…' : 'Выйти'}
+              </Button>
             </div>
           ) : (
             <a
