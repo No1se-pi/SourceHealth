@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type User } from '../api/client';
 import { Card } from '../components/common/Card';
-import { Button } from '../components/common/Button';
+import { getButtonStyles } from '../components/common/Button';
 import { LoadingState } from '../components/common/LoadingState';
 
 export const AuthCallbackPage: React.FC = () => {
@@ -52,15 +52,15 @@ export const AuthCallbackPage: React.FC = () => {
             </div>
             {user && (
               <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--sh-text-secondary)' }}>
-                Идентификатор сессии: <code style={{ color: 'var(--sh-text-primary)' }}>{user.id}</code>
+                ID пользователя: <code style={{ color: 'var(--sh-text-primary)' }}>{user.id}</code>
               </p>
             )}
             <p style={{ margin: 0, fontSize: '0.9rem' }}>
               Теперь вы можете запускать анализ открытых репозиториев SourceCraft.
             </p>
             <div>
-              <Link to="/">
-                <Button variant="primary">К списку репозиториев</Button>
+              <Link to="/" className="btn-link" style={getButtonStyles('primary', 'md')}>
+                К списку репозиториев
               </Link>
             </div>
           </div>
@@ -83,12 +83,12 @@ export const AuthCallbackPage: React.FC = () => {
             <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--sh-text-secondary)' }}>
               Возможно, время сессии истекло или cookies заблокированы браузером.
             </p>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <a href="/api/v1/auth/yandex/login">
-                <Button variant="primary">Повторить вход</Button>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <a href="/api/v1/auth/yandex/login" className="btn-link" style={getButtonStyles('primary', 'md')}>
+                Повторить вход
               </a>
-              <Link to="/">
-                <Button variant="secondary">На главную</Button>
+              <Link to="/" className="btn-link" style={getButtonStyles('secondary', 'md')}>
+                На главную
               </Link>
             </div>
           </div>

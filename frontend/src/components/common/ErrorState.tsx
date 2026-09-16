@@ -26,7 +26,7 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
   onRetry,
   className = '',
 }) => {
-  let userMessage = 'Сервис временно недоступен. Пожалуйста, повторите попытку позже.';
+  let userMessage = 'Произошла непредвиденная ошибка. Повторите попытку.';
   let errorCode: string | null = null;
   let requestId: string | null = null;
   let status: number | null = null;
@@ -36,11 +36,6 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
     requestId = error.requestId || null;
     status = error.status;
     userMessage = ERROR_MESSAGES[error.code] || `Ошибка запроса (${error.code})`;
-  } else if (error instanceof Error) {
-    // Only use message if it doesn't leak stack/internals
-    if (error.message && !error.message.includes('at ') && !error.message.includes('\n')) {
-      userMessage = error.message;
-    }
   }
 
   return (

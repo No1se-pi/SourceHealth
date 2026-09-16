@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Card } from '../components/common/Card';
-import { Button } from '../components/common/Button';
+import { getButtonStyles } from '../components/common/Button';
 
 export const NotFoundPage: React.FC = () => {
   return (
@@ -11,8 +11,8 @@ export const NotFoundPage: React.FC = () => {
           Запрашиваемая страница не существует или была перемещена.
         </p>
         <div>
-          <Link to="/">
-            <Button variant="primary">На главную страницу</Button>
+          <Link to="/" className="btn-link" style={getButtonStyles('primary', 'md')}>
+            На главную страницу
           </Link>
         </div>
       </Card>

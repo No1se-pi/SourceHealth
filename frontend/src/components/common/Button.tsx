@@ -3,25 +3,11 @@ import React from 'react';
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: ButtonVariant;
-  size?: ButtonSize;
-  loading?: boolean;
-  children: React.ReactNode;
-}
-
-export const Button: React.FC<ButtonProps> = ({
-  variant = 'secondary',
-  size = 'md',
-  loading = false,
-  disabled = false,
-  children,
-  style,
-  className = '',
-  ...rest
-}) => {
-  const isDisabled = disabled || loading;
-
+export function getButtonStyles(
+  variant: ButtonVariant = 'secondary',
+  size: ButtonSize = 'md',
+  extraStyle?: React.CSSProperties,
+): React.CSSProperties {
   const sizeStyles: Record<ButtonSize, React.CSSProperties> = {
     sm: {
       padding: '0.35rem 0.65rem',
@@ -68,17 +54,44 @@ export const Button: React.FC<ButtonProps> = ({
     },
   };
 
-  const combinedStyle: React.CSSProperties = {
+  return {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
     gap: '0.5rem',
     fontWeight: 500,
-    cursor: isDisabled ? 'not-allowed' : 'pointer',
-    opacity: isDisabled ? 0.6 : 1,
+    textDecoration: 'none',
+    cursor: 'pointer',
     transition: 'background var(--sh-transition), border-color var(--sh-transition), opacity var(--sh-transition)',
     ...sizeStyles[size],
     ...variantStyles[variant],
+    ...extraStyle,
+  };
+}
+
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  loading?: boolean;
+  children: React.ReactNode;
+}
+
+export const Button: React.FC<ButtonProps> = ({
+  variant = 'secondary',
+  size = 'md',
+  loading = false,
+  disabled = false,
+  children,
+  style,
+  className = '',
+  ...rest
+}) => {
+  const isDisabled = disabled || loading;
+
+  const combinedStyle: React.CSSProperties = {
+    ...getButtonStyles(variant, size),
+    cursor: isDisabled ? 'not-allowed' : 'pointer',
+    opacity: isDisabled ? 0.6 : 1,
     ...style,
   };
 

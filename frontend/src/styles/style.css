@@ -64,6 +64,10 @@ a:hover {
   text-decoration: underline;
 }
 
+.btn-link, .btn-link:hover {
+  text-decoration: none !important;
+}
+
 code, kbd, samp, pre {
   font-family: var(--sh-font-mono);
   font-size: 0.9em;
