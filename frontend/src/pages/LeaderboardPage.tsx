@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type RepositoryPage } from '../api/client';
 import { Card } from '../components/common/Card';
@@ -51,34 +51,36 @@ export const LeaderboardPage: React.FC = () => {
   const [language, setLanguage] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const fetchRepositories = () => {
-    let active = true;
+  const requestGenRef = useRef(0);
+
+  const fetchRepositories = useCallback(() => {
+    const currentGen = ++requestGenRef.current;
     setLoading(true);
     setError(undefined);
 
     api
       .repositories(offset, sort, language)
       .then((value) => {
-        if (active) {
+        if (requestGenRef.current === currentGen) {
           setPage(value);
           setLoading(false);
         }
       })
       .catch((err) => {
-        if (active) {
+        if (requestGenRef.current === currentGen) {
           setError(err);
           setLoading(false);
         }
       });
-
-    return () => {
-      active = false;
-    };
-  };
+  }, [offset, sort, language]);
 
   useEffect(() => {
-    return fetchRepositories();
-  }, [offset, sort, language]);
+    fetchRepositories();
+    return () => {
+      // Invalidate in-flight requests on unmount or filter/sort/offset change
+      requestGenRef.current++;
+    };
+  }, [fetchRepositories]);
 
   const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSort(e.target.value);

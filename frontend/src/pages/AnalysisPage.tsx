@@ -22,13 +22,13 @@ export const AnalysisPage: React.FC = () => {
   const [error, setError] = useState<unknown>();
   const [loading, setLoading] = useState(true);
 
-  const activeRef = useRef(true);
+  const requestGenRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const pollAnalysis = useCallback(async () => {
+  const pollAnalysis = useCallback(async (expectedGen: number) => {
     try {
       const value = await api.analysis(id);
-      if (!activeRef.current) return;
+      if (requestGenRef.current !== expectedGen) return;
 
       setRun(value);
       setError(undefined);
@@ -37,13 +37,13 @@ export const AnalysisPage: React.FC = () => {
       const isTerminal = ['completed', 'partial', 'failed'].includes(value.status);
       if (!isTerminal) {
         timerRef.current = setTimeout(() => {
-          if (activeRef.current) {
-            void pollAnalysis();
+          if (requestGenRef.current === expectedGen) {
+            void pollAnalysis(expectedGen);
           }
         }, 2000);
       }
     } catch (err) {
-      if (!activeRef.current) return;
+      if (requestGenRef.current !== expectedGen) return;
       setError(err);
       setLoading(false);
       // Do NOT auto-retry on error to prevent spamming the backend
@@ -51,24 +51,36 @@ export const AnalysisPage: React.FC = () => {
   }, [id]);
 
   useEffect(() => {
-    activeRef.current = true;
+    const currentGen = ++requestGenRef.current;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setRun(undefined); // Clear stale run from previous analysis immediately
     setLoading(true);
     setError(undefined);
 
-    void pollAnalysis();
+    void pollAnalysis(currentGen);
 
     return () => {
-      activeRef.current = false;
+      // Invalidate current generation and clear pending timer on unmount or id change
+      requestGenRef.current++;
       if (timerRef.current) {
         clearTimeout(timerRef.current);
+        timerRef.current = null;
       }
     };
   }, [pollAnalysis]);
 
   const handleRetry = () => {
+    const currentGen = ++requestGenRef.current;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     setError(undefined);
     setLoading(true);
-    void pollAnalysis();
+    void pollAnalysis(currentGen);
   };
 
   const statusMeta = run ? STATUS_CONFIG[run.status] : null;

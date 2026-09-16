@@ -54,6 +54,8 @@ export const RepositoryPage: React.FC = () => {
     const currentGen = ++requestGenRef.current;
     setLoading(true);
     setLoadError(undefined);
+    setStartError(undefined);
+    setRepo(undefined); // Clear stale repo from any previous repository immediately
     setLatestAnalysis(null); // Clear stale analysis from any previous repo immediately
 
     try {
