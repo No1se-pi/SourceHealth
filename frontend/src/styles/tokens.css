@@ -1,0 +1,80 @@
+/**
+ * SourceHealth Design Tokens — Dark-First Modern Developer SaaS
+ * GitHub / Linear / Vercel / SourceCraft aesthetic
+ */
+
+:root {
+  /* Color Palette — Base Surfaces (Dark Graphite / Black) */
+  --sh-bg-base: #0a0d14;
+  --sh-bg-surface: #111520;
+  --sh-bg-surface-elevated: #171c2b;
+  --sh-bg-surface-hover: #1c2234;
+  --sh-bg-input: #0e121b;
+
+  /* Borders */
+  --sh-border-subtle: #1e2436;
+  --sh-border-default: #283046;
+  --sh-border-hover: #3b4664;
+  --sh-border-strong: #4e5a7d;
+
+  /* Typography Colors */
+  --sh-text-primary: #f1f5f9;
+  --sh-text-secondary: #94a3b8;
+  --sh-text-muted: #64748b;
+  --sh-text-inverse: #0a0d14;
+
+  /* Brand / Action Colors (Purple Accent) */
+  --sh-brand: #8b5cf6;
+  --sh-brand-hover: #7c3aed;
+  --sh-brand-active: #6d28d9;
+  --sh-brand-subtle: rgba(139, 92, 246, 0.12);
+  --sh-brand-border: rgba(139, 92, 246, 0.35);
+
+  /* Health Semantics */
+  /* Good / Healthy (Green) */
+  --sh-health-good: #22c55e;
+  --sh-health-good-bg: rgba(34, 197, 94, 0.12);
+  --sh-health-good-border: rgba(34, 197, 94, 0.3);
+
+  /* Warning / Attention Needed (Yellow/Amber) */
+  --sh-health-warning: #f59e0b;
+  --sh-health-warning-bg: rgba(245, 158, 11, 0.12);
+  --sh-health-warning-border: rgba(245, 158, 11, 0.3);
+
+  /* Problem / Danger (Red) */
+  --sh-health-danger: #ef4444;
+  --sh-health-danger-bg: rgba(239, 68, 68, 0.12);
+  --sh-health-danger-border: rgba(239, 68, 68, 0.3);
+
+  /* Unavailable / NO_DATA (Neutral Gray) */
+  --sh-health-unavailable: #64748b;
+  --sh-health-unavailable-bg: rgba(100, 116, 139, 0.14);
+  --sh-health-unavailable-border: rgba(100, 116, 139, 0.28);
+
+  /* Focus Ring */
+  --sh-focus-ring: 0 0 0 2px #0a0d14, 0 0 0 4px #8b5cf6;
+
+  /* Typography */
+  --sh-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --sh-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Radii */
+  --sh-radius-sm: 6px;
+  --sh-radius-md: 10px;
+  --sh-radius-lg: 14px;
+  --sh-radius-full: 9999px;
+
+  /* Spacing */
+  --sh-space-1: 0.25rem;  /* 4px */
+  --sh-space-2: 0.5rem;   /* 8px */
+  --sh-space-3: 0.75rem;  /* 12px */
+  --sh-space-4: 1rem;     /* 16px */
+  --sh-space-5: 1.25rem;  /* 20px */
+  --sh-space-6: 1.5rem;   /* 24px */
+  --sh-space-8: 2rem;     /* 32px */
+  --sh-space-10: 2.5rem;  /* 40px */
+  --sh-space-12: 3rem;    /* 48px */
+
+  /* Transitions */
+  --sh-transition: 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
