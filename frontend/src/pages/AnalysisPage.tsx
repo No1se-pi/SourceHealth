@@ -1,101 +1,118 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, type Analysis, type RunStatus } from '../api/client';
+import { api, type Analysis } from '../api/client';
 import { Card } from '../components/common/Card';
-import { Badge, type BadgeVariant } from '../components/common/Badge';
+import { Badge } from '../components/common/Badge';
 import { ScoreDisplay } from '../components/common/ScoreDisplay';
 import { AvailabilityBadge } from '../components/common/AvailabilityBadge';
 import { LoadingState } from '../components/common/LoadingState';
 import { ErrorState } from '../components/common/ErrorState';
-
-interface StatusMeta {
-  label: string;
-  variant: BadgeVariant;
-  inProgress: boolean;
-}
-
-const STATUS_CONFIG: Record<RunStatus, StatusMeta> = {
-  queued: { label: 'В очереди', variant: 'brand', inProgress: true },
-  collecting: { label: 'Сбор данных', variant: 'brand', inProgress: true },
-  analyzing: { label: 'Анализ репозитория', variant: 'brand', inProgress: true },
-  scoring: { label: 'Подготовка оценки', variant: 'brand', inProgress: true },
-  completed: { label: 'Завершён', variant: 'success', inProgress: false },
-  partial: { label: 'Завершён с неполными данными', variant: 'warning', inProgress: false },
-  failed: { label: 'Не удалось завершить', variant: 'danger', inProgress: false },
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  documentation: 'Документация',
-  cicd: 'CI/CD',
-  security: 'Безопасность (Security)',
-  activity: 'Активность разработки',
-  issues: 'Задачи и тикеты (Issues)',
-  code_health: 'Качество кода (Code Health)',
-};
+import { RecommendationCard } from '../components/common/RecommendationCard';
+import {
+  CATEGORY_ORDER,
+  CATEGORY_LABELS,
+  STATUS_CONFIG,
+} from '../utils/analysis';
 
 export const AnalysisPage: React.FC = () => {
   const { id = '' } = useParams<{ id: string }>();
   const [run, setRun] = useState<Analysis>();
   const [error, setError] = useState<unknown>();
+  const [loading, setLoading] = useState(true);
+
+  const activeRef = useRef(true);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const pollAnalysis = useCallback(async () => {
+    try {
+      const value = await api.analysis(id);
+      if (!activeRef.current) return;
+
+      setRun(value);
+      setError(undefined);
+      setLoading(false);
+
+      const isTerminal = ['completed', 'partial', 'failed'].includes(value.status);
+      if (!isTerminal) {
+        timerRef.current = setTimeout(() => {
+          if (activeRef.current) {
+            void pollAnalysis();
+          }
+        }, 2000);
+      }
+    } catch (err) {
+      if (!activeRef.current) return;
+      setError(err);
+      setLoading(false);
+      // Do NOT auto-retry on error to prevent spamming the backend
+    }
+  }, [id]);
 
   useEffect(() => {
-    let active = true;
-    let timer: ReturnType<typeof setTimeout>;
-
-    setRun(undefined);
+    activeRef.current = true;
+    setLoading(true);
     setError(undefined);
 
-    async function poll() {
-      try {
-        const value = await api.analysis(id);
-        if (!active) return;
-        setRun(value);
-        setError(undefined);
-
-        if (!['completed', 'partial', 'failed'].includes(value.status)) {
-          timer = setTimeout(poll, 2000);
-        }
-      } catch (err) {
-        if (active) setError(err);
-      }
-    }
-
-    void poll();
+    void pollAnalysis();
 
     return () => {
-      active = false;
-      clearTimeout(timer);
+      activeRef.current = false;
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
     };
-  }, [id]);
+  }, [pollAnalysis]);
+
+  const handleRetry = () => {
+    setError(undefined);
+    setLoading(true);
+    void pollAnalysis();
+  };
 
   const statusMeta = run ? STATUS_CONFIG[run.status] : null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-6)' }}>
-      <div>
-        <Link
-          to="/"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.4rem',
-            fontSize: '0.9rem',
-            color: 'var(--sh-text-muted)',
-            marginBottom: 'var(--sh-space-3)',
-          }}
-        >
-          ← Назад к лидерборду
-        </Link>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <Link
+            to="/"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              fontSize: '0.9rem',
+              color: 'var(--sh-text-muted)',
+            }}
+          >
+            ← К лидерборду
+          </Link>
+          {run && run.repository_id && (
+            <Link
+              to={`/repositories/${run.repository_id}`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                fontSize: '0.9rem',
+                color: 'var(--sh-text-muted)',
+              }}
+            >
+              ← К репозиторию
+            </Link>
+          )}
+        </div>
       </div>
 
       {error ? (
         <ErrorState
           error={error}
           title="Ошибка загрузки состояния анализа"
+          onRetry={handleRetry}
         />
       ) : null}
 
-      {!run && !error && (
+      {!run && loading && !error && (
         <Card>
           <LoadingState message="Подключение к сессии анализа…" />
         </Card>
@@ -145,15 +162,15 @@ export const AnalysisPage: React.FC = () => {
               }}
             >
               <div style={{ fontSize: '0.85rem', color: 'var(--sh-text-muted)' }}>
-                {run.repository_id && (
-                  <Link to={`/repositories/${run.repository_id}`}>
-                    ← К странице репозитория
-                  </Link>
+                {run.completed_at ? (
+                  <span>Завершено: {new Date(run.completed_at).toLocaleString('ru-RU')}</span>
+                ) : (
+                  <span>В очереди с {new Date(run.queued_at).toLocaleString('ru-RU')}</span>
                 )}
               </div>
               {['completed', 'partial'].includes(run.status) && (
                 <a
-                  href={`/api/v1/analyses/${id}/report.md`}
+                  href={`/api/v1/analyses/${encodeURIComponent(run.id)}/report.md`}
                   download
                   style={{
                     display: 'inline-flex',
@@ -169,13 +186,13 @@ export const AnalysisPage: React.FC = () => {
                     textDecoration: 'none',
                   }}
                 >
-                  <span>⬇ Скачать отчёт в Markdown</span>
+                  <span>⬇ Скачать отчёт (Markdown)</span>
                 </a>
               )}
             </div>
           }
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-5)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-6)' }}>
             {run.error_code && (
               <div
                 role="alert"
@@ -192,6 +209,7 @@ export const AnalysisPage: React.FC = () => {
               </div>
             )}
 
+            {/* Category Scores in Fixed UI Order */}
             <div>
               <h3 style={{ marginBottom: 'var(--sh-space-3)' }}>Оценки по категориям</h3>
               <div
@@ -201,44 +219,152 @@ export const AnalysisPage: React.FC = () => {
                   gap: 'var(--sh-space-4)',
                 }}
               >
-                {Object.entries(run.category_scores).map(([key, value]) => (
-                  <div
-                    key={key}
-                    style={{
-                      padding: 'var(--sh-space-4)',
-                      backgroundColor: 'var(--sh-bg-base)',
-                      border: '1px solid var(--sh-border-subtle)',
-                      borderRadius: 'var(--sh-radius-sm)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '0.5rem',
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 600, color: 'var(--sh-text-primary)' }}>
-                        {CATEGORY_LABELS[key] || key}
-                      </span>
-                      <AvailabilityBadge availability={value.availability} />
+                {CATEGORY_ORDER.map((catKey) => {
+                  const scoreData = run.category_scores[catKey];
+                  const availability = scoreData?.availability ?? run.data_coverage?.[catKey] ?? 'no_data';
+                  return (
+                    <div
+                      key={catKey}
+                      style={{
+                        padding: 'var(--sh-space-4)',
+                        backgroundColor: 'var(--sh-bg-base)',
+                        border: '1px solid var(--sh-border-subtle)',
+                        borderRadius: 'var(--sh-radius-sm)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.5rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--sh-text-primary)' }}>
+                          {CATEGORY_LABELS[catKey]}
+                        </span>
+                        <AvailabilityBadge availability={availability} />
+                      </div>
+                      <div>
+                        <ScoreDisplay score={scoreData?.score ?? null} size="md" />
+                      </div>
+                      {scoreData?.explanation && (
+                        <p
+                          style={{
+                            margin: 0,
+                            fontSize: '0.86rem',
+                            color: 'var(--sh-text-secondary)',
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          {scoreData.explanation}
+                        </p>
+                      )}
                     </div>
-                    <div>
-                      <ScoreDisplay score={value.score} size="md" />
-                    </div>
-                    {value.explanation && (
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: '0.86rem',
-                          color: 'var(--sh-text-secondary)',
-                          lineHeight: 1.45,
-                        }}
-                      >
-                        {value.explanation}
-                      </p>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
+
+            {/* Recommendations Section */}
+            <div>
+              <h3 style={{ marginBottom: 'var(--sh-space-3)' }}>Рекомендации по улучшению</h3>
+              {run.recommendations && run.recommendations.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-3)' }}>
+                  {[...run.recommendations]
+                    .sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id))
+                    .map((rec) => (
+                      <RecommendationCard
+                        key={rec.id}
+                        recommendation={rec}
+                        checks={run.checks}
+                      />
+                    ))}
+                </div>
+              ) : (
+                <p style={{ color: 'var(--sh-text-muted)', fontSize: '0.9rem', margin: 0 }}>
+                  Рекомендации пока не сформированы; это не подтверждает отсутствие проблем.
+                </p>
+              )}
+            </div>
+
+            {/* Strengths / Weaknesses Notice */}
+            <div
+              style={{
+                padding: 'var(--sh-space-3) var(--sh-space-4)',
+                backgroundColor: 'var(--sh-bg-surface-elevated)',
+                border: '1px solid var(--sh-border-subtle)',
+                borderRadius: 'var(--sh-radius-sm)',
+                fontSize: '0.86rem',
+                color: 'var(--sh-text-muted)',
+              }}
+            >
+              <strong style={{ color: 'var(--sh-text-secondary)' }}>Сильные и слабые стороны: </strong>
+              Выводы о сильных и слабых сторонах проекта появятся после утверждения правил и контракта бэкенда.
+            </div>
+
+            {/* Supporting Evidence and Checks Breakdown */}
+            {run.checks && Object.keys(run.checks).length > 0 && (
+              <div>
+                <h3 style={{ marginBottom: 'var(--sh-space-3)' }}>Результаты проверок и факты</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-3)' }}>
+                  {Object.entries(run.checks).map(([checkName, checkData]) => (
+                    <div
+                      key={checkName}
+                      style={{
+                        padding: 'var(--sh-space-3) var(--sh-space-4)',
+                        backgroundColor: 'var(--sh-bg-base)',
+                        borderRadius: 'var(--sh-radius-sm)',
+                        border: '1px solid var(--sh-border-subtle)',
+                        fontSize: '0.88rem',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: '0.5rem',
+                          marginBottom: '0.35rem',
+                        }}
+                      >
+                        <span style={{ fontWeight: 600, color: 'var(--sh-text-primary)' }}>
+                          {checkName} ({checkData.source})
+                        </span>
+                        <AvailabilityBadge availability={checkData.availability} />
+                      </div>
+                      {checkData.findings && checkData.findings.length > 0 && (
+                        <div style={{ color: 'var(--sh-text-muted)', fontSize: '0.82rem', marginBottom: '0.35rem' }}>
+                          Находок анализатора: {checkData.findings.length}
+                        </div>
+                      )}
+                      {checkData.evidence && checkData.evidence.length > 0 && (
+                        <div style={{ marginTop: '0.5rem' }}>
+                          <span style={{ fontSize: '0.78rem', color: 'var(--sh-text-muted)', display: 'block', marginBottom: '0.25rem' }}>
+                            Факты ({checkData.evidence.length}):
+                          </span>
+                          <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.82rem', color: 'var(--sh-text-secondary)' }}>
+                            {checkData.evidence.map((ev) => (
+                              <li key={ev.id} style={{ marginBottom: '0.25rem' }}>
+                                <span style={{ fontFamily: 'var(--sh-font-mono)', color: 'var(--sh-text-muted)' }}>
+                                  {ev.id}:
+                                </span>{' '}
+                                <span>{ev.summary}</span>
+                                {ev.url && (
+                                  <>
+                                    {' — '}
+                                    <a href={ev.url} target="_blank" rel="noopener noreferrer">
+                                      Источник ↗
+                                    </a>
+                                  </>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </Card>
       )}
