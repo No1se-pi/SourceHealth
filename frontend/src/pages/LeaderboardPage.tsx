@@ -57,7 +57,7 @@ export const LeaderboardPage: React.FC = () => {
         </h1>
         <p style={{ maxWidth: '720px', margin: 0 }}>
           Оценки основаны на объективных фактах и проверяемых метриках SourceCraft.
-          Принцип: отсутствие данных («Нет оценки») не приравнивается к плохому репозиторию.
+          Принцип: отсутствие данных («Нет данных») не приравнивается к плохому репозиторию.
         </p>
       </div>
 
@@ -182,7 +182,7 @@ export const LeaderboardPage: React.FC = () => {
                     )}
                   </div>
                   <div style={{ flexShrink: 0 }}>
-                    <ScoreDisplay score={repo.health_score} size="md" showStatusLabel />
+                    <ScoreDisplay score={repo.health_score} size="md" />
                   </div>
                 </li>
               ))}

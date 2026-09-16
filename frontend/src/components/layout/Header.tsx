@@ -6,6 +6,7 @@ export const Header: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const location = useLocation();
 
+  // Run session check once on mount. Unauthenticated visitors get 401, which is handled gracefully.
   useEffect(() => {
     let active = true;
     api
@@ -14,13 +15,13 @@ export const Header: React.FC = () => {
         if (active) setUser(data);
       })
       .catch(() => {
-        // Unauthenticated session is expected for public visitors
+        // Unauthenticated visitor is the default public state
         if (active) setUser(null);
       });
     return () => {
       active = false;
     };
-  }, [location.pathname]);
+  }, []);
 
   return (
     <header className="app-header">

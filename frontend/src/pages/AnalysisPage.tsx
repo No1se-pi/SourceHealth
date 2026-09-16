@@ -130,7 +130,7 @@ export const AnalysisPage: React.FC = () => {
                   <span>{statusMeta.label}</span>
                 </Badge>
               )}
-              <ScoreDisplay score={run.health_score} size="lg" showStatusLabel />
+              <ScoreDisplay score={run.health_score} size="lg" />
             </div>
           }
           footer={

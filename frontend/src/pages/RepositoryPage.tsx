@@ -109,7 +109,7 @@ export const RepositoryPage: React.FC = () => {
               <div style={{ fontSize: '0.8rem', color: 'var(--sh-text-muted)', marginBottom: '0.2rem' }}>
                 Repo Health Score
               </div>
-              <ScoreDisplay score={repo.health_score} size="lg" showStatusLabel />
+              <ScoreDisplay score={repo.health_score} size="lg" />
             </div>
           }
         >
