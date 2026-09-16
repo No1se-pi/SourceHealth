@@ -1,6 +1,8 @@
 """Typed settings: создаются на границе процесса, не во время импорта core."""
 
-from pydantic import Field, SecretStr, field_validator
+from typing import Literal
+
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,8 +26,19 @@ class Settings(BaseSettings):
     code_cache_ttl: int = Field(default=604800, ge=1)
     result_cache_ttl: int = Field(default=300, ge=1)
     analysis_timeout: int = Field(default=600, ge=30, le=3600)
-    analysis_profile: str = "platform-v1"
+    analysis_profile: Literal["platform-v1", "code-v1"] = "platform-v1"
+    code_runtime_enabled: bool = False
+    code_runtime_image: str = "sourcehealth-sast"
+    code_runtime_timeout: int = Field(default=180, ge=1, le=1200)
     refresh_interval: int = Field(default=86400, ge=300)
+
+    @model_validator(mode="after")
+    def runtime_budget(self):
+        # The legacy workflow applies timeout separately to clone and analysis.
+        # Reserve time for bounded platform requests, container setup and cleanup.
+        if self.code_runtime_enabled and self.analysis_timeout < 2 * self.code_runtime_timeout + 180:
+            raise ValueError("analysis_timeout must cover both runtime stages and orchestration")
+        return self
 
     @field_validator("database_url")
     @classmethod

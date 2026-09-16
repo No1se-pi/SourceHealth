@@ -18,8 +18,10 @@ UID 10001, network none, cap-drop ALL, no-new-privileges, ограничение
 
 **Docker socket даёт чрезвычайно привилегированный доступ к хосту.** Нельзя считать
 read-only socket mount безопасной изоляцией. Compose API-only worker socket не получает.
-Для будущего code worker — отдельный изолированный runner host/VM, ограниченный
-контроллер запуска, отдельный filesystem с quotas и egress allowlist на clone stage.
+Для `worker-code` — отдельный изолированный runner host/VM с доверенным оператором,
+Docker CLI/Engine; общий backend image/worker не получает socket или privileged mode.
+Ограниченный контроллер запуска, filesystem с quotas и egress allowlist на clone stage
+остаются условиями публичного deployment.
 Контейнер анализа не получает socket/PAT/home directory. AnalysisRuntime позволяет
 заменить Docker executor без изменения analyzer logic.
 

@@ -12,13 +12,14 @@
 - Существующие Git-анализ, local SAST, CLI, SARIF и изолированный Docker workflow.
 - API-only AnalysisContext, repository identity, availability и evidence contracts.
 - FastAPI, PostgreSQL/Alembic, Redis/RQ, lifecycle и дедупликация запусков.
+- Фоновый code-v1: Git + local SAST через один Docker runtime на отдельном trusted worker.
 - SourceCraft metadata client/collector, Я ID Authorization Code + PKCE/server sessions.
 - React/TypeScript foundation, HTTP DTO/OpenAPI и Markdown report.
 
 **Score пока null**: методика не утверждена. AppSec SourceCraft и механизм доступа
 пользователя Я ID к его SourceCraft repositories ещё не подключены. Локальный SAST
 считается code health и не подменяет официальный Security. Private repos запрещены.
-Точные проверки и ограничения — [результат foundation](docs/DELIVERY.md).
+Точные проверки и ограничения — [закрытие foundation](docs/FOUNDATION_CLOSURE.md).
 
 ## Быстрый запуск
 

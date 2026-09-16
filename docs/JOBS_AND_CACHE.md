@@ -26,8 +26,9 @@ Trigger: manual/scheduled/refresh/system. Partial означает полезн�
 
 Active dedupe сильнее snapshot key: один активный run профиля на repo даже при
 неизвестном/изменившемся HEAD. Новый commit во время run попадёт в следующий запуск.
-При подключении clone нужно сохранять фактически анализируемый SHA и сверять его с
-запрошенным snapshot. Пока API-only профиль не обещает фиксацию code snapshot.
+`code-v1` сейчас анализирует полную историю default branch на момент clone; запрошенный
+SHA не pin-ится. Фактический SHA и сверка snapshot остаются следующей задачей: code cache
+не используется, неизвестный HEAD не превращается в обещание snapshot consistency.
 
 ## Восстановление
 
@@ -47,7 +48,7 @@ locks: worker guard требует прямого/session-pooled подключ�
 
 | Уровень | Ключ | TTL / invalidation | Сейчас |
 |---|---|---|---|
-| Code | repo ID + HEAD + analyzer + version + configuration | 7 дней; новый HEAD/version меняет ключ | Примитив; фоновой code profile не подключён |
+| Code | repo ID + HEAD + analyzer + version + configuration | 7 дней; новый HEAD/version меняет ключ | Примитив; code-v1 пока не переиспользует code cache |
 | Platform | repo ID + resource + authorization scope | 5 минут; HEAD не участвует | Public metadata |
 | Finished run | repo ID + HEAD + profile + policy + report version | 5 минут | Реализован |
 | Auth | HMAC opaque token | Session 24ч, pending 10мин | Реализован |
@@ -76,5 +77,19 @@ dispatch recovery. Compose scheduler — one-shot profile, не скрытый l
 
 ## Дальнейшая работа
 
-Execution profiles, квоты/приоритеты, budget API, TTL ресурсов, code runtime/cache,
-точный SHA. Наличие code_cache_key не означает, что worker уже переиспользует SAST.
+Квоты/приоритеты, budget API, TTL ресурсов, code cache и точный SHA.
+Наличие code_cache_key не означает, что worker уже переиспользует SAST.
+
+## Execution profiles
+
+- `platform-v1` → очередь `analysis` → обычный `worker`, без Docker доступа.
+- `code-v1` → очередь `analysis-code` → отдельный `worker-code` на trusted Linux host/VM.
+
+Настройка `ANALYSIS_PROFILE` применяется при создании run; queued run сохраняет свой
+профиль даже после перезапуска API с другой настройкой. Worker читает профиль из БД.
+Code worker требует `CODE_RUNTIME_ENABLED=true`; если runtime недоступен во время job,
+platform report сохраняется partial. Не запущен code worker — заявка остаётся queued;
+это операционная ошибка конфигурации, не успешный API-only fallback.
+Каждая runtime стадия ограничена `CODE_RUNTIME_TIMEOUT`; общий `ANALYSIS_TIMEOUT`
+должен покрывать две стадии плюс 180 секунд на orchestration. Остальные lifecycle,
+advisory lock и дедупликация не меняются. Запуск описан в [DEPLOYMENT](DEPLOYMENT.md).
