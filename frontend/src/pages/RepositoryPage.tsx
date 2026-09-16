@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, type RepositoryDetails, type Analysis } from '../api/client';
+import { api, type RepositoryDetails, type Analysis, type ApiError } from '../api/client';
 import { Card } from '../components/common/Card';
-import { Button } from '../components/common/Button';
+import { Button, getButtonStyles } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
 import { ScoreDisplay } from '../components/common/ScoreDisplay';
 import { AvailabilityBadge } from '../components/common/AvailabilityBadge';
@@ -14,6 +14,7 @@ import {
   CATEGORY_ORDER,
   CATEGORY_LABELS,
   STATUS_CONFIG,
+  getSafeExternalUrl,
 } from '../utils/analysis';
 
 function formatLastActivity(timestamp: string | null | undefined): string {
@@ -42,64 +43,72 @@ export const RepositoryPage: React.FC = () => {
 
   const [repo, setRepo] = useState<RepositoryDetails>();
   const [latestAnalysis, setLatestAnalysis] = useState<Analysis | null>(null);
-  const [error, setError] = useState<unknown>();
+  const [loadError, setLoadError] = useState<unknown>();
+  const [startError, setStartError] = useState<unknown>();
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
 
-  const fetchRepositoryData = useCallback(async () => {
-    let active = true;
+  const requestGenRef = useRef(0);
+
+  const loadRepository = useCallback(async () => {
+    const currentGen = ++requestGenRef.current;
     setLoading(true);
-    setError(undefined);
+    setLoadError(undefined);
+    setLatestAnalysis(null); // Clear stale analysis from any previous repo immediately
 
     try {
       const repoData = await api.repository(id);
-      if (!active) return;
+      if (requestGenRef.current !== currentGen) return;
       setRepo(repoData);
 
       if (repoData.latest_analysis_id) {
         try {
           const analysisData = await api.analysis(repoData.latest_analysis_id);
-          if (active) setLatestAnalysis(analysisData);
+          if (requestGenRef.current !== currentGen) return;
+          setLatestAnalysis(analysisData);
         } catch {
-          // If latest analysis fetch fails, keep repository data visible
-          if (active) setLatestAnalysis(null);
+          if (requestGenRef.current !== currentGen) return;
+          setLatestAnalysis(null);
         }
-      } else {
-        setLatestAnalysis(null);
       }
       setLoading(false);
     } catch (err) {
-      if (active) {
-        setError(err);
-        setLoading(false);
-      }
+      if (requestGenRef.current !== currentGen) return;
+      setLoadError(err);
+      setLoading(false);
     }
-
-    return () => {
-      active = false;
-    };
   }, [id]);
 
   useEffect(() => {
-    void fetchRepositoryData();
-  }, [fetchRepositoryData]);
+    void loadRepository();
+    return () => {
+      // Invalidate in-flight requests on unmount or id change
+      requestGenRef.current++;
+    };
+  }, [loadRepository]);
 
   const handleStartAnalysis = async () => {
     if (starting) return; // Prevent double submit
     setStarting(true);
-    setError(undefined);
+    setStartError(undefined);
 
     try {
       const run = await api.start(id);
       navigate(`/analyses/${run.id}`);
     } catch (err) {
-      setError(err);
+      setStartError(err);
       setStarting(false);
     }
   };
 
   const hasAnalysis = Boolean(repo?.latest_analysis_id);
+  const isAnalysisInProgress =
+    latestAnalysis && ['queued', 'collecting', 'analyzing', 'scoring'].includes(latestAnalysis.status);
+  const isReportReady =
+    latestAnalysis && ['completed', 'partial'].includes(latestAnalysis.status);
   const analysisStatusMeta = latestAnalysis ? STATUS_CONFIG[latestAnalysis.status] : null;
+  const safeCanonicalUrl = repo ? getSafeExternalUrl(repo.canonical_url) : null;
+  const isAuthRequiredError = (startError as ApiError)?.status === 401;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-6)' }}>
@@ -119,11 +128,53 @@ export const RepositoryPage: React.FC = () => {
         </Link>
       </div>
 
-      {error ? (
+      {loadError ? (
         <ErrorState
-          error={error}
-          title="Ошибка загрузки данных или запуска анализа"
-          onRetry={fetchRepositoryData}
+          error={loadError}
+          title="Ошибка загрузки данных репозитория"
+          onRetry={loadRepository}
+        />
+      ) : null}
+
+      {startError && isAuthRequiredError ? (
+        <div
+          role="alert"
+          style={{
+            padding: 'var(--sh-space-3) var(--sh-space-4)',
+            backgroundColor: 'var(--sh-health-warning-bg)',
+            border: '1px solid var(--sh-health-warning-border)',
+            borderRadius: 'var(--sh-radius-sm)',
+            color: 'var(--sh-health-warning)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+            fontSize: '0.9rem',
+          }}
+        >
+          <span>Для запуска анализа необходимо войти через Яндекс ID.</span>
+          <a
+            href="/api/v1/auth/yandex/login"
+            className="btn-link"
+            style={{
+              backgroundColor: 'var(--sh-bg-surface-elevated)',
+              color: 'var(--sh-text-primary)',
+              border: '1px solid var(--sh-border-default)',
+              padding: '0.35rem 0.75rem',
+              borderRadius: 'var(--sh-radius-sm)',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+            }}
+          >
+            Войти через Я ID ↗
+          </a>
+        </div>
+      ) : startError ? (
+        <ErrorState
+          error={startError}
+          title="Не удалось запустить анализ"
+          onRetry={handleStartAnalysis}
         />
       ) : null}
 
@@ -139,15 +190,19 @@ export const RepositoryPage: React.FC = () => {
           <Card
             title={`${repo.organization_slug}/${repo.repository_slug}`}
             subtitle={
-              <a
-                href={repo.canonical_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-              >
-                <span>Открыть в SourceCraft</span>
-                <span aria-hidden="true">↗</span>
-              </a>
+              safeCanonicalUrl ? (
+                <a
+                  href={safeCanonicalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                >
+                  <span>Открыть в SourceCraft</span>
+                  <span aria-hidden="true">↗</span>
+                </a>
+              ) : (
+                <span style={{ color: 'var(--sh-text-muted)' }}>{repo.canonical_url}</span>
+              )
             }
             headerAction={
               <div style={{ textAlign: 'right' }}>
@@ -217,18 +272,29 @@ export const RepositoryPage: React.FC = () => {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-                  <Button
-                    variant="primary"
-                    onClick={handleStartAnalysis}
-                    loading={starting}
-                    disabled={starting}
-                  >
-                    {starting
-                      ? 'Запускаем анализ…'
-                      : hasAnalysis
-                        ? 'Повторить анализ'
-                        : 'Запустить анализ'}
-                  </Button>
+                  {isAnalysisInProgress ? (
+                    <Link
+                      to={`/analyses/${latestAnalysis.id}`}
+                      className="btn-link"
+                      style={getButtonStyles('primary', 'md')}
+                    >
+                      <span>Анализ выполняется · Открыть запуск</span>
+                      <span aria-hidden="true">→</span>
+                    </Link>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      onClick={handleStartAnalysis}
+                      loading={starting}
+                      disabled={starting}
+                    >
+                      {starting
+                        ? 'Запускаем анализ…'
+                        : hasAnalysis
+                          ? 'Повторить анализ'
+                          : 'Запустить анализ'}
+                    </Button>
+                  )}
 
                   {hasAnalysis && (
                     <Link
@@ -252,7 +318,7 @@ export const RepositoryPage: React.FC = () => {
                     </Link>
                   )}
 
-                  {hasAnalysis && (
+                  {isReportReady && (
                     <a
                       href={`/api/v1/analyses/${encodeURIComponent(repo.latest_analysis_id ?? '')}/report.md`}
                       download
@@ -317,6 +383,7 @@ export const RepositoryPage: React.FC = () => {
                       const scoreData = latestAnalysis.category_scores?.[catKey];
                       const availability =
                         scoreData?.availability ?? latestAnalysis.data_coverage?.[catKey] ?? 'no_data';
+                      const factsCount = scoreData?.evidence_refs?.length ?? 0;
                       return (
                         <div
                           key={catKey}
@@ -356,6 +423,11 @@ export const RepositoryPage: React.FC = () => {
                             >
                               {scoreData.explanation}
                             </p>
+                          )}
+                          {factsCount > 0 && (
+                            <div style={{ fontSize: '0.78rem', color: 'var(--sh-text-muted)', marginTop: 'auto' }}>
+                              Фактов в отчёте: {factsCount}
+                            </div>
                           )}
                         </div>
                       );

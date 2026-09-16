@@ -8,10 +8,12 @@ import { AvailabilityBadge } from '../components/common/AvailabilityBadge';
 import { LoadingState } from '../components/common/LoadingState';
 import { ErrorState } from '../components/common/ErrorState';
 import { RecommendationCard } from '../components/common/RecommendationCard';
+import { EvidenceList } from '../components/common/EvidenceList';
 import {
   CATEGORY_ORDER,
   CATEGORY_LABELS,
   STATUS_CONFIG,
+  getSafeExternalUrl,
 } from '../utils/analysis';
 
 export const AnalysisPage: React.FC = () => {
@@ -256,6 +258,13 @@ export const AnalysisPage: React.FC = () => {
                           {scoreData.explanation}
                         </p>
                       )}
+                      {scoreData?.evidence_refs && scoreData.evidence_refs.length > 0 && (
+                        <EvidenceList
+                          evidenceRefs={scoreData.evidence_refs}
+                          checks={run.checks}
+                          label="Подтверждающие факты"
+                        />
+                      )}
                     </div>
                   );
                 })}
@@ -282,21 +291,6 @@ export const AnalysisPage: React.FC = () => {
                   Рекомендации пока не сформированы; это не подтверждает отсутствие проблем.
                 </p>
               )}
-            </div>
-
-            {/* Strengths / Weaknesses Notice */}
-            <div
-              style={{
-                padding: 'var(--sh-space-3) var(--sh-space-4)',
-                backgroundColor: 'var(--sh-bg-surface-elevated)',
-                border: '1px solid var(--sh-border-subtle)',
-                borderRadius: 'var(--sh-radius-sm)',
-                fontSize: '0.86rem',
-                color: 'var(--sh-text-muted)',
-              }}
-            >
-              <strong style={{ color: 'var(--sh-text-secondary)' }}>Сильные и слабые стороны: </strong>
-              Выводы о сильных и слабых сторонах проекта появятся после утверждения правил и контракта бэкенда.
             </div>
 
             {/* Supporting Evidence and Checks Breakdown */}
@@ -341,22 +335,29 @@ export const AnalysisPage: React.FC = () => {
                             Факты ({checkData.evidence.length}):
                           </span>
                           <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.82rem', color: 'var(--sh-text-secondary)' }}>
-                            {checkData.evidence.map((ev) => (
-                              <li key={ev.id} style={{ marginBottom: '0.25rem' }}>
-                                <span style={{ fontFamily: 'var(--sh-font-mono)', color: 'var(--sh-text-muted)' }}>
-                                  {ev.id}:
-                                </span>{' '}
-                                <span>{ev.summary}</span>
-                                {ev.url && (
-                                  <>
-                                    {' — '}
-                                    <a href={ev.url} target="_blank" rel="noopener noreferrer">
-                                      Источник ↗
-                                    </a>
-                                  </>
-                                )}
-                              </li>
-                            ))}
+                            {checkData.evidence.map((ev) => {
+                              const safeUrl = getSafeExternalUrl(ev.url);
+                              return (
+                                <li key={ev.id} style={{ marginBottom: '0.25rem' }}>
+                                  <span style={{ fontFamily: 'var(--sh-font-mono)', color: 'var(--sh-text-muted)' }}>
+                                    {ev.id}:
+                                  </span>{' '}
+                                  <span>{ev.summary}</span>
+                                  {safeUrl ? (
+                                    <>
+                                      {' — '}
+                                      <a href={safeUrl} target="_blank" rel="noopener noreferrer">
+                                        Источник ↗
+                                      </a>
+                                    </>
+                                  ) : ev.url ? (
+                                    <span style={{ color: 'var(--sh-text-muted)' }}>
+                                      {' — '}{ev.reference || ev.url}
+                                    </span>
+                                  ) : null}
+                                </li>
+                              );
+                            })}
                           </ul>
                         </div>
                       )}

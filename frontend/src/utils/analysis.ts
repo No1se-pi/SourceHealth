@@ -59,3 +59,21 @@ export function resolveEvidence(
 
   return refs.map((ref) => map.get(ref)).filter((ev): ev is Evidence => Boolean(ev));
 }
+
+/**
+ * Validates external URLs to only permit http: and https: protocols.
+ * Returns the sanitized href if valid, or null if malformed or unsafe (e.g. javascript:, data:, file:).
+ */
+export function getSafeExternalUrl(url: string | null | undefined): string | null {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      return parsed.href;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
