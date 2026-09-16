@@ -24,6 +24,13 @@ sourcehealth_local и category code_health.
 score. SourceCraftSecurityAnalyzer сообщает недоступность неподключённого AppSec.
 Не считать эти два анализатора реализацией всех шести категорий.
 
+В `code-v1` background job добавляет `checks.git_activity` (activity/git) и
+`checks.sast` (code_health/sourcehealth_local) через один sandbox запуск.
+Legacy JSON 1.0 остаётся прежним; converter переносит counters/findings в общий
+контракт 3.0. Ошибка/невалидный check не удаляет второй check или platform facts.
+SAST partial сохраняет измеренные counters и причины неполного охвата; runtime failure
+даёт NO_DATA, а не нулевые метрики/Score. Cleanup failure помечается отдельным safe code.
+
 ## Добавить IssuesAnalyzer
 
 Collector получает issues через client.iter_items и хранит необходимые временные поля,

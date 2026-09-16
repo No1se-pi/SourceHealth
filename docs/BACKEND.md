@@ -2,17 +2,19 @@
 
 ## Где находится логика
 
-`api/app.py` — composition root и небольшая группа routers в одном файле. Создаёт
-settings, engine/session factory, Redis, application/auth services. Здесь HTTP codes,
-cookies, валидация входа и сериализация DTO. Расчётов метрик и scoring в routers нет.
-По мере роста можно разнести routers по ресурсам без изменения контракта.
+`api/app.py` — composition root: settings, engine/session factory, Redis,
+application/auth services, lifespan, middleware и exception handlers.
+`api/routers/{health,auth,repositories,analyses}.py` — HTTP endpoints;
+`api/dependencies.py` — session/origin/public-visibility guards. Сервисы доступны
+через app.state и принадлежат конкретному экземпляру приложения, глобальных sessions нет.
+DTO, URL и operation IDs сохранены; OpenAPI после переноса не меняется.
 
 `application/services.py` — транзакционные команды: register, request_analysis,
 transition, finish, enqueue_due. `application/jobs.py` — доставка и исполнение.
 `integrations/sourcecraft` — транспорт и collectors. `storage/models.py` — SQLAlchemy
 модели. `core` — переносимые понятия без PostgreSQL/HTTP/Redis imports.
 
-В `api/app.py` читающие SELECT пока находятся рядом с handlers: это простые
+В `api/routers/` читающие SELECT пока находятся рядом с handlers: это простые
 проекции persistence → DTO, не аналитика. При усложнении фильтров выделять query service,
 не вводить repository interface на каждую таблицу ради симметрии.
 
@@ -22,15 +24,18 @@ transition, finish, enqueue_due. `application/jobs.py` — доставка и �
 2. Сохраняет только allowlisted безопасные факты; ограничивает число страниц/объём.
 3. Application собирает их в context под именем коллектора, отдельно записывает availability.
 4. Анализатор получает context и возвращает AnalyzerResult. Не пишет в DB и не ставит jobs.
-5. Зарегистрировать анализатор в конкретном профиле в `application/jobs.py`.
+5. Зарегистрировать анализатор в `application/pipeline.py`; orchestration и сохранение — `jobs.py`.
 6. Если inputs/поведение профиля изменились — изменить `ANALYSIS_PROFILE`; иначе может
    быть переиспользован завершённый run со старым набором анализаторов.
 7. Добавить unit fixtures и обновить ANALYTICS/SOURCECRAFT. Core/DTO/migration обычно не меняются.
 
-Для дальнейшего роста профили выделяются в обычный Python registry, когда появляется
-второй реально поддерживаемый профиль. Сейчас поддерживается только `platform-v1`:
-repository metadata + availability AppSec. Изменение строки настройки само по себе
-не включает новые анализаторы или clone.
+Поддерживаются `platform-v1` и `code-v1`; неизвестный профиль отклоняется Settings.
+`jobs.queue_name()` маршрутизирует persisted profile, поэтому dispatcher может доставлять
+обе очереди независимо от собственной настройки. `code-v1` добавляет Git/SAST через
+`AnalysisRuntime`, а `runtime_results.py` преобразует legacy JSON с allowlist метрик,
+относительных locations и фиксированных error codes. Текст finding берётся из доверенных
+правил пакета; image и worker должны поставляться из одной версии SourceHealth.
+`ScoringEngine` вызывается после объединения результатов. Никакой новой DB migration.
 
 ## Ошибки и конфигурация
 

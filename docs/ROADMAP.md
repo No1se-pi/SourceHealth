@@ -8,7 +8,7 @@
 | Подтвердить Я ID → SourceCraft permissions | Backend + организаторы | OAuth app/разрешённая схема | Реально получен список доступных repo, проверен запрет чужого |
 | Documentation и Issues | Analyzer | Стабильные facts из Collector | Unit fixtures + evidence + корректный NO_DATA |
 | CI/CD и platform activity | Analyzer/Backend | Verified endpoints | Полные/partial данные, время и refresh без изменения HEAD |
-| Background code profile | Backend | AnalysisRuntime + SHA/quotas | Безопасный clone, isolated analysis, cleanup, cache hit при том же snapshot |
+| Snapshot/cache и эксплуатация code profile | Backend | Уже подключённый code-v1 | Фактический SHA, pinning, quotas, cache hit при том же snapshot |
 | Первая Score policy + recommendations | Backend + вся команда | Метрики и AppSec | Формула/weights/docs/replay и контрольные сценарии шести категорий |
 | Leaderboard/detail UX | Frontend | DTO foundation уже готов | Score/categories/evidence/no-data/partial, фильтры и выгрузка |
 | Реальный вход и собственный repo | Backend/Frontend | Подтверждённый bridge | Полный пользовательский сценарий, logout/permissions |

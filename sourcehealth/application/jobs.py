@@ -11,12 +11,11 @@ from rq.exceptions import DuplicateJobError, NoSuchJobError
 from rq.job import Job
 from sqlalchemy import select, text
 
-from sourcehealth.analyzers.platform import RepositoryMetadataAnalyzer, SourceCraftSecurityAnalyzer
 from sourcehealth.core import AnalysisContext
 from sourcehealth.core.domain import ACTIVE_STATUSES, DataAvailability
 from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
 from sourcehealth.integrations.sourcecraft.collectors import AppSecCollector, CollectedFacts, RepositoryCollector
-from sourcehealth.runner import AnalysisRunner
+from sourcehealth.runtime import configured_runtime
 from sourcehealth.scoring.engine import ScoringEngine
 from sourcehealth.settings import Settings
 from sourcehealth.storage.database import create_database
@@ -24,19 +23,25 @@ from sourcehealth.storage.models import AnalysisRun, Repository
 
 from .cache import JsonCache, platform_cache_key
 from .connections import create_redis
+from .pipeline import analyze_context
 from .services import AnalysisService, repository_ref
 
 logger = logging.getLogger(__name__)
 
 
+def queue_name(profile: str) -> str:
+    """Очередь определяется сохранённым профилем, не environment dispatcher."""
+    return {"platform-v1": "analysis", "code-v1": "analysis-code"}[profile]
+
+
 def dispatch_pending(sessions, redis: Redis, timeout: int = 600) -> int:
     """Коммит queued уже существует. Повторная доставка безопасна для execute_analysis."""
-    queue = Queue("analysis", connection=redis)
     with sessions() as db:
-        ids = list(db.scalars(select(AnalysisRun.id).where(AnalysisRun.status == "queued")
-                             .order_by(AnalysisRun.queued_at).limit(100)))
+        rows = list(db.execute(select(AnalysisRun.id, AnalysisRun.profile).where(AnalysisRun.status == "queued")
+                               .order_by(AnalysisRun.queued_at).limit(100)))
     count = 0
-    for run_id in ids:
+    for run_id, profile in rows:
+        queue = Queue(queue_name(profile), connection=redis)
         job_id = str(run_id)
         try:
             job = Job.fetch(job_id, connection=redis)
@@ -105,10 +110,12 @@ def execute_analysis(analysis_id: str) -> None:
                     if run is None or run.status != "queued":
                         return
                     repository = repository_ref(db.get(Repository, run.repository_id))
+                    profile = run.profile
                 service.transition(run_id, "collecting")
                 context = collect_platform(repository, settings, redis)
                 service.transition(run_id, "analyzing")
-                report = AnalysisRunner([RepositoryMetadataAnalyzer(), SourceCraftSecurityAnalyzer()]).analyze_context(context)
+                report = analyze_context(context, include_code=profile == "code-v1",
+                                         runtime=configured_runtime(settings) if profile == "code-v1" else None)
                 service.transition(run_id, "scoring")
                 ScoringEngine().apply(report)
                 service.finish(run_id, report)

@@ -6,6 +6,19 @@ permissions:
   contents: read
 
 jobs:
+  compose-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python scripts/compose_smoke.py --project sourcehealth-smoke-ci
+      - name: Cleanup even after cancellation or smoke failure
+        if: always()
+        run: docker compose --project-name sourcehealth-smoke-ci down -v --remove-orphans
+
   quality:
     runs-on: ${{ matrix.os }}
     strategy:

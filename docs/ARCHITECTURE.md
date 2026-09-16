@@ -27,9 +27,12 @@ RepositoryRef
                 FastAPI /api/v1 → React / Markdown
 ```
 
-Рабочий фоновой профиль `platform-v1` сейчас использует только API metadata и
-отдельное отсутствие AppSec-данных. Clone/локальные анализаторы работают через
-существующий CLI и DockerAnalysisRuntime, **ещё не подключены к фоновой очереди**.
+Фоновый профиль `platform-v1` использует API metadata и availability AppSec.
+Профиль `code-v1` дополнительно вызывает `AnalysisRuntime` один раз для Git и SAST:
+`DockerAnalysisRuntime` → прежний clone/scan workflow → `runtime_results` → общие checks.
+Он доставляется в отдельную очередь `analysis-code`, которую обслуживает trusted
+`worker-code`. Обычный Compose worker не получает доступ к Docker. Runtime error
+оставляет platform checks и переводит code checks в NO_DATA; отчёт сохраняется partial.
 Scoring возвращает шесть nullable категорий. Это foundation, не полный продукт ТЗ.
 
 ## Дерево
@@ -48,8 +51,9 @@ sourcehealth/
   application/          commands, lifecycle, queue, cache, scheduler
   storage/              SQLAlchemy модели и session factory
   auth/                 Я ID / PKCE / server sessions
-  api/                  FastAPI, HTTP DTO, errors
+  api/                  composition root, dependencies, routers/, HTTP DTO, errors
   runtime.py            AnalysisRuntime и Docker adapter
+  runtime_results.py    безопасный legacy 1.0 → AnalyzerResult converter
   markdown.py           public report → Markdown
   runner.py             execution независимых analyzers
   reporting.py          сохранённый CLI/SARIF compatibility layer

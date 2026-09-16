@@ -31,7 +31,7 @@ services:
   redis:
     image: redis:7-alpine
     command: [redis-server, --appendonly, "yes"]
-    ports: ["127.0.0.1:6379:6379"]
+    ports: ["127.0.0.1:${REDIS_PORT:-6379}:6379"]
     volumes: [redis-data:/data]
     healthcheck:
       test: [CMD, redis-cli, ping]
@@ -45,7 +45,7 @@ services:
       postgres: {condition: service_healthy}
   backend:
     <<: *app
-    ports: ["127.0.0.1:8000:8000"]
+    ports: ["127.0.0.1:${BACKEND_PORT:-8000}:8000"]
     depends_on:
       migrate: {condition: service_completed_successfully}
       redis: {condition: service_healthy}

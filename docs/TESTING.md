@@ -14,6 +14,7 @@ python -m ruff check .
 python scripts/export_openapi.py
 npm ci --prefix frontend
 npm run types --prefix frontend
+git diff --exit-code -- docs/openapi.json frontend/src/api/generated.ts
 npm run build --prefix frontend
 git diff --check
 ```
@@ -52,7 +53,26 @@ report deny, Markdown и Я ID state/PKCE/session/logout. Я ID и collection HT
 Для Linux переменные задавать `export`, после — `unset`. Интеграционный CI job
 поднимает PostgreSQL/Redis services отдельно от fast unit matrix.
 
-## Миграция
+## Runtime integration и Compose smoke
+
+`tests/test_runtime_pipeline.py` проверяет одно sandbox-обращение для Git/SAST,
+partial/failure/malformed payload/cleanup, сохранение platform facts, классификацию
+local SAST и отсутствие raw error/snippet в public JSON. Fixture runtime — не live clone.
+`test_code_queue_runtime_persistence_and_http` в integration suite использует настоящие
+PostgreSQL/RQ/HTTP с fake runtime: отдельная code очередь, success/partial/exception/
+disabled, persistence и HTTP/Markdown. Обычный worker не получает code jobs.
+
+```powershell
+python -m unittest tests.test_runtime_pipeline -v
+docker compose config --quiet
+python scripts/compose_smoke.py
+```
+
+Compose smoke — настоящий build/up/migrate/health/worker и обязательный down -v в
+изолированном project. Он не обращается к SourceCraft или Я ID. Ubuntu CI выполняет
+его отдельным job; детали изоляции в [DEPLOYMENT](DEPLOYMENT.md).
+
+## Проверка миграции
 
 Upgrade/`alembic check` обязательны. Downgrade/upgrade проверять только на disposable
 `*_test` БД: downgrade удаляет таблицы и историю. Offline SQL `upgrade head --sql`
