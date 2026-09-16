@@ -23,8 +23,7 @@
 ## Рабочий цикл
 
 1. Взять узкую задачу из ROADMAP с ожидаемым результатом и test acceptance.
-2. Создать feature branch от согласованной integration branch. Текущая рабочая
-   ветка foundation — Dev-No1se; stable branch команда выбирает отдельно.
+2. Создать `feature/*` от `Dev-No1se`, нашей integration branch.
 3. Перед кодом согласовать только затрагиваемый контракт: inputs, names, nullable
    semantics, version. Если контракт уже подходит, не создавать новый.
 4. Реализовать вертикальный сценарий, fixture, meaningful test и документацию.
@@ -32,6 +31,23 @@
 6. Открыть PR: проблема/результат, изменённые контракты, проверки, ограничения.
 7. Shared change просматривает архитектурный владелец и потребитель границы.
 8. Merge через review. Не push напрямую в стабильную ветку.
+
+### Git workflow
+
+```text
+feature/* → small PR + review → Dev-No1se → release PR → main
+```
+
+`main` — стабильная/release ветка; `Dev-No1se` — общая integration ветка.
+Никаких недельных прямых push в общую ветку: обычная работа идёт короткими feature PR.
+Перед release PR пройти весь CI, включая integration, frontend contract и Compose smoke.
+`core/**`, API DTO, `migrations/**`, ADR — shared-contract changes: отдельно указать
+в PR совместимость и потребителей, которым нужен review. GitHub handles для CODEOWNERS
+пока не подтверждены, выдуманный файл не добавляем.
+
+Foundation baseline после closure заморожен: следующая работа — категории аналитики
+и методика. Расширяем существующие границы; новый архитектурный слой требует конкретной
+необходимости. Команды ручного тега и границы приёмки — [FOUNDATION_CLOSURE](FOUNDATION_CLOSURE.md).
 
 ## Правила зависимостей
 

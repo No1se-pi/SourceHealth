@@ -19,7 +19,7 @@ from .services import AnalysisService
 def main():
     configure_logging()
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("worker", "enqueue-due", "dispatch", "register"))
+    parser.add_argument("command", choices=("worker", "worker-code", "enqueue-due", "dispatch", "register"))
     parser.add_argument("url", nargs="?")
     args = parser.parse_args()
     settings = Settings()
@@ -27,8 +27,11 @@ def main():
     redis = create_redis(settings.redis_url.get_secret_value())
     try:
         service = AnalysisService(sessions, settings)
-        if args.command == "worker":
-            Worker([Queue("analysis", connection=redis)], connection=redis).work()
+        if args.command in {"worker", "worker-code"}:
+            if args.command == "worker-code" and not settings.code_runtime_enabled:
+                parser.exit(2, "worker-code requires explicit CODE_RUNTIME_ENABLED=true on a trusted host\n")
+            queue = "analysis-code" if args.command == "worker-code" else "analysis"
+            Worker([Queue(queue, connection=redis)], connection=redis).work()
         elif args.command == "register":
             if not args.url:
                 parser.error("register requires a SourceCraft URL")

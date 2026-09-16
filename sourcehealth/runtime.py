@@ -11,6 +11,13 @@ class AnalysisRuntime(Protocol):
         ...
 
 
+def configured_runtime(settings) -> AnalysisRuntime | None:
+    """Composition boundary: Docker доступ включается только в явном trusted процессе."""
+    if not settings.code_runtime_enabled:
+        return None
+    return DockerAnalysisRuntime(image=settings.code_runtime_image, timeout=settings.code_runtime_timeout)
+
+
 class DockerAnalysisRuntime:
     """Только публичный SourceCraft; worker API-only не получает Docker socket."""
 

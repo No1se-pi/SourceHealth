@@ -12,6 +12,8 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID, uuid4
 
+from tests.test_runtime_pipeline import runtime_fixture
+
 ENABLED = bool(os.environ.get("TEST_DATABASE_URL") and os.environ.get("TEST_REDIS_URL"))
 
 if ENABLED:
@@ -72,6 +74,7 @@ class PersistenceTests(unittest.TestCase):
             db.execute(delete(Repository).where(Repository.id == self.repository_id))
         for run_id in ids:
             Queue("analysis", connection=self.redis).remove(str(run_id))
+            Queue("analysis-code", connection=self.redis).remove(str(run_id))
             self.redis.delete(f"rq:job:{run_id}")
 
     def context(self, repository, settings, redis):
@@ -127,6 +130,49 @@ class PersistenceTests(unittest.TestCase):
             TestWorker([Queue("analysis", connection=self.redis)], connection=self.redis).work(burst=True, logging_level="WARNING")
         with self.sessions() as db:
             self.assertEqual(db.get(AnalysisRun, run.id).status, "partial")
+
+    def test_code_queue_runtime_persistence_and_http(self):
+        """Real RQ/PG/HTTP with fake sandbox: success, partial and exception all retain metadata."""
+        from unittest.mock import Mock
+
+        class TestWorker(SimpleWorker):
+            death_penalty_class = TimerDeathPenalty
+
+        settings = self.settings.model_copy(update={"analysis_profile": "code-v1"})
+        service = AnalysisService(self.sessions, settings)
+        for mode in ("success", "partial", "failure", "disabled"):
+            with self.subTest(mode=mode):
+                run = service.request_analysis(self.repository_id, force=True)
+                dispatch_pending(self.sessions, self.redis)
+                self.assertIn(str(run.id), Queue("analysis-code", connection=self.redis).job_ids)
+                self.assertNotIn(str(run.id), Queue("analysis", connection=self.redis).job_ids)
+                runtime = Mock()
+                runtime.analyze.return_value = runtime_fixture(partial=mode == "partial")
+                if mode == "failure":
+                    runtime.analyze.side_effect = RuntimeError("private runtime error")
+                with (patch("sourcehealth.application.jobs.Settings", return_value=settings),
+                      patch("sourcehealth.application.jobs.collect_platform", self.context),
+                      patch("sourcehealth.application.jobs.configured_runtime", return_value=None if mode == "disabled" else runtime)):
+                    TestWorker([Queue("analysis-code", connection=self.redis)], connection=self.redis).work(
+                        burst=True, logging_level="WARNING")
+                if mode != "disabled":
+                    runtime.analyze.assert_called_once()
+                with TestClient(create_app(settings, sessions=self.sessions, redis=self.redis)) as client:
+                    response = client.get(f"/api/v1/analyses/{run.id}")
+                    self.assertEqual(response.status_code, 200)
+                    payload = response.json()
+                    self.assertEqual(payload["status"], "partial")  # AppSec remains unavailable.
+                    self.assertEqual(payload["checks"]["repository_metadata"]["status"], "ok")
+                    self.assertEqual(payload["checks"]["sast"]["category"], "code_health")
+                    self.assertEqual(payload["checks"]["sast"]["source"], "sourcehealth_local")
+                    self.assertEqual(payload["checks"]["git_activity"]["status"],
+                                     "ok" if mode in ("success", "partial") else "error")
+                    self.assertEqual(payload["checks"]["sast"]["status"],
+                                     {"success": "ok", "partial": "partial", "failure": "error", "disabled": "error"}[mode])
+                    self.assertIsNone(payload["health_score"])
+                    self.assertEqual(payload["category_scores"]["security"]["availability"], "no_data")
+                    self.assertNotIn("private runtime error", response.text)
+                    self.assertEqual(client.get(f"/api/v1/analyses/{run.id}/report.md").status_code, 200)
 
     def test_recovery_does_not_fail_live_lock_holder(self):
         run = self.service.request_analysis(self.repository_id)

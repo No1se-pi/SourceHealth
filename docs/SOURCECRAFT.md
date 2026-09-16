@@ -1,5 +1,10 @@
 # Интеграция SourceCraft
 
+Обновление 16 сентября: команда предоставила `SCS_API_1.0.0_draft.pdf` с описанием
+отдельного Security API. Методы и оставшиеся пробелы вынесены в [SOURCECRAFT_SECURITY_DRAFT](SOURCECRAFT_SECURITY_DRAFT.md).
+Ниже сведения о публичной Swagger от 15 сентября; отсутствие AppSec в ней больше
+не означает отсутствие документации Security API. Draft не подтверждает live доступ.
+
 Проверено 2026-09-15 по официальным ресурсам:
 
 - [Работа с REST API](https://sourcecraft.dev/portal/docs/ru/sourcecraft/operations/api-start).
@@ -37,9 +42,9 @@ request ID у платформы не предполагается. Ошибки
 | Repository metadata | Да | Swagger GetRepository | GET R | PAT | Client + allowlist collector | Public live acceptance; rename reconciliation |
 | Issues | Да | ListRepositoryIssues | GET R/issues, items=issues | PAT | Общая pagination, бизнес-collector planned | Filter/windows, private issues в public repo |
 | CI/CD | Да | ListRuns | GET R/cicd/runs, items=runs | PAT/публичность workflow | Client foundation | Доступный объём history, критерий not_configured |
-| AppSec SAST | Да | ТЗ + документация AppSec | В текущей публичной Swagger не найден | Не подтверждено | Отдельная boundary, NO_DATA | OPEN INTEGRATION QUESTION |
-| AppSec SCA | Да | ТЗ + документация AppSec | Не найден | Не подтверждено | Boundary | OPEN INTEGRATION QUESTION |
-| Secret scanning | Да | ТЗ + документация AppSec | Не найден | Не подтверждено | Boundary | OPEN INTEGRATION QUESTION |
+| AppSec SAST | Да | SCS Backend API 1.0.0 draft, 16.09 | Отдельные /v1/scans, /v1/defect-groups, /v1/findings | Не подтверждено | Boundary, NO_DATA | Base URL, auth, schemas, mapping; см. draft notes |
+| AppSec SCA | Да | Тот же SCS draft | Те же методы; engine type согласовать со схемой | Не подтверждено | Boundary | Exact schema + live fixture |
+| Secret scanning | Да | Тот же SCS draft | Те же методы; SECRETS указан для отчётов | Не подтверждено | Boundary | Enum конкретного метода + live fixture |
 | PR/MR | Да, activity | Swagger Pull Requests | GET R/pulls | PAT | Foundation клиента | Полнота полей/времени/статусов |
 | Reviews | Бонус | Swagger pull comments/reviewers/decision | GET R/pulls/{pull_request_slug}/comments, /reviewers | PAT | Planned | История review transitions и длительности |
 | Contributors | Да, activity | Swagger contributors | GET R/contributors | PAT | Planned | Bots, aliases, privacy email |
@@ -60,7 +65,7 @@ error=appsec_interface_unconfirmed`. Это статус незавершённ�
 отсутствия сканирования у проекта. Нельзя подменить его данными нашего scanner.
 
 Перед реализацией запросить у организаторов/документации: официальный интерфейс
-выгрузки, permissions, pagination, scanner type, severity, open/resolved/false-positive,
+выгрузки (полная OpenAPI SCS draft, base URL/auth), permissions, pagination, scanner type, severity, open/resolved/false-positive,
 fingerprint/reference, scan timestamp, соответствие HEAD, ограничения по private repo.
 Сохранить fixture без secret values и source snippets; добавить contract test и ссылку
 на источник. Лишь затем подключать collector и численную Security policy.

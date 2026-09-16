@@ -57,8 +57,56 @@ python -m sourcehealth.application register https://sourcecraft.dev/ORGANIZATION
 ```
 
 Подставить существующие slugs. Команда печатает repository_id и analysis_id.
-Сейчас фоновый анализ собирает metadata, выдаёт partial и null Score из-за неподключённой
-методики/AppSec. Это ожидаемый foundation outcome. Непубличный/unverified repo не принимается.
+По умолчанию фоновый анализ собирает metadata; `code-v1` добавляет Git/SAST через trusted
+worker ниже. Partial и null Score при неподключённых AppSec/методике ожидаемы.
+Непубличный/unverified repo не принимается.
+
+## Trusted code worker — отдельный execution profile
+
+Это операторский Linux host/VM с Docker Engine/CLI, установленным SourceHealth той же
+ревизии и сетевым доступом к сервисным PostgreSQL/Redis. Процесс имеет привилегии Docker
+daemon на **выделенной машине**. Не переносить этот доступ в API или generic Compose worker.
+RQ `worker-code` использует fork; на Windows запускать на отдельном Linux host/VM.
+
+На trusted host, из checkout проверенной ревизии:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-server.lock
+python -m pip install -e '.[server]'
+docker build -f sourcehealth/sast/Dockerfile -t sourcehealth-sast .
+# DATABASE_URL / REDIS_URL — сервисные адреса через environment/secret storage.
+export CODE_RUNTIME_ENABLED=true
+export CODE_RUNTIME_IMAGE=sourcehealth-sast
+export CODE_RUNTIME_TIMEOUT=180
+export ANALYSIS_TIMEOUT=600
+python -m sourcehealth.application worker-code
+```
+
+Для создания code runs задать `ANALYSIS_PROFILE=code-v1` у API, register и scheduler,
+перезапустить соответствующие процессы. Обычный worker можно оставить для старых
+`platform-v1` jobs. Dispatcher сам выбирает очередь по сохранённому профилю run.
+API не нуждается в `CODE_RUNTIME_ENABLED=true`: настройка включается только у
+trusted code worker. Image — настройка оператора, не пользовательский HTTP параметр.
+
+Один вызов runtime делает clone → offline Git/SAST → cleanup. Никаких install/test/build
+команд целевого repo. Clone не получает PAT; поддерживаются только verified public repo.
+Timeout/clone error/отсутствие Docker → partial report с сохранением platform facts.
+Выделенный runtime включать сначала в контролируемой среде: disk quotas,
+уборка после SIGKILL и фиксация точного SHA/cache не входят в эту closure-поставку.
+
+## Изолированный Compose smoke
+
+```powershell
+python scripts/compose_smoke.py
+```
+
+Скрипт реально собирает backend/worker, поднимает PostgreSQL/Redis/migrate/backend/worker,
+ждёт health, проверяет HTTP 200 и регистрацию RQ worker. Проект `sourcehealth-smoke-*`,
+случайные порты, собственные volumes и пустой env-file изолируют его от обычного стенда.
+В `finally` выполняется `docker compose down -v --remove-orphans` только для smoke-проекта.
+CI имеет дополнительный `always()` cleanup. Live SourceCraft/Я ID/code scan не требуется.
 
 ## Scheduler и восстановление доставки
 
