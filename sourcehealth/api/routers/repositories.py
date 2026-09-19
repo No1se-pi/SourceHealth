@@ -11,12 +11,25 @@ from sourcehealth.application.services import ServiceError
 from sourcehealth.storage.models import Repository
 
 from ..dependencies import check_origin, public_repository, public_run, require_user
-from ..schemas import AnalysisRequest, AnalysisSummary, RepositoryDetails, RepositoryPage, RepositorySummary
+from ..schemas import (
+    AnalysisRequest,
+    AnalysisSummary,
+    RepositoryDetails,
+    RepositoryImport,
+    RepositoryPage,
+    RepositorySummary,
+)
 
 router = APIRouter()
 
 
-
+@router.post("/api/v1/repositories", response_model=RepositoryDetails, status_code=201)
+def import_repository(body: RepositoryImport, request: Request):
+    require_user(request)
+    check_origin(request)
+    repository_id = request.app.state.service.import_public_repository(body.url)
+    with request.app.state.sessions() as db:
+        return RepositoryDetails.model_validate(public_repository(db, repository_id))
 @router.get("/api/v1/repositories", response_model=RepositoryPage)
 def repositories(request: Request, limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0, le=100000),
                  sort: str = Query("health_score", pattern="^(health_score|likes|last_activity)$"),

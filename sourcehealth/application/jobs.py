@@ -1,7 +1,7 @@
 """Durable queued rows → RQ. PostgreSQL advisory lock fences duplicate deliveries."""
 
 import logging
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -13,10 +13,19 @@ from sqlalchemy import select, text
 
 from sourcehealth.core import AnalysisContext
 from sourcehealth.core.domain import ACTIVE_STATUSES, DataAvailability
+from sourcehealth.integrations.sourcecraft.analytics import (
+    CICollector,
+    ContributorsCollector,
+    IssuesCollector,
+    PullRequestsCollector,
+    ReleasesCollector,
+)
 from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
 from sourcehealth.integrations.sourcecraft.collectors import AppSecCollector, CollectedFacts, RepositoryCollector
+from sourcehealth.recommendations.mvp import recommend
 from sourcehealth.runtime import configured_runtime
 from sourcehealth.scoring.engine import ScoringEngine
+from sourcehealth.scoring.mvp import MVPPolicy
 from sourcehealth.settings import Settings
 from sourcehealth.storage.database import create_database
 from sourcehealth.storage.models import AnalysisRun, Repository
@@ -31,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 def queue_name(profile: str) -> str:
     """Очередь определяется сохранённым профилем, не environment dispatcher."""
-    return {"platform-v1": "analysis", "code-v1": "analysis-code"}[profile]
+    return {"platform-v1": "analysis", "code-v1": "analysis-code", "mvp-v1": "analysis-code"}[profile]
 
 
 def dispatch_pending(sessions, redis: Redis, timeout: int = 600) -> int:
@@ -113,11 +122,16 @@ def execute_analysis(analysis_id: str) -> None:
                     profile = run.profile
                 service.transition(run_id, "collecting")
                 context = collect_platform(repository, settings, redis)
+                if profile == "mvp-v1":
+                    context = collect_mvp(context, settings)
                 service.transition(run_id, "analyzing")
-                report = analyze_context(context, include_code=profile == "code-v1",
-                                         runtime=configured_runtime(settings) if profile == "code-v1" else None)
+                report = analyze_context(context, include_code=profile in {"code-v1", "mvp-v1"}, with_mvp=profile == "mvp-v1",
+                                         runtime=configured_runtime(settings, with_mvp=True) if profile == "mvp-v1" else
+                                         configured_runtime(settings) if profile == "code-v1" else None)
                 service.transition(run_id, "scoring")
-                ScoringEngine().apply(report)
+                ScoringEngine(MVPPolicy() if profile == "mvp-v1" else None).apply(report)
+                if profile == "mvp-v1":
+                    report.recommendations = recommend(report.checks)
                 service.finish(run_id, report)
                 logger.info("analysis_finished", extra={"analysis_id": analysis_id, "repository_id": repository.id,
                                                         "component": "worker", "event": "analysis_finished"})
@@ -135,6 +149,25 @@ def execute_analysis(analysis_id: str) -> None:
     finally:
         redis.close()
         engine.dispose()
+
+
+def collect_mvp(context, settings, *, client=None):
+    """API facts обновляются независимо от SHA; общий time budget ограничивает fan-out."""
+    from contextlib import nullcontext
+
+    manager = nullcontext(client) if client is not None else SourceCraftClient(
+        pat=settings.sourcecraft_pat.get_secret_value() if settings.sourcecraft_pat else None,
+        timeout=min(settings.sourcecraft_timeout, 10), max_pages=min(settings.sourcecraft_max_pages, 5), deadline_seconds=120)
+    facts, statuses = dict(context.sourcecraft_facts), dict(context.collection_statuses)
+    collection = dict(context.metadata.get("collection", {}))
+    with manager as client:
+        for cls in (IssuesCollector, CICollector, PullRequestsCollector, ContributorsCollector, ReleasesCollector):
+            collected = cls(client).collect(context.repository)
+            facts[cls.name], statuses[cls.name] = collected.facts, collected.availability
+            collection[cls.name] = {"collected_at": collected.collected_at, "schema_version": collected.schema_version,
+                                    "error": collected.error}
+    return replace(context, sourcecraft_facts=facts, collection_statuses=statuses,
+                   metadata={**context.metadata, "collection": collection})
 
 
 def recover_abandoned(engine, sessions, settings) -> int:

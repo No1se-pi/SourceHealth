@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from sourcehealth.core.domain import ACTIVE_STATUSES, RepositoryRef, validate_transition
+from sourcehealth.scoring.mvp import MVPPolicy
 from sourcehealth.storage.models import AnalysisRun, Repository
 
 from .cache import fingerprint
@@ -33,11 +34,41 @@ class AnalysisService:
         with self.sessions.begin() as db:
             values = ref.to_dict()
             values["id"] = UUID(ref.id)
-            db.execute(insert(Repository).values(**values).on_conflict_do_nothing())
+            db.execute(insert(Repository).values(**values).on_conflict_do_update(
+                index_elements=[Repository.canonical_url],
+                set_={key: values[key] for key in ("sourcecraft_id", "visibility", "default_branch")}))
             row = db.scalar(select(Repository).where(Repository.canonical_url == ref.canonical_url))
             if row is None:
                 raise ServiceError("repository_identity_conflict", 409)
             return row.id
+
+    def import_public_repository(self, url: str, *, client=None) -> UUID:
+        """HTTP/CLI import проверяет публичность у платформы; сессия Я ID не даёт private прав."""
+        from contextlib import nullcontext
+
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+        from sourcehealth.integrations.sourcecraft.collectors import RepositoryCollector
+
+        try:
+            ref = RepositoryRef.from_url(url)
+        except ValueError:
+            raise ServiceError("invalid_sourcecraft_url", 422) from None
+        manager = nullcontext(client) if client is not None else SourceCraftClient(
+            pat=self.settings.sourcecraft_pat.get_secret_value() if self.settings.sourcecraft_pat else None,
+            timeout=self.settings.sourcecraft_timeout, deadline_seconds=45)
+        with manager as source:
+            collected = RepositoryCollector(source).collect(ref)
+        if collected.availability != "available":
+            status = 404 if collected.error in {"public_repository_required", "not_found", "access_denied"} else 503
+            raise ServiceError("public_repository_unverified", status)
+        ref = RepositoryRef.from_url(ref.canonical_url, sourcecraft_id=collected.facts["id"],
+                                     default_branch=collected.facts.get("default_branch"), visibility="public")
+        repository_id = self.register_repository(ref)
+        with self.sessions.begin() as db:
+            row = db.get(Repository, repository_id)
+            if "language" in collected.facts:
+                row.language = collected.facts["language"]
+        return repository_id
 
     def request_analysis(self, repository_id: UUID, *, trigger: str = "manual", force: bool = False) -> AnalysisRun:
         if trigger not in {"manual", "scheduled", "refresh", "system"}:
@@ -55,7 +86,8 @@ class AnalysisService:
             if active:
                 return active
             key = fingerprint("run-v1", repository_id=str(repo.id), head_sha=repo.head_sha,
-                              profile=self.settings.analysis_profile, policy="unconfigured-v1", contract="3.0")
+                              profile=self.settings.analysis_profile,
+                              policy=MVPPolicy.version if self.settings.analysis_profile == "mvp-v1" else "unconfigured-v1", contract="3.0")
             if not force:
                 cached = db.scalar(select(AnalysisRun).where(
                     AnalysisRun.fingerprint == key, AnalysisRun.status.in_(("completed", "partial")),
@@ -96,8 +128,20 @@ class AnalysisService:
             run.scoring_policy_version, run.health_score = report.scoring_policy_version, report.health_score
             run.recommendations = payload["recommendations"]
             run.data_coverage = {name: check.availability.value for name, check in report.checks.items()}
+            if run.profile == "mvp-v1":
+                run.data_coverage = {name: category["availability"] for name, category in report.category_scores.items()}
+                run.head_sha = report.repository.get("head_sha")
             repo = db.get(Repository, run.repository_id, with_for_update=True)
             repo.latest_analysis_id, repo.health_score = run.id, run.health_score
+            if run.profile == "mvp-v1":
+                repo.head_sha = run.head_sha
+                # The first request may not know HEAD yet. Cache the completed
+                # observation under its actual snapshot, as subsequent requests do.
+                run.fingerprint = fingerprint("run-v1", repository_id=str(repo.id), head_sha=run.head_sha,
+                                              profile=run.profile, policy=report.scoring_policy_version, contract="3.0")
+                git = report.checks.get("git_activity")
+                if git and git.metrics.get("last_commit_date"):
+                    repo.last_activity_at = datetime.fromisoformat(git.metrics["last_commit_date"])
             repo.next_analysis_at = run.completed_at + timedelta(seconds=self.settings.refresh_interval)
 
     def enqueue_due(self) -> list[UUID]:

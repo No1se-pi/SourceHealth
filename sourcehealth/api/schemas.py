@@ -120,5 +120,10 @@ class AnalysisRequest(BaseModel):
     force_refresh: bool = False
 
 
+class RepositoryImport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    url: str = Field(min_length=1, max_length=512)
+
+
 class UserDTO(BaseModel):
     id: UUID

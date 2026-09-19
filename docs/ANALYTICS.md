@@ -1,70 +1,127 @@
-# Аналитика: категории, факты и расширение
+# Аналитика MVP: факты, определения и границы
 
-Анализатор возвращает измерения и evidence, а не окончательный Health Score.
-Collectors отвечают за I/O и availability. Scoring отдельно интерпретирует метрики.
+Профиль `mvp-v1` реализован 19.09.2026. Collectors выполняют I/O; analyzers получают
+facts и возвращают метрики/evidence; policy отдельно рассчитывает оценку. Проверки
+на контрактных fixtures и настоящих PostgreSQL/Redis описаны в [TESTING](TESTING.md).
+Успешный live сбор SourceCraft пока не принят: доступные запросы вернули 401.
 
-| Категория | Источники | План метрик | Evidence |
-|---|---|---|---|
-| documentation | Git snapshot | README/license, run/build/test instructions, CONTRIBUTING/CODEOWNERS | file + HEAD + relative path |
-| cicd | SourceCraft runs + CI config | Success rate, duration, recent failures, configuration presence | ci_run/config file |
-| security | Только SourceCraft AppSec | Open/resolved по SAST/SCA/secrets и severity | vulnerability/scan reference + timestamps |
-| activity | Git, MR, contributors, releases | Commit windows/gaps, last activity, contributors, releases | commit/platform references |
-| issues | SourceCraft issues/comments | Open/closed, stale, response/closure times | issue/comment references |
-| code_health | Snapshot + Git history, local scanner | TODO/FIXME, complexity/debt, local findings | file/line/commit, без source snippets |
+| Категория | Check / источник | Измерения |
+|---|---|---|
+| documentation | documentation / git_snapshot | README, LICENSE, run/build/test, CONTRIBUTING, CODEOWNERS, docs |
+| cicd | cicd / sourcecraft + snapshot | Конфигурация, запуски, success/failure, duration, последний статус |
+| security | sourcecraft_appsec / sourcecraft_appsec | Пока NO_DATA: appsec_interface_unconfirmed |
+| activity | git_activity / git + platform_activity / sourcecraft | Git windows/recency, PR, contributors, releases |
+| issues | issues / sourcecraft | Open/closed, stale, response/closure medians, последние 30 дней |
+| code_health | sast / sourcehealth_local + technical_debt / git_snapshot | Локальные findings, TODO/FIXME, возраст строк, большие файлы |
 
-## Что работает сейчас
+`platform-v1` и `code-v1` сохраняют прежнее поведение и `unconfigured-v1`.
+`mvp-v1` проходит через `analysis-code`: один clone и один sandbox scan с `--with-mvp`.
+Analyzer не обращается к DB, Redis или frontend. Сбой sandbox не удаляет platform facts.
 
-GitActivityAnalyzer и GitActivityAnalyzerAdapter сохраняют прежние расчёты, точные
-определения в [METRICS](METRICS.md). GitCollector возвращает список истории HEAD,
-API pure analyzer не менялся. Local SAST сохраняет JSON rules, AST/regex/lexical
-engines, budgets, redaction и SARIF. Его id остаётся `sast`, но source явно
-sourcehealth_local и category code_health.
+## Общая семантика
 
-В фоне RepositoryMetadataAnalyzer публикует безопасные metadata/evidence, без category
-score. SourceCraftSecurityAnalyzer сообщает недоступность неподключённого AppSec.
-Не считать эти два анализатора реализацией всех шести категорий.
+Временные окна новых pure analyzers считаются от `context.started_at` в UTC; recent —
+замкнутый интервал `[started_at − 30 дней, started_at]`. Старый GitActivity не переписан:
+его определения в [METRICS](METRICS.md). Snapshot получает reference time своего
+scanner context. В report остаются timestamps наблюдений и фактический HEAD SHA.
 
-В `code-v1` background job добавляет `checks.git_activity` (activity/git) и
-`checks.sast` (code_health/sourcehealth_local) через один sandbox запуск.
-Legacy JSON 1.0 остаётся прежним; converter переносит counters/findings в общий
-контракт 3.0. Ошибка/невалидный check не удаляет второй check или platform facts.
-SAST partial сохраняет измеренные counters и причины неполного охвата; runtime failure
-даёт NO_DATA, а не нулевые метрики/Score. Cleanup failure помечается отдельным safe code.
+Полный пустой ответ API — `available`, известные counts равны 0. Отсутствующий
+collector — `no_data`, ошибка до первого item — `source_unavailable`, ошибка после
+получения части items — `partial`. При partial итоговые counts/ratios равны `null`;
+`observed_count`/`runs_observed` обозначают только размер реально полученной части.
+Дубли id исключаются. Неизвестное значение никогда не подменяется нулём.
 
-## Добавить IssuesAnalyzer
+Evidence содержит источник, тип, время, repository reference/URL; snapshot evidence —
+HEAD и относительный путь признака. Это агрегированное наблюдение, а не публикация
+issue/comment body или исходного кода. Проверки хранят inputs для replay policy;
+исходные тела HTTP не сохраняются. References проверяет ScoringEngine.
 
-Collector получает issues через client.iter_items и хранит необходимые временные поля,
-статусы и references. Не сохранять весь body/comment: он может содержать секреты.
-Analyzer принимает context.sourcecraft_facts['issues']; время анализа берёт из
-context.started_at, не datetime.now(). Результат:
+## Documentation
 
-```python
-return AnalyzerResult(
-    analyzer="issues", category="issues", source="sourcecraft",
-    analyzer_version="1", availability=availability,
-    status="ok" if availability == DataAvailability.AVAILABLE else "partial",
-    metrics={"open_count": open_count, "window_days": 30},
-    evidence=evidence,
-)
-```
+`SnapshotCollector` читает tracked файлы текущего HEAD в изолированном свежем clone.
+Исключаются `.git`, `node_modules`, `vendor`, `.venv`, `venv`, `dist`, `build`,
+`__pycache__`. Symlink/junction, hardlink и специальные файлы не читаются. Target code,
+install/build/tests/hooks не исполняются.
 
-Это пример формы, не готовая методика. `open_count=None` при неизвестных данных;
-0 допустим только при полном наблюдении пустого набора. Частичная pagination не
-равна полному count. Новый analyzer добавляется обычным списком в profile; plugin
-framework, новый router и таблица per analyzer не нужны.
+Детерминированные признаки:
 
-## Договориться о смысле метрик
+- README в корне: без расширения или `.md/.rst/.txt`; сохраняются byte size и Markdown headings.
+- LICENSE/LICENCE/COPYING в корне; проверяется присутствие, не юридическая корректность лицензии.
+- CONTRIBUTING в корне, CODEOWNERS в корне/`.github`/`.sourcecraft`/`docs`.
+- `docs_directory`: хотя бы один безопасный tracked файл внутри `docs`.
+- Run/build/test: совпадения команд или заголовков в README и `.md/.rst/.txt` внутри `docs`.
+  Run: Quick Start, Getting Started, «запуск», npm run dev/start, docker compose up,
+  uvicorn, python -m. Build: заголовок build/«сборк», npm run build, docker build,
+  cargo build, go build. Test: заголовок test/«тест», pytest, unittest, npm/go/cargo test.
 
-До реализации указать unit, окно времени, timezone, включение границ, scope ветки,
-фильтр bots/private issues, empty vs unavailable, sampling/partial semantics.
-Фиксировать analyzer_version при изменении смысла. Для code facts хранить HEAD и
-configuration digest. Rolling Git метрики зависят не только от SHA, но и от reference
-time: нельзя бессрочно кэшировать готовый `days_since_last_commit` по HEAD.
+Это проверка наличия признаков, не качества текста и не успешности команды. Регулярные
+выражения версионируются вместе с analyzer; LLM не используется. Лимиты: 10 000 tracked
+файлов, 1 MiB на читаемый файл, 64 MiB суммарно, общий бюджет 30с плюс начальные Git
+операции с timeout 10с каждая. Превышение/ошибка даёт partial; не найденные в неполном
+обходе признаки — `null`, оценка Documentation не рассчитывается.
 
-## Большие репозитории
+## Issues
 
-Текущий GitCollector хранит весь stdout/list[Commit] в памяти. Его compatibility API
-сохранён. Будущие collectors могут добавлять streaming, ограниченные окна, агрегаты
-или incremental storage, не меняя Analyzer Protocol. Shallow clone запрещён как
-скрытый default для исторических метрик; partial clone/blob filtering допустим только
-если анализу не нужны отсутствующие blobs. Лимиты и partial coverage показываются явно.
+Только публичные issues; `initial/in_progress/paused` — open,
+`completed/cancelled` — closed. `closed_at` соответствует официальному `completed_at`
+(последний переход в завершённое состояние). Stale: open issue не обновлялся ≥30 дней.
+`stale_ratio = stale_open_count/open_count`, при полном отсутствии open — 0.
+`recent_created/recent_closed` используют соответствующие timestamps и окно 30 дней.
+
+First response — **первый публичный комментарий**, включая self-comments и bots;
+это не обещание времени ответа другого участника. Сохраняются только timestamp и
+полнота чтения комментариев. Budget — первые 10 issues, не более 2000 comments на issue.
+Median response рассчитывается по ответившим issues только если comments всех issues
+полностью просмотрены; отсутствие комментариев не равно ответу за 0 часов.
+`response_observed_count` показывает число наблюдаемых ответов. При превышении budget
+median неизвестна, но полный список issues остаётся пригодным для counts/stale.
+Median close использует только closed и требует известного времени закрытия каждого.
+Отрицательные durations отвергаются collector. Даты вне окна не попадают в recent.
+
+## CI/CD
+
+Состояния success и failed/timeout/rejected образуют знаменатель success rate.
+Canceled/skipped и незавершённые состояния не считаются ни успехом, ни failure.
+Duration — `finished_at − started_at`, медиана только при известной длительности всех
+этих завершённых runs. Recent failures считаются по created_at, latest — по created_at.
+
+`configured=false / not_configured` требует одновременно **полного пустого API списка**
+и полного snapshot без `.sourcecraft/ci.yaml`. Это отсутствие нативной SourceCraft CI,
+не утверждение об отсутствии внешних CI-систем. Наличие файла или наблюдённых runs
+подтверждает configured=true. API outage/partial остаётся outage/partial даже при
+наличии файла. Пустой список без знания snapshot даёт configured=null.
+
+## Activity
+
+GitActivityAdapter сохраняет прежние commits/windows/gaps/last commit. Дополнительный
+PlatformActivityAnalyzer считает все PR, merged PR, PR с updated_at в последние 30 дней,
+уникальных contributors и **опубликованные** releases, timestamp последнего release.
+Draft/discarded releases исключены, emails/names/notes не сохраняются. Bots и aliases
+contributors не объединяются: это число id, возвращённых платформой.
+Каждый ресурс имеет собственную availability; неполные counts равны null. Отсутствие
+release при полном списке — 0, а не outage. Git и известные platform компоненты могут
+давать частичную оценку Activity по правилам [SCORING](SCORING.md).
+
+## Code Health и technical debt
+
+Local SAST сохраняет rules, engines, redaction, budgets и SARIF. Он не даёт Security score.
+Debt использует безопасные UTF-8 code files: py/js/jsx/ts/tsx/java/go/rs/c/h/cpp/hpp/cs/
+php/rb/swift/kt/scala/sh/sql. Лексические слова `TODO` и `FIXME` регистрозависимы,
+учитываются также внутри строк; это прозрачная эвристика, не parser комментариев.
+Сохраняются counts маркеров, files_with_debt, code_files и `(TODO+FIXME)/code_files`.
+Large file — более 1000 строк. Complexity/длина функций в v1 не заявляются.
+
+Возраст — максимальное число дней с **последнего изменения текущей строки маркера**
+по `git blame --line-porcelain --no-textconv HEAD`. Это не дата первого появления TODO.
+Не более 10 файлов с маркерами и 5с на blame в пределах общего budget. При неполном
+blame `age_complete=false`, возраст null; density может оставаться известной.
+Чистый полный набор без маркеров имеет age=null и age_complete=true. Partial snapshot
+сохраняет наблюдённые counts, но density=null и весь debt исключается из score.
+
+## Расширение
+
+Новый analyzer подключается списком в профиль, без plugin framework и таблицы per check.
+При изменении смысла метрики обновлять analyzer/policy version, fixtures и эту страницу.
+Готовые rolling metrics нельзя бессрочно кэшировать по SHA: TTL запуска ограничивает
+возраст всей observation; platform facts повторно собираются при новом запуске даже
+без изменения Git. Большая Git-история пока использует совместимый list[Commit].

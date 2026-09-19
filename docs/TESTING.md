@@ -78,6 +78,32 @@ Upgrade/`alembic check` обязательны. Downgrade/upgrade проверя
 `*_test` БД: downgrade удаляет таблицы и историю. Offline SQL `upgrade head --sql`
 показывает DDL, но не доказывает успешное применение на настоящем PostgreSQL.
 
+## MVP analytics: воспроизводимая проверка
+
+`tests/test_mvp_collectors.py` проверяет официальный shape, allowlist, pagination,
+пустые/partial/invalid/outage ответы, comment budget и ограниченное discovery.
+`tests/test_mvp_snapshot.py` создаёт настоящие Git repositories: документация, debt,
+blame age, partial budget, symlink и полный scanner → normalizer roundtrip.
+`tests/test_mvp_analytics.py` проверяет метрики, шесть slots, монотонность, coverage,
+replay, Security boundary и валидность evidence recommendations.
+
+`test_mvp_import_queue_report_leaderboard_and_cache` в integration suite выполняет
+HTTP import → настоящий RQ worker → collectors → analyzers → score → PostgreSQL →
+GET AnalysisDetails/Markdown/leaderboard и повтор из кэша. SourceCraft transport и
+code runtime — fixtures; DB/Redis/RQ/HTTP настоящие. Дополнительно проверяются
+неверный URL, Origin, отсутствие сессии, private/unverified repository.
+
+```powershell
+python -m unittest tests.test_mvp_collectors tests.test_mvp_analytics tests.test_mvp_snapshot -v
+docker build -f sourcehealth/sast/Dockerfile -t sourcehealth-sast .
+python scripts/mvp_snapshot_smoke.py
+```
+
+Результаты поставки и live blockers: [MVP_ANALYTICS](MVP_ANALYTICS.md).
+Snapshot smoke использует настоящий offline Docker scanner и synthetic Git repository,
+проверяет HEAD/docs/debt/Git/SAST и отсутствие исполнения target code. Собственный
+unique volume удаляется в finally. Это не live clone SourceCraft.
+
 ## Live SourceCraft opt-in
 
 ```powershell

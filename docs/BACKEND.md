@@ -29,7 +29,7 @@ transition, finish, enqueue_due. `application/jobs.py` — доставка и �
    быть переиспользован завершённый run со старым набором анализаторов.
 7. Добавить unit fixtures и обновить ANALYTICS/SOURCECRAFT. Core/DTO/migration обычно не меняются.
 
-Поддерживаются `platform-v1` и `code-v1`; неизвестный профиль отклоняется Settings.
+Поддерживаются `platform-v1`, `code-v1` и `mvp-v1`; неизвестный профиль отклоняется Settings.
 `jobs.queue_name()` маршрутизирует persisted profile, поэтому dispatcher может доставлять
 обе очереди независимо от собственной настройки. `code-v1` добавляет Git/SAST через
 `AnalysisRuntime`, а `runtime_results.py` преобразует legacy JSON с allowlist метрик,

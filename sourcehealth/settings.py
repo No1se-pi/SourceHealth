@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     code_cache_ttl: int = Field(default=604800, ge=1)
     result_cache_ttl: int = Field(default=300, ge=1)
     analysis_timeout: int = Field(default=600, ge=30, le=3600)
-    analysis_profile: Literal["platform-v1", "code-v1"] = "platform-v1"
+    analysis_profile: Literal["platform-v1", "code-v1", "mvp-v1"] = "platform-v1"
     code_runtime_enabled: bool = False
     code_runtime_image: str = "sourcehealth-sast"
     code_runtime_timeout: int = Field(default=180, ge=1, le=1200)

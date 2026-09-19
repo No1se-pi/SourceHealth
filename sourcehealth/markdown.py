@@ -28,7 +28,11 @@ def render_markdown(report) -> str:
         value = category.get("score")
         lines.append(f"| {_text(name)} | {value if value is not None else 'NO_DATA'} | "
                      f"{_text(category['availability'])} | {_text(category['explanation'])} |")
-    lines += ["", "## Сильные стороны", "", "Выводы появятся после утверждения правил и привязки к фактам.",
+    lines += ["", "## Сильные стороны", ""]
+    strengths = [name for name, c in report.get("category_scores", {}).items() if c.get("score") is not None and c["score"] >= 80]
+    lines += [f"- {_text(name)}: оценка не ниже 80 по сохранённой методике." for name in sorted(strengths)] or ["Недостаточно подтверждённых высоких оценок."]
+    scored = [name for name, c in report.get("category_scores", {}).items() if c.get("score") is not None]
+    lines += ["", f"Охват: рассчитано категорий {len(scored)} из 6. NO_DATA — данных нет; это не нулевая оценка.",
               "", "## Проблемы и ограничения данных", ""]
     for name, check in sorted(report.get("checks", {}).items()):
         lines.append(f"- {_text(name)}: {_text(check['availability'])}; находок: {len(check.get('findings', []))}.")

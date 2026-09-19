@@ -2,21 +2,22 @@
 
 Источник продуктовых требований: «8. Yandex Cloud.pdf», 21 страница, ТЗ ЛЦТ 2026.
 Номера ниже — разделы исходного ТЗ. Приложенный архитектурный промпт задаёт объём
-foundation-работы, но не заменяет исходные требования к финальной сдаче.
+foundation-работы, последующий analytics batch реализован 19.09.2026. Эти этапы
+не заменяют исходные требования к финальной сдаче и live приёмке.
 
 ## Матрица соответствия
 
 | Требование ТЗ | Компоненты | Сейчас | Приёмка следующего этапа |
 |---|---|---|---|
-| 3.1 Documentation / best practices | collectors + documentation analyzer | Planned | README, LICENSE, запуск/сборка/тесты с file evidence |
-| 3.1 CI/CD | SourceCraft client + CI collector/analyzer | Foundation клиента | Метрики реальных прогонов, пустой список не выдаётся за отсутствие CI |
+| 3.1 Documentation / best practices | snapshot collector + documentation analyzer | Unit + real Git fixtures | Live repo, README/LICENSE/run/build/test evidence |
+| 3.1 CI/CD | SourceCraft CI collector/analyzer | Contract tested, полные/partial/absent различимы | Успешный live сбор прогонов |
 | 3.1 Security | отдельный AppSec collector + security analyzer | Boundary, NO_DATA | Реальные SAST/SCA/secrets findings, severity и resolution из AppSec |
-| 3.1 Activity | GitCollector, GitActivityAnalyzer, adapter | Работает локально | Подключить безопасный runtime к фоновому профилю; MR/releases/contributors через API |
-| 3.1 Issues | SourceCraft client pagination + будущий analyzer | Foundation | Open/closed, зависшие задачи; объяснить окна наблюдений |
-| 3.1 Code health / debt | local SAST + новые code analyzers | SAST работает локально | TODO/FIXME/сложность и debt evidence; SAST не подменяет AppSec |
-| 3.2 Score 0–100 | ScoringEngine / ScoringPolicy | Контракт, null Score | Версионированная формула, веса, нормализация, контрольные сценарии |
-| 3.3 Рекомендации | Recommendation / evidence_refs / rule protocol | Контракт | Каждое правило показывает факт, приоритет, действие и воспроизводимый эффект |
-| 3.4 Страница анализа | FastAPI DTO, React routes | Foundation | Шесть категорий, сильные/слабые стороны, переход к evidence |
+| 3.1 Activity | GitActivity + PR/releases/contributors | mvp-v1, contract tested | Live platform facts совместно с Git |
+| 3.1 Issues | IssuesCollector/Analyzer | Counts/stale/latency, contract tested | Live API, полная comments история где доступна |
+| 3.1 Code health / debt | local SAST + snapshot/blame | TODO/FIXME/age/density/large files, unit + Git fixtures | Live code profile; complexity не заявляется |
+| 3.2 Score 0–100 | MVPPolicy / ScoringEngine | mvp-score-v1, replay/coverage/monotonic tests | Сверка на реальных reports; AppSec после доступа |
+| 3.3 Рекомендации | deterministic rules / evidence_refs | Правила docs/CI/issues/debt/SAST | Live проверка полезности; impact qualitative |
+| 3.4 Страница анализа | FastAPI DTO, React routes | Шесть категорий, evidence, рекомендации | Browser/live приёмка полного flow |
 | 4 Публичный рейтинг | repositories, индексы, API, React | Список реальной БД и sort | Наполнение публичным каталогом, язык, лайки, активность, шкала Score |
 | 5 Я ID и собственный репозиторий | auth + будущая SourceCraft authorization | Я ID flow реализован; bridge открыт | Реальный вход, список доступных repo, проверка прав на каждом действии |
 | 6 Регулярный анализ | enqueue-due, RQ, PostgreSQL | Команда реализована | Cron каждую минуту, демонстрация первого/повторного run |
@@ -30,8 +31,8 @@ foundation-работы, но не заменяет исходные требо�
 
 FastAPI, React, PostgreSQL, Redis/RQ — наши архитектурные решения. ТЗ не фиксирует
 стек. Пример весов Security 20%, Activity 15%, Documentation 15%, CI 15%, Issues 15%,
-Code health 20% является ориентиром, а не обязательной формулой. Сейчас эти веса
-не включены в код: пустая реализация не должна генерировать правдоподобный Score.
+Code health 20% является ориентиром. В mvp-score-v1 приняты эти веса; формулы и
+minimum coverage опубликованы в [SCORING](SCORING.md). Старые профили сохраняют null.
 
 ## Приоритет сдачи
 

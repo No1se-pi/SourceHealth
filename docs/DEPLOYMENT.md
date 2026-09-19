@@ -58,7 +58,8 @@ python -m sourcehealth.application register https://sourcecraft.dev/ORGANIZATION
 
 Подставить существующие slugs. Команда печатает repository_id и analysis_id.
 По умолчанию фоновый анализ собирает metadata; `code-v1` добавляет Git/SAST через trusted
-worker ниже. Partial и null Score при неподключённых AppSec/методике ожидаемы.
+worker ниже. `mvp-v1` добавляет обязательную аналитику и численную policy; partial
+из-за AppSec NO_DATA ожидаем, но не требует null overall при достаточном coverage.
 Непубличный/unverified repo не принимается.
 
 ## Trusted code worker — отдельный execution profile
@@ -84,17 +85,35 @@ export ANALYSIS_TIMEOUT=600
 python -m sourcehealth.application worker-code
 ```
 
-Для создания code runs задать `ANALYSIS_PROFILE=code-v1` у API, register и scheduler,
+Для полного MVP задать `ANALYSIS_PROFILE=mvp-v1` у API, register и scheduler
+(`code-v1` остаётся совместимым старым профилем),
 перезапустить соответствующие процессы. Обычный worker можно оставить для старых
 `platform-v1` jobs. Dispatcher сам выбирает очередь по сохранённому профилю run.
 API не нуждается в `CODE_RUNTIME_ENABLED=true`: настройка включается только у
 trusted code worker. Image — настройка оператора, не пользовательский HTTP параметр.
 
-Один вызов runtime делает clone → offline Git/SAST → cleanup. Никаких install/test/build
+Один вызов runtime делает clone → offline Git/SAST/documentation/debt → cleanup. Никаких install/test/build
 команд целевого repo. Clone не получает PAT; поддерживаются только verified public repo.
 Timeout/clone error/отсутствие Docker → partial report с сохранением platform facts.
 Выделенный runtime включать сначала в контролируемой среде: disk quotas,
-уборка после SIGKILL и фиксация точного SHA/cache не входят в эту closure-поставку.
+уборка после SIGKILL и code cache ещё требуют операционной приёмки. mvp-v1 уже сохраняет
+фактический SHA, но не принимает пользовательский SHA для pinning.
+
+## Public import и ограниченное discovery
+
+После входа Я ID форма на leaderboard принимает SourceCraft URL, проверяет public
+через API и открывает страницу repo; запуск — существующей кнопкой. SOURCECRAFT_PAT
+настраивается оператором отдельно от OAuth Я ID. Private пока запрещены.
+
+```powershell
+python -m sourcehealth.application discover --organization ORGANIZATION --limit 20
+python -m sourcehealth.application discover --limit 20
+```
+
+Без organization используется подтверждённый Swagger endpoint GET /repos. Каждая
+найденная запись повторно проверяется, импортируется и ставится на анализ. Это один
+ограниченный batch (limit 1..100, 120с), а не полный обход каталога. Вывод содержит число
+импортов и availability; partial не означает полный каталог. Live доступ ещё не принят.
 
 ## Изолированный Compose smoke
 
