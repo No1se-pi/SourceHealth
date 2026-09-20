@@ -125,10 +125,16 @@ class CICollector(ListCollector):
     def normalize(self, raw):
         dates = raw["dates"]
         started, completed = timestamp(dates.get("started_at")), timestamp(dates.get("finished_at"))
+        # SourceCraft uses Unix epoch for stages that have not happened yet.
+        if started == "1970-01-01T00:00:00+00:00":
+            started = None
+        if completed == "1970-01-01T00:00:00+00:00":
+            completed = None
         duration = (datetime.fromisoformat(completed) - datetime.fromisoformat(started)).total_seconds() if started and completed else None
         if duration is not None and duration < 0:
             raise SourceCraftError("invalid_response")
-        return {"id": identifier(raw["id"]),
+        # Official Run schema: public IDs are not assigned yet; slug is the run counter.
+        return {"id": identifier(raw.get("id") or raw.get("slug")),
                 "status": enum(raw["status"], {"created", "prepared", "processing", "success", "failed", "canceled",
                                                "timeout", "skipped", "awaiting_approval", "rejected"}),
                 "created_at": timestamp(dates.get("created_at"), required=True), "started_at": started,

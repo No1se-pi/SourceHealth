@@ -23,6 +23,10 @@ npm ci --prefix frontend
 npm run dev --prefix frontend
 ```
 
+Миграции и backend внутри образа запускаются через `python -m alembic` и
+`python -m uvicorn`. Это сохраняет запуск в hardened-окружениях, где исполнение
+установленных console scripts запрещено политикой mount (`operation not permitted`).
+
 Не копировать .env.example поверх своего заполненного .env. Linux/macOS activation:
 `source .venv/bin/activate`. `requirements-server.lock` фиксирует runtime dependency
 snapshot; npm ci использует package-lock.json. Обновление lock — отдельный проверяемый PR.
@@ -67,10 +71,15 @@ worker ниже. `mvp-v1` добавляет обязательную анали
 
 ## Trusted code worker — отдельный execution profile
 
-Это операторский Linux host/VM с Docker Engine/CLI, установленным SourceHealth той же
-ревизии и сетевым доступом к сервисным PostgreSQL/Redis. Процесс имеет привилегии Docker
-daemon на **выделенной машине**. Не переносить этот доступ в API или generic Compose worker.
-RQ `worker-code` использует fork; на Windows запускать на отдельном Linux host/VM.
+Обычный `docker compose up` поднимает PostgreSQL, Redis, migrations, API и generic worker.
+Он не потребляет очередь `analysis-code`: для полного `mvp-v1` нужен отдельный trusted
+`worker-code`. Это операторский Linux host/VM с Docker Engine/CLI, установленным
+SourceHealth той же ревизии и сетевым доступом к сервисным PostgreSQL/Redis. Процесс имеет
+привилегии Docker daemon на **выделенной машине**. Не переносить этот доступ в API или
+generic Compose worker и не монтировать туда Docker socket.
+
+Production recommendation — отдельный Linux trusted host. Для локального Windows demo
+допустим проверенный путь через существующий `SimpleWorker` и Docker Desktop.
 
 На trusted host, из checkout проверенной ревизии:
 
@@ -81,6 +90,7 @@ python -m pip install -r requirements-server.lock
 python -m pip install -e '.[server]'
 docker build -f sourcehealth/sast/Dockerfile -t sourcehealth-sast .
 # DATABASE_URL / REDIS_URL — сервисные адреса через environment/secret storage.
+export ANALYSIS_PROFILE=mvp-v1
 export CODE_RUNTIME_ENABLED=true
 export CODE_RUNTIME_IMAGE=sourcehealth-sast
 export CODE_RUNTIME_TIMEOUT=180
@@ -175,3 +185,10 @@ DB/Redis shared; PG locks удерживают single-flight. Соблюдать
 нужны HTTPS reverse proxy, секреты, DB roles/backups, private network, rate limits,
 cron, monitoring и restore drill. Не монтировать Docker socket в web API или обычный
 platform worker. Code workers выделять по [SECURITY](SECURITY.md).
+# Дополнительная настройка подключения SourceCraft
+
+Для пользовательского PAT connection задайте отдельный `SOURCECRAFT_CREDENTIAL_KEY`:
+base64 от 32 случайных байтов (`openssl rand -base64 32`). Не используйте SESSION_SECRET
+повторно и не коммитьте значение. SOURCECRAFT_CONNECTION_TTL по умолчанию 1800с.
+При смене ключа прежние подключения потребуют повторного ввода PAT.
+Это не включает private analysis и не заменяет настройку Яндекс OAuth.

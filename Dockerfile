@@ -9,4 +9,4 @@ COPY migrations ./migrations
 RUN pip install --no-cache-dir --no-deps . && useradd --uid 10001 --create-home app
 USER 10001:10001
 EXPOSE 8000
-CMD ["uvicorn", "sourcehealth.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+CMD ["python", "-m", "uvicorn", "sourcehealth.api.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

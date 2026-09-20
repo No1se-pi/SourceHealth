@@ -1,4 +1,4 @@
-# Детерминированная методика mvp-score-v1.1
+# Детерминированная методика mvp-score-v1.2
 
 `MVPPolicy` включена для `mvp-v1`. `platform-v1` и `code-v1` сохраняют
 `UnconfiguredPolicy / unconfigured-v1` с nullable score. Policy не выполняет I/O,
@@ -7,6 +7,8 @@
 Изменение 20.09.2026: v1.1 исключает self-comments, учитывает долю issues без ответа
 и использует отдельную полноту Documentation/Debt. Старые v1 reports не меняются;
 новая policy version автоматически меняет fingerprint нового запуска.
+Изменение 21.09.2026: v1.2 не оценивает полностью пустой issue tracker как 100 и
+ограничивает недавнюю Git-активность меньшим из signals commit count/active days.
 
 ## Итог и coverage
 
@@ -56,9 +58,9 @@ README size/headings — диагностические метрики, отде
 Stale обязателен; при неполной comments истории response-компонент исключается.
 Если история полная, но ответов нет, response-компонент равен 0 (rate=0, median=null).
 Медиана считается среди ответивших, rate — среди всех issues; быстрые ответы меньшинству
-не дают всем 100. Self-comment не является ответом. Полный пустой список имеет stale=0,
-latency=null и score=100 по наблюдаемому отсутствию backlog. Это не оценка отзывчивости
-команды без issues. Partial pagination не оценивается. Семантика первого комментария
+не дают всем 100. Self-comment не является ответом. Полный пустой список наблюдаем,
+но score=null: отсутствие задач не доказывает качество issue management.
+Partial pagination не оценивается. Семантика первого комментария
 и ограниченного comments budget явно указана в ANALYTICS.
 
 ## CI/CD
@@ -73,13 +75,14 @@ Duration/recent failures/latest status информативны, не меняю
 
 | Компонент | Формула | Вес |
 |---|---|---:|
-| Commits 30 дней | `100 × C(commits_last_30_days / 20)` | 40 |
+| Recent activity | `100 × min(C(commits_last_30_days/20), C(active_days_last_30_days/5))` | 40 |
 | Последний commit | `100 × (1 − C(days_since_last_commit / 90))` | 40 |
 | Обновлённые PR 30 дней | `100 × C(recent_pr_activity / 5)` | 10 |
 | Contributors | `100 × C(contributors_count / 3)` | 5 |
 | Последний release | `100 × (1 − C(days_since_release / 365))` | 5 |
 
-Нужен полный Git result. Полная пустая Git-история даёт 0; недоступная — null.
+Нужен полный Git result. Burst из множества commits в один день не максимизирует recent activity.
+Полная пустая Git-история даёт 0; недоступная — null.
 Полное отсутствие releases даёт 0 для release-компонента. Неизвестные platform
 компоненты исключаются, категория помечается partial. Давность release вычисляется
 по сохранённому reference_time platform analyzer. PR count/merged count — диагностика.

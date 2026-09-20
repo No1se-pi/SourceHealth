@@ -46,7 +46,8 @@ Remove-Item Env:DATABASE_URL, Env:TEST_DATABASE_URL, Env:TEST_REDIS_URL
 
 Тесты создают уникальные repo и удаляют собственные записи. Проверяют десять
 конкурентных запросов/пять dispatchers, DB unique constraint, недоставленный queued,
-RQ execution, сохранение report, cached/force поведение, recovery guard, private
+RQ execution, восстановление orphaned `queued` RQ job из durable DB outbox,
+сохранение report, cached/force поведение, recovery guard, private
 report deny, Markdown и Я ID state/PKCE/session/logout. Я ID и collection HTTP в этих
 тестах mocked: real persistence не означает live внешнюю acceptance.
 
@@ -132,3 +133,15 @@ commit SHA, число tracked files/commits/размер, memory/time, coverage
 Не повторять дорогие benchmarks без изменения/регрессии. Browser acceptance отдельно:
 loading/error/empty/no-data/partial, navigation, auth, report download. Build и HTTP
 200 не означают проверку пикселей или полного пользовательского пути.
+# Mandatory closure проверки
+
+`tests.test_repository_rating` и `tests.test_ci_live_contract` покрывают sparse reactions,
+невалидные uint counters, Run slug и epoch незавершённых стадий.
+Integration suite проверяет AES-GCM Redis storage, TTL ограничения, изоляцию сессий,
+disconnect/logout и import → persisted likes/null. HTTP SourceCraft в этих integration
+сценариях подменён; это не live пользовательская авторизация.
+
+`.sourcecraft/ci.yaml` использует отдельные Python 3.11 и Node 24 cubes.
+Системный Python 3.11.2 из Node Bookworm воспроизводил regex regression; используем
+актуальный Python 3.11 image. Docker/Compose smoke остаются в GitHub, поскольку
+доступ к Docker daemon в SourceCraft runner не подтверждён.

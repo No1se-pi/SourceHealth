@@ -106,3 +106,22 @@ Terminal status остаётся `partial`: официальный SourceCraft A
 этого repository не найдено поддерживаемых code files для числового Code Health. Это не
 ошибка transport или worker. Raw responses и PAT не сохранялись. Browser OAuth этим
 прогоном не проверялся.
+
+## Повторная приёмка policy v1.2 — 21.09.2026
+
+На SourceCraft HEAD `aa225141a057fb0ad28c49e6bc37409f8d8903fd` выполнены настоящий
+`probe-sourcecraft`, opt-in contract test и полный `accept-public` через PostgreSQL,
+Redis/RQ, Docker Git/SAST runtime и persisted report. Итоговый analysis
+`bf27205e-899f-4a22-902d-dacfe9860a5b`: `overall=ok`, terminal status `partial`,
+Health 69.35, nominal coverage 65%, policy `mvp-score-v1.2`. Категории: Documentation
+90, CI/CD 25, Activity 55.24, Code Health 97.72; Issues — наблюдаемый пустой набор и
+score=null, Security — NO_DATA. Это оценка настоящего SourceHealth mirror.
+
+Во время запуска обнаружен реальный RQ shutdown race: job сохранял статус `queued`, но
+отсутствовал в очереди. Dispatcher теперь проверяет фактическое присутствие ID и под
+per-run Redis lock восстанавливает доставку из durable DB row. Тот же зависший run был
+восстановлен (`enqueued=1`) и успешно завершил acceptance; добавлен integration regression.
+
+Bounded global discovery был ограничен десятью элементами: 9 repositories импортированы,
+одна ошибка изолирована, batch вернул partial. Девять jobs затем завершились на trusted
+worker; calibration record находится в [MANDATORY_100_CLOSURE](MANDATORY_100_CLOSURE.md).

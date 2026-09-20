@@ -15,7 +15,7 @@ foundation-работы, последующий analytics batch реализов
 | 3.1 Activity | GitActivity + PR/releases/contributors | mvp-v1, contract tested | Live platform facts совместно с Git |
 | 3.1 Issues | IssuesCollector/Analyzer | Counts/stale/latency, contract tested | Live API, полная comments история где доступна |
 | 3.1 Code health / debt | local SAST + snapshot/blame | TODO/FIXME/age/density/large files, unit + Git fixtures | Live code profile; complexity не заявляется |
-| 3.2 Score 0–100 | MVPPolicy / ScoringEngine | mvp-score-v1, replay/coverage/monotonic tests | Сверка на реальных reports; AppSec после доступа |
+| 3.2 Score 0–100 | MVPPolicy / ScoringEngine | mvp-score-v1.2, replay/coverage/monotonic tests | Проверено на 10 live reports; AppSec после доступа |
 | 3.3 Рекомендации | deterministic rules / evidence_refs | Правила docs/CI/issues/debt/SAST | Live проверка полезности; impact qualitative |
 | 3.4 Страница анализа | FastAPI DTO, React routes | Шесть категорий, evidence, рекомендации | Browser/live приёмка полного flow |
 | 4 Публичный рейтинг | repositories, индексы, API, React | Список реальной БД и sort | Наполнение публичным каталогом, язык, лайки, активность, шкала Score |
@@ -31,7 +31,7 @@ foundation-работы, последующий analytics batch реализов
 
 FastAPI, React, PostgreSQL, Redis/RQ — наши архитектурные решения. ТЗ не фиксирует
 стек. Пример весов Security 20%, Activity 15%, Documentation 15%, CI 15%, Issues 15%,
-Code health 20% является ориентиром. В mvp-score-v1 приняты эти веса; формулы и
+Code health 20% является ориентиром. В mvp-score-v1.2 сохранены эти веса; формулы и
 minimum coverage опубликованы в [SCORING](SCORING.md). Старые профили сохраняют null.
 
 ## Приоритет сдачи

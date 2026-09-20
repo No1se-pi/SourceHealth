@@ -22,8 +22,9 @@
 | POST `/api/v1/auth/logout` | 204 | Exact Origin; удаляет серверную сессию |
 | GET `/api/v1/me` | UserDTO, 200 | Без сессии 401 |
 
-Нет 501 endpoints с выдуманными результатами. Private listing/analysis,
-пользовательские PAT и админка пока отсутствуют.
+Нет 501 endpoints с выдуманными результатами. Реализовано session-scoped подключение
+пользовательского SourceCraft PAT и выдача доступных этой сессии repositories. Private
+analysis и админка отсутствуют.
 
 ## Pagination и сортировка
 
@@ -80,7 +81,7 @@ force существует в application, HTTP policy предстоит сог
 
 Для `mvp-v1` AnalysisDetails возвращает шесть category slots и category-level
 `data_coverage`; checks дополнительно содержат documentation, technical_debt, issues,
-cicd, platform_activity. Score — по [SCORING](SCORING.md), текущая policy `mvp-score-v1.1`.
+cicd, platform_activity. Score — по [SCORING](SCORING.md), текущая policy `mvp-score-v1.2`.
 `head_sha` — фактический snapshot. Старые профили сохраняют check-level coverage и
 nullable baseline. Snapshot failure/недоступный AppSec допускают partial report.
 
@@ -110,3 +111,16 @@ npm run build --prefix frontend
 OpenAPI, generated.ts, docs и tests меняются в одном PR. Новые analyzer metrics
 обычно не требуют изменения DTO. Breaking HTTP change требует согласования и новой
 версии либо явной миграции до первого общего deployment.
+## SourceCraft connection endpoints
+
+Все endpoints требуют Я ID сессию; изменения — точный Origin.
+`POST /api/v1/sourcecraft/connection` принимает `{pat}` и возвращает только
+`connected`/`expires_in`; `GET /api/v1/sourcecraft/connection` возвращает статус;
+`DELETE /api/v1/sourcecraft/connection` удаляет локальный credential. PAT хранится только
+как AES-GCM ciphertext в Redis, имеет TTL не дольше текущей сессии и
+`SOURCECRAFT_CONNECTION_TTL`.
+
+`GET /api/v1/sourcecraft/repositories?organization=...` возвращает до 100 URL,
+`visibility`/`can_analyze` и `has_more`; ответ `no-store`, без credential и сторонних
+descriptions. Private/internal элементы доступны только текущей сессии в этом ответе и
+не попадают в public каталог. Анализ private/internal repositories по-прежнему запрещён.

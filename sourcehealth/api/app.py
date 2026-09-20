@@ -18,7 +18,7 @@ from sourcehealth.logging_config import configure_logging
 from sourcehealth.settings import Settings
 from sourcehealth.storage.database import create_database
 
-from .routers import analyses, health, repositories
+from .routers import analyses, health, repositories, sourcecraft
 from .routers import auth as auth_routes
 from .schemas import ErrorResponse
 
@@ -91,4 +91,5 @@ def create_app(settings: Settings | None = None, *, sessions=None, redis=None) -
     app.include_router(repositories.router)
     app.include_router(analyses.router)
     app.include_router(auth_routes.router)
+    app.include_router(sourcecraft.router)
     return app

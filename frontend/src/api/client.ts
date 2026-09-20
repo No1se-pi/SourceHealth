@@ -47,6 +47,13 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  sourcecraftStatus: () => request<components['schemas']['SourceCraftConnectionDTO']>('/sourcecraft/connection'),
+  connectSourcecraft: (pat: string) => request<components['schemas']['SourceCraftConnectionDTO']>('/sourcecraft/connection', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pat }),
+  }),
+  disconnectSourcecraft: () => request<void>('/sourcecraft/connection', { method: 'DELETE' }),
+  connectedRepositories: (organization: string) => request<components['schemas']['ConnectedRepositoriesDTO']>(
+    `/sourcecraft/repositories?${new URLSearchParams({ organization })}`),
   importRepository: (url: string) => request<RepositoryDetails>('/repositories', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }),
   }),

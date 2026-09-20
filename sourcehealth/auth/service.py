@@ -97,4 +97,4 @@ class AuthService:
 
     def logout(self, token: str | None) -> None:
         if token:
-            self.redis.delete(self._key("session", token))
+            self.redis.delete(self._key("session", token), self._key("sourcecraft", token))

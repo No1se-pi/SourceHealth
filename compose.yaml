@@ -40,7 +40,7 @@ services:
       retries: 20
   migrate:
     <<: *app
-    command: [alembic, upgrade, head]
+    command: [python, -m, alembic, upgrade, head]
     depends_on:
       postgres: {condition: service_healthy}
   backend:
