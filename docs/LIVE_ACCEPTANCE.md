@@ -89,3 +89,20 @@ Build или mocked OAuth не считается browser acceptance.
 Сохранить время, commit SHA, публичный URL, exit code и безопасный JSON summary. Не сохранять
 PAT, `.env`, raw HTTP bodies, callback query, source snippets и персональные данные. Если PAT
 не предоставлен, итоговая запись должна быть точной: `LIVE SOURCECRAFT: NOT RUN — credentials not provided`.
+
+## Подтверждённый прогон 20.09.2026
+
+На commit `8516317` проверен публичный repository
+`https://sourcecraft.dev/lct-hackaton-2026/case-18-repo-health-score-team-41`:
+
+- `probe-sourcecraft`: exit 0, authenticated=true, все шесть collectors complete;
+- `tests.test_live_sourcecraft`: passed на настоящем API;
+- `accept-public`: exit 0, overall=ok, analysis `2e7e495a-92c5-47fd-9383-fa029e70405e`;
+- persisted HEAD `0f801b94b3ec4023dc540cd815367608df3f8568`, Score 51.83,
+  nominal coverage 60%, четыре scored categories;
+- worker-code завершил job успешно через реальный Docker Git/SAST runtime.
+
+Terminal status остаётся `partial`: официальный SourceCraft AppSec не подключён, а в snapshot
+этого repository не найдено поддерживаемых code files для числового Code Health. Это не
+ошибка transport или worker. Raw responses и PAT не сохранялись. Browser OAuth этим
+прогоном не проверялся.

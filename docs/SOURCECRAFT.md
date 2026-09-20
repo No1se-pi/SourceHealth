@@ -87,6 +87,19 @@ CI runs, pulls, contributors, releases и отдельный GET /repos. Все 
 на живых данных. Следующая приёмка: рабочий read PAT → sanitized fixtures → public
 import → trusted worker → отчёт. Я ID session не заменяет SourceCraft PAT.
 
+## Live наблюдение 20.09.2026
+
+Рабочий read PAT подтвердил metadata и все analytics resources целевого public repository.
+Первый probe обнаружил HTTP 400 для Issues только при `filter=visibility=public`; запрос без
+неподдержанного параметра вернул 200. Commit `8516317` удалил filter, сохранив отбрасывание
+private items по полю visibility. После исправления probe завершился exit 0, opt-in live test
+прошёл, а полный import → RQ worker-code → Docker Git/SAST → score → persistence/Markdown
+вернул overall=ok. Точные безопасные результаты — [LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md).
+
+Историческое наблюдение 19.09 выше сохраняется как доказательство корректной обработки 401,
+но больше не описывает текущий доступ к public API. Global discovery и private access этим
+прогоном не принимались.
+
 ## AppSec boundary и другие открытые вопросы
 
 AppSecCollector возвращает source=sourcecraft_appsec, availability=no_data,
