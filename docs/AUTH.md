@@ -50,10 +50,19 @@ Docker command Uvicorn запускается с --no-access-log.
 имени, slug или наличия token Я ID. Нельзя применять service PAT как права любого
 вошедшего пользователя.
 
-Нужно подтвердить у организаторов: supported delegated auth/token exchange, scopes,
-mapping identity, list accessible repositories, проверки права читать/анализировать,
-отзыв доступа. Если разрешён отдельный ввод PAT, это отдельное продуктово-безопасностное
-решение: encrypted storage, scopes, revoke, audit и user consent. Сейчас такой flow не создан.
+У организаторов всё ещё нужно подтвердить supported delegated auth/token exchange, scopes,
+mapping identity, list accessible repositories, проверки права читать/анализировать и
+отзыв доступа. Вместо неподтверждённого bridge реализован явный fallback:
+
+```text
+Я ID session → ввод отдельного SourceCraft PAT → GET /user verification
+→ encrypted Redis credential → список доступных repositories организации
+→ анализ выбранного public repo
+```
+
+Это user-provided PAT, а не credential, делегированный Яндексом. Он не разрешает private
+analysis: private/internal repositories можно увидеть только в текущей сессии, но нельзя
+импортировать или анализировать.
 
 ## Текущее ограничение доступа
 
@@ -71,7 +80,7 @@ Live acceptance: войти в браузере, проверить redirect, /m
 затем пройти чек-лист [LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md). Операторские probe/accept
 не автоматизируют браузерный OAuth и не являются доказательством этого сценария.
 неверный Origin и отсутствие токенов в logs/network payload приложения.
-# Пользовательское подключение SourceCraft
+## Пользовательское подключение SourceCraft
 
 После Я ID доступен `/sourcecraft`: отдельный PAT проверяется GET /user.
 Яндекс OAuth не используется как SourceCraft credential. Исследованные официальные

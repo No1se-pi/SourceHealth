@@ -4,9 +4,30 @@
 
 1. Заполнить локальный `.env` по [DEPLOYMENT](DEPLOYMENT.md), не показывая PAT и OAuth secrets.
 2. Выполнить `docker compose up -d --build` и `npm run dev --prefix frontend`.
-3. Проверить `python -m sourcehealth.application doctor`: профиль `mvp-v1`, code runtime,
+   Compose поднимает API, PostgreSQL, Redis и generic worker, но этот worker не потребляет
+   очередь `analysis-code`, в которую направляются задачи профиля `mvp-v1`.
+3. Собрать из корня repository изолированный runtime image:
+
+   ```powershell
+   docker build -f sourcehealth/sast/Dockerfile -t sourcehealth-sast .
+   ```
+
+4. В отдельном терминале запустить trusted worker с его собственным environment:
+
+   ```powershell
+   $env:ANALYSIS_PROFILE = "mvp-v1"
+   $env:CODE_RUNTIME_ENABLED = "true"
+   $env:CODE_RUNTIME_IMAGE = "sourcehealth-sast"
+   python -m sourcehealth.application worker-code
+   ```
+
+   Полный MVP требует отдельного consumer очереди `analysis-code`. Для проверенного
+   Windows/local demo допустим существующий `SimpleWorker` и Docker Desktop; production
+   recommendation — выделенный trusted Linux host. Docker socket нельзя монтировать в
+   backend или generic worker.
+5. Проверить `python -m sourcehealth.application doctor`: профиль `mvp-v1`, code runtime,
    PostgreSQL и Redis должны быть доступны.
-4. Открыть `http://127.0.0.1:5173`.
+6. Открыть `http://127.0.0.1:5173`.
 
 ## Сценарий показа
 
