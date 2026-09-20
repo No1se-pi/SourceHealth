@@ -115,3 +115,11 @@ Likes остаются nullable: Repository.rating.value не объявляет
 
 Clone остаётся public HTTPS `https://git.sourcecraft.dev/org/repo.git`, без передачи
 PAT в clone URL. Issues/CI collectors не используют Git HEAD как ключ свежести.
+# Уточнения live-контракта 20.09.2026
+
+`Repository.likes` берётся только из `rating.reaction_counts` типа `positive_low`.
+Heart/Diamond, rating.value и percentile не подменяют likes. Невалидный/отсутствующий
+rating остаётся null; полный sparse массив без positive_low означает 0.
+CI Run публичный `id` пока отсутствует по Swagger; устойчивый ключ — `slug`.
+Дата Unix epoch для незавершённой стадии не считается фактическим завершением.
+Проверки и оставшаяся работа: [MANDATORY_100_CLOSURE](MANDATORY_100_CLOSURE.md).

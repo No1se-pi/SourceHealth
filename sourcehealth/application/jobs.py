@@ -76,7 +76,7 @@ def lock_key(analysis_id: UUID) -> int:
 def collect_platform(repository, settings, redis):
     """Один реальный vertical slice: API metadata + честная AppSec availability."""
     cache = JsonCache(redis)
-    key = platform_cache_key(repository.id, "repository_metadata")
+    key = platform_cache_key(repository.id, "repository_metadata-v2")
     cached = cache.get(key)
     metadata = None
     if cached:
@@ -122,6 +122,12 @@ def execute_analysis(analysis_id: str) -> None:
                     profile = run.profile
                 service.transition(run_id, "collecting")
                 context = collect_platform(repository, settings, redis)
+                if context.collection_statuses.get("repository_metadata") == DataAvailability.AVAILABLE:
+                    with sessions.begin() as db:
+                        row = db.get(Repository, run.repository_id)
+                        metadata = context.sourcecraft_facts["repository_metadata"]
+                        row.likes = metadata.get("likes")
+                        row.language = metadata.get("language")
                 if profile == "mvp-v1":
                     context = collect_mvp(context, settings)
                 service.transition(run_id, "analyzing")

@@ -52,9 +52,33 @@ class RepositoryCollector:
             if isinstance(language, dict) and isinstance(language.get("name"), str):
                 if re.fullmatch(r"[A-Za-z0-9+# ._-]{1,64}", language["name"]):
                     facts["language"] = language["name"]
+            facts["likes"] = repository_likes(raw.get("rating"))
             return CollectedFacts("sourcecraft", DataAvailability.AVAILABLE, facts)
         except SourceCraftError as error:
             return CollectedFacts("sourcecraft", DataAvailability.SOURCE_UNAVAILABLE, error=error.code)
+
+
+def repository_likes(rating: Any) -> int | None:
+    """Like — только positive_low; неизвестный/невалидный счётчик не становится нулём.
+
+    API отдаёт sparse uint64 counters. Хранилище использует signed int32:
+    переполнение оставляем неизвестным, не обрезаем и не роняем весь import.
+    """
+    if not isinstance(rating, dict) or not isinstance(rating.get("reaction_counts"), list):
+        return None
+    likes = None
+    for reaction in rating["reaction_counts"]:
+        if not isinstance(reaction, dict):
+            return None
+        if reaction.get("type") != "positive_low":
+            continue
+        value = reaction.get("count")
+        if likes is not None or not isinstance(value, str) or not re.fullmatch(r"[0-9]{1,20}", value):
+            return None
+        likes = int(value)
+        if likes > 2_147_483_647:
+            return None
+    return 0 if likes is None else likes
 
 
 class AppSecCollector:

@@ -68,6 +68,7 @@ class AnalysisService:
             row = db.get(Repository, repository_id)
             if "language" in collected.facts:
                 row.language = collected.facts["language"]
+            row.likes = collected.facts.get("likes")
         return repository_id
 
     def request_analysis(self, repository_id: UUID, *, trigger: str = "manual", force: bool = False) -> AnalysisRun:
