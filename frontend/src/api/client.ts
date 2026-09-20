@@ -5,6 +5,7 @@ export type RepositoryDetails = components['schemas']['RepositoryDetails'];
 export type RepositoryPage = components['schemas']['RepositoryPage'];
 export type Analysis = components['schemas']['AnalysisDetails'];
 export type AnalysisSummary = components['schemas']['AnalysisSummary'];
+export type AnalysisPage = components['schemas']['AnalysisPage'];
 export type CategoryScore = components['schemas']['CategoryScoreDTO'];
 export type DataAvailability = components['schemas']['DataAvailability'];
 export type RunStatus = components['schemas']['RunStatus'];
@@ -61,6 +62,8 @@ export const api = {
     request<RepositoryDetails>(`/repositories/${encodeURIComponent(id)}`),
   latestAnalysis: (repositoryId: string) =>
     request<AnalysisSummary>(`/repositories/${encodeURIComponent(repositoryId)}/analyses/latest`),
+  analysisHistory: (repositoryId: string) =>
+    request<AnalysisPage>(`/repositories/${encodeURIComponent(repositoryId)}/analyses?limit=10&offset=0`),
   analysis: (id: string) =>
     request<Analysis>(`/analyses/${encodeURIComponent(id)}`),
   start: (id: string) =>

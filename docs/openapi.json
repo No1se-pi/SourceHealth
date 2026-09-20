@@ -533,6 +533,127 @@
       }
     },
     "/api/v1/repositories/{repository_id}/analyses": {
+      "get": {
+        "summary": "History",
+        "operationId": "history_api_v1_repositories__repository_id__analyses_get",
+        "parameters": [
+          {
+            "name": "repository_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Repository Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      },
       "post": {
         "summary": "Start",
         "operationId": "start_api_v1_repositories__repository_id__analyses_post",
@@ -1210,6 +1331,10 @@
             "format": "uuid",
             "title": "Repository Id"
           },
+          "profile": {
+            "type": "string",
+            "title": "Profile"
+          },
           "status": {
             "$ref": "#/components/schemas/RunStatus"
           },
@@ -1336,6 +1461,7 @@
         "required": [
           "id",
           "repository_id",
+          "profile",
           "status",
           "trigger",
           "queued_at",
@@ -1352,6 +1478,37 @@
           "checks"
         ],
         "title": "AnalysisDetails"
+      },
+      "AnalysisPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AnalysisSummary"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "limit",
+          "offset",
+          "has_more"
+        ],
+        "title": "AnalysisPage"
       },
       "AnalysisRequest": {
         "properties": {
@@ -1376,6 +1533,10 @@
             "type": "string",
             "format": "uuid",
             "title": "Repository Id"
+          },
+          "profile": {
+            "type": "string",
+            "title": "Profile"
           },
           "status": {
             "$ref": "#/components/schemas/RunStatus"
@@ -1465,6 +1626,7 @@
         "required": [
           "id",
           "repository_id",
+          "profile",
           "status",
           "trigger",
           "queued_at",

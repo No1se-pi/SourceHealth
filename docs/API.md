@@ -13,6 +13,7 @@
 | POST `/api/v1/repositories` | RepositoryDetails, 201 | Сессия Я ID + exact Origin; проверка public через SourceCraft API |
 | GET `/api/v1/repositories/{repository_id}` | RepositoryDetails, 200 | Private/unknown/nonexistent → 404 |
 | GET `/api/v1/repositories/{repository_id}/analyses/latest` | AnalysisSummary, 200 | Последний законченный run; если нет → 404 |
+| GET `/api/v1/repositories/{repository_id}/analyses?limit=20&offset=0` | AnalysisPage, 200 | Все статусы public repo; queued_at DESC, id DESC |
 | POST `/api/v1/repositories/{repository_id}/analyses` | AnalysisSummary, 202 | Сессия Я ID + exact Origin; public repo |
 | GET `/api/v1/analyses/{analysis_id}` | AnalysisDetails, 200 | Повторная проверка visibility repo |
 | GET `/api/v1/analyses/{analysis_id}/report.md` | text/markdown, attachment | completed/partial; иначе 409 |
@@ -22,7 +23,7 @@
 | GET `/api/v1/me` | UserDTO, 200 | Без сессии 401 |
 
 Нет 501 endpoints с выдуманными результатами. Private listing/analysis,
-пользовательские PAT, админка и history endpoint пока отсутствуют.
+пользовательские PAT и админка пока отсутствуют.
 
 ## Pagination и сортировка
 
@@ -38,8 +39,10 @@ snapshot не обещается. Для массового каталога о�
 - RepositorySummary: UUID id; org/repo slugs; canonical_url; visibility; nullable
   health_score/language/likes/last_activity_at/latest_analysis_id.
 - RepositoryDetails: Summary + sourcecraft_id/default_branch/head_sha.
-- AnalysisSummary: UUID id/repository_id; status/trigger; queued_at/started_at/completed_at;
+- AnalysisSummary: UUID id/repository_id; profile; status/trigger; queued_at/started_at/completed_at;
   nullable head_sha/health_score; scoring_policy_version/analyzer_contract_version/error_code.
+- AnalysisPage: items, limit, offset, has_more. История использует стабильный дополнительный
+  порядок по UUID при одинаковом queued_at; total не вычисляется.
 - AnalysisDetails: Summary + category_scores/data_coverage/recommendations/checks.
 - AnalysisDetails.score_coverage: nullable объект, вычисленный backend из сохранённых
   category scores и известных весов policy; nominal_weight_percent, scored_categories,

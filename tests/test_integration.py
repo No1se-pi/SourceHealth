@@ -19,6 +19,7 @@ ENABLED = bool(os.environ.get("TEST_DATABASE_URL") and os.environ.get("TEST_REDI
 if ENABLED:
     import httpx
     from fastapi.testclient import TestClient
+    from pydantic import SecretStr
     from redis import Redis
     from rq import Queue, SimpleWorker
     from rq.timeouts import TimerDeathPenalty
@@ -244,6 +245,91 @@ class PersistenceTests(unittest.TestCase):
             self.assertEqual(row.results["category_scores"], row.category_scores)
             self.assertEqual(row.results["recommendations"], row.recommendations)
             self.assertEqual(len(row.data_coverage), 6)
+
+    def test_public_analysis_history_is_stable_paginated_and_private_safe(self):
+        queued_at = datetime(2026, 9, 20, 12, tzinfo=UTC)
+        ids = [UUID("10000000-0000-0000-0000-000000000001"),
+               UUID("10000000-0000-0000-0000-000000000002"),
+               UUID("10000000-0000-0000-0000-000000000003")]
+        with self.sessions.begin() as db:
+            db.add_all([
+                AnalysisRun(id=ids[0], repository_id=self.repository_id, status="completed", trigger="manual",
+                            profile="mvp-v1", fingerprint="1" * 64, queued_at=queued_at,
+                            completed_at=queued_at, scoring_policy_version="mvp-score-v1.1"),
+                AnalysisRun(id=ids[1], repository_id=self.repository_id, status="failed", trigger="system",
+                            profile="platform-v1", fingerprint="2" * 64, queued_at=queued_at,
+                            completed_at=queued_at, error_code="fixture_failure"),
+                AnalysisRun(id=ids[2], repository_id=self.repository_id, status="queued", trigger="refresh",
+                            profile="code-v1", fingerprint="3" * 64, queued_at=queued_at),
+            ])
+        with TestClient(create_app(self.settings, sessions=self.sessions, redis=self.redis),
+                        base_url="https://testserver") as client:
+            first = client.get(f"/api/v1/repositories/{self.repository_id}/analyses", params={"limit": 2})
+            self.assertEqual(first.status_code, 200, first.text)
+            self.assertEqual([item["id"] for item in first.json()["items"]], [str(ids[2]), str(ids[1])])
+            self.assertEqual([item["profile"] for item in first.json()["items"]], ["code-v1", "platform-v1"])
+            self.assertTrue(first.json()["has_more"])
+            second = client.get(f"/api/v1/repositories/{self.repository_id}/analyses",
+                                params={"limit": 2, "offset": 2}).json()
+            self.assertEqual([item["id"] for item in second["items"]], [str(ids[0])])
+            self.assertFalse(second["has_more"])
+            with self.sessions.begin() as db:
+                db.get(Repository, self.repository_id).visibility = "private"
+            self.assertEqual(client.get(f"/api/v1/repositories/{self.repository_id}/analyses").status_code, 404)
+
+    def test_accept_public_runs_existing_mvp_pipeline_and_validates_persistence(self):
+        from unittest.mock import Mock
+
+        from sourcehealth.application.acceptance import accept_public
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+        from tests.mvp_fixtures import runtime_payload, sourcecraft_transport
+
+        settings = self.settings.model_copy(update={"analysis_profile": "mvp-v1",
+                                                    "sourcecraft_pat": SecretStr("test" + "-credential")})
+        transport = sourcecraft_transport(self.ref.repository_slug)
+
+        def source_client(**kwargs):
+            return SourceCraftClient(transport=transport, **kwargs)
+
+        runtime = Mock()
+        runtime.analyze.return_value = runtime_payload()
+
+        def execute_pending(sessions, redis, timeout):
+            with sessions() as db:
+                run_id = db.scalar(select(AnalysisRun.id).where(
+                    AnalysisRun.repository_id == self.repository_id, AnalysisRun.status == "queued"))
+            execute_analysis(str(run_id))
+
+        env = {"DATABASE_URL": os.environ["TEST_DATABASE_URL"], "REDIS_URL": os.environ["TEST_REDIS_URL"]}
+        with (SourceCraftClient(transport=transport) as client,
+              patch.dict(os.environ, env),
+              patch("sourcehealth.application.jobs.SourceCraftClient", side_effect=source_client),
+              patch("sourcehealth.application.jobs.Settings", return_value=settings),
+              patch("sourcehealth.application.jobs.configured_runtime", return_value=runtime)):
+            result, code = accept_public(settings, self.ref.canonical_url, self.sessions, self.redis,
+                                         client=client, dispatch=execute_pending, sleep=lambda _: None)
+        self.assertEqual(code, 0, result)
+        self.assertEqual(result["overall"], "ok")
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(result["score_coverage"]["nominal_weight_percent"], 80)
+        self.assertEqual(result["categories"]["security"]["availability"], "no_data")
+
+    def test_accept_timeout_keeps_durable_run_queued(self):
+        from sourcehealth.application.acceptance import accept_public
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+        from tests.mvp_fixtures import sourcecraft_transport
+
+        settings = self.settings.model_copy(update={"analysis_profile": "mvp-v1",
+                                                    "sourcecraft_pat": SecretStr("test" + "-credential")})
+        ticks = iter((0.0, 0.0, 0.0, 2.0, 2.0))
+        with SourceCraftClient(transport=sourcecraft_transport(self.ref.repository_slug)) as client:
+            result, code = accept_public(settings, self.ref.canonical_url, self.sessions, self.redis, timeout=1,
+                                         client=client, dispatch=lambda *args: None,
+                                         clock=lambda: next(ticks), sleep=lambda _: None)
+        self.assertEqual(code, 1)
+        self.assertEqual(result["error"], "acceptance_timeout")
+        with self.sessions() as db:
+            self.assertEqual(db.get(AnalysisRun, UUID(result["analysis_id"])).status, "queued")
 
     def test_import_rejects_unverified_private_and_unauthenticated(self):
         from sourcehealth.application.services import ServiceError

@@ -110,14 +110,16 @@ unknown authors, независимую полноту docs/debt и backend weig
 ## Live SourceCraft opt-in
 
 ```powershell
-$env:SOURCECRAFT_LIVE_TEST='1'
-$env:SOURCECRAFT_TEST_REPOSITORY='https://sourcecraft.dev/ORGANIZATION/REPOSITORY'
-python -m unittest tests.test_sourcecraft_live -v
+$env:SOURCEHEALTH_LIVE_REPO_URL='https://sourcecraft.dev/org/repo'
+python -m unittest tests.test_live_sourcecraft -v
 ```
 
-PAT при необходимости задаётся отдельно environment, не command-line URL.
-Обычный CI не имеет настоящих credentials. После запуска удалить test flags.
+PAT задаётся отдельно environment. Обычный CI не имеет настоящих credentials. После
+запуска удалить обе переменные из текущей shell session.
 Successful live metadata не подтверждает AppSec или права закрытых repo.
+Тест запускается только при одновременном наличии `SOURCECRAFT_PAT` и
+`SOURCEHEALTH_LIVE_REPO_URL`, не выполняет discovery и не сохраняет raw payload.
+Полная операторская процедура и формат доказательств: [LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md).
 
 ## Большие репозитории и runtime
 

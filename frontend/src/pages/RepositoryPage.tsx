@@ -6,6 +6,7 @@ import { Button, getButtonStyles } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
 import { ScoreDisplay } from '../components/common/ScoreDisplay';
 import { ScoreCoverage } from '../components/common/ScoreCoverage';
+import { AnalysisHistory } from '../components/common/AnalysisHistory';
 import { AvailabilityBadge } from '../components/common/AvailabilityBadge';
 import { LoadingState } from '../components/common/LoadingState';
 import { EmptyState } from '../components/common/EmptyState';
@@ -353,6 +354,7 @@ export const RepositoryPage: React.FC = () => {
           </Card>
 
           {/* Latest Analysis Breakdown or Empty State */}
+          <AnalysisHistory key={id} repositoryId={id} />
           {hasAnalysis && latestAnalysis ? (
             <Card
               title="Сводка последнего анализа"

@@ -16,6 +16,10 @@
 
 ## P0 — оставшаяся внешняя и продуктовая приёмка
 
+Операторский контур `probe-sourcecraft` → `accept-public` и opt-in live test реализован.
+Сам факт успешного live прогона отмечается только после запуска с локальным PAT; отсутствие
+credentials остаётся статусом NOT RUN, а не дефектом collectors.
+
 | Задача | Владелец | Что нужно / критерий |
 |---|---|---|
 | Успешный public SourceCraft доступ | Backend + владелец доступа | Рабочий read PAT; сейчас metadata/analytics/discovery отвечают 401 |

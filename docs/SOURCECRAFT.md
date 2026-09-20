@@ -30,7 +30,13 @@ analytics profile ограничивает до 5 страниц на resource �
 ## Реализованные collectors
 
 Префикс R = `/repos/{org_slug}/{repo_slug}`. Все методы подтверждены Swagger;
-успешная live приёмка данных пока отсутствует.
+успешная live приёмка фиксируется только результатом операторских команд из
+[LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md); contract fixtures сами по себе её не подтверждают.
+
+Перед запуском инфраструктуры `probe-sourcecraft URL` проверяет metadata, Issues, CI/CD,
+pull requests, contributors и releases. Команда не открывает PostgreSQL/Redis и печатает
+только allowlisted JSON summary. Exit code: 0 — полный ответ, 1 — partial/outage ресурса,
+2 — configuration/auth/repository/schema error.
 
 | Collector | Endpoint / ключ списка | Сохраняемые поля и правила |
 |---|---|---|

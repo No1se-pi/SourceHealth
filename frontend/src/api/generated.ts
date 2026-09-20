@@ -83,7 +83,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** History */
+        get: operations["history_api_v1_repositories__repository_id__analyses_get"];
         put?: never;
         /** Start */
         post: operations["start_api_v1_repositories__repository_id__analyses_post"];
@@ -211,6 +212,8 @@ export interface components {
              * Format: uuid
              */
             repository_id: string;
+            /** Profile */
+            profile: string;
             status: components["schemas"]["RunStatus"];
             /**
              * Trigger
@@ -252,6 +255,17 @@ export interface components {
             };
             score_coverage?: components["schemas"]["ScoreCoverageDTO"] | null;
         };
+        /** AnalysisPage */
+        AnalysisPage: {
+            /** Items */
+            items: components["schemas"]["AnalysisSummary"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Has More */
+            has_more: boolean;
+        };
         /** AnalysisRequest */
         AnalysisRequest: {
             /**
@@ -272,6 +286,8 @@ export interface components {
              * Format: uuid
              */
             repository_id: string;
+            /** Profile */
+            profile: string;
             status: components["schemas"]["RunStatus"];
             /**
              * Trigger
@@ -889,6 +905,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnalysisSummary"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    history_api_v1_repositories__repository_id__analyses_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                repository_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalysisPage"];
                 };
             };
             /** @description Bad Request */

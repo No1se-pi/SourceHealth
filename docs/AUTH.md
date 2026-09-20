@@ -35,6 +35,8 @@ Secret хранить в .env/secret manager; не коммитить. Rotation 
 инвалидирует существующие сессии/pending state.
 
 Для локального HTTP допустимы только localhost/127.0.0.1 и явный COOKIE_SECURE=false.
+Готовый dev-набор в `.env.example` использует `http://127.0.0.1:5173` одновременно для
+PUBLIC_ORIGIN и YANDEX_REDIRECT_URI; менять один адрес без второго нельзя.
 Origin frontend и redirect backend должны совпадать через Vite proxy. См.
 [DEPLOYMENT](DEPLOYMENT.md). Для публичного стенда только HTTPS Secure cookies.
 Access logs reverse proxy должны исключать callback query: code/state не логировать.
@@ -66,4 +68,6 @@ API показывает только сохранённые verified-public rep
 Интеграционные используют настоящий PostgreSQL/Redis и mocked Я ID HTTP. Они не
 подтверждают реальную регистрацию приложения, scopes и успешный login пользователя.
 Live acceptance: войти в браузере, проверить redirect, /me, logout, повтор callback,
+затем пройти чек-лист [LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md). Операторские probe/accept
+не автоматизируют браузерный OAuth и не являются доказательством этого сценария.
 неверный Origin и отсутствие токенов в logs/network payload приложения.
