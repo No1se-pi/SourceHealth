@@ -10,6 +10,7 @@
 |---|---|---|
 | GET `/api/v1/health` | HealthResponse, 200 | Liveness, без соединения с БД |
 | GET `/api/v1/repositories` | RepositoryPage, 200 | Только visibility=public |
+| POST `/api/v1/repositories` | RepositoryDetails, 201 | Сессия Я ID + exact Origin; проверка public через SourceCraft API |
 | GET `/api/v1/repositories/{repository_id}` | RepositoryDetails, 200 | Private/unknown/nonexistent → 404 |
 | GET `/api/v1/repositories/{repository_id}/analyses/latest` | AnalysisSummary, 200 | Последний законченный run; если нет → 404 |
 | POST `/api/v1/repositories/{repository_id}/analyses` | AnalysisSummary, 202 | Сессия Я ID + exact Origin; public repo |
@@ -20,7 +21,7 @@
 | POST `/api/v1/auth/logout` | 204 | Exact Origin; удаляет серверную сессию |
 | GET `/api/v1/me` | UserDTO, 200 | Без сессии 401 |
 
-Нет 501 endpoints с выдуманными результатами. HTTP import, private listing/analysis,
+Нет 501 endpoints с выдуманными результатами. Private listing/analysis,
 пользовательские PAT, админка и history endpoint пока отсутствуют.
 
 ## Pagination и сортировка
@@ -40,6 +41,10 @@ snapshot не обещается. Для массового каталога о�
 - AnalysisSummary: UUID id/repository_id; status/trigger; queued_at/started_at/completed_at;
   nullable head_sha/health_score; scoring_policy_version/analyzer_contract_version/error_code.
 - AnalysisDetails: Summary + category_scores/data_coverage/recommendations/checks.
+- AnalysisDetails.score_coverage: nullable объект, вычисленный backend из сохранённых
+  category scores и известных весов policy; nominal_weight_percent, scored_categories,
+  unscored_categories, partial_categories. Для неизвестной policy — null. Не означает
+  процент проверенных файлов или полноту частичных категорий; frontend не копирует веса.
 - CategoryScore: category, nullable score, availability, explanation, evidence_refs.
 - AnalyzerResult: analyzer, status, availability, source, category, versions, metrics,
   findings, metadata, safe error, evidence. Metrics имеют свой analyzer contract.
@@ -53,12 +58,28 @@ Timestamps — UTC ISO-8601. Nullable время означает ещё не н
 
 ## POST и polling
 
-POST body: `{"force_refresh": false}`, `Content-Type: application/json`, session
+Import: `POST /api/v1/repositories`, body `{"url":"https://sourcecraft.dev/org/repo"}`.
+Допустим только canonical SourceCraft URL (до 512 символов); arbitrary Git URL не
+принимается. RepositoryCollector проверяет явно public visibility; упsert сохраняет
+внутренний UUID существующего repo. Повторный import также возвращает 201 с тем же id.
+Неподтверждённый/private/not-found repo — 404, недоступная проверка/401 внешнего API —
+503 `public_repository_unverified`; invalid URL — 422 `invalid_sourcecraft_url`.
+Требуются session cookie и exact Origin. Я ID не даёт private SourceCraft permissions.
+Import сам не запускает анализ: frontend переходит на страницу repo с существующей
+кнопкой запуска. CLI register/discover дополнительно создают analysis run.
+
+Запуск анализа: POST body `{"force_refresh": false}`, `Content-Type: application/json`, session
 cookie и Origin, точно совпадающий с PUBLIC_ORIGIN. Ответ 202 с реальным run,
 включая cached terminal result. completed/partial/failed — terminal; остальные
 frontend опрашивает раз в 2 секунды. Повторный POST возвращает активный run.
 `force_refresh=true` сейчас 403: Я ID не подтверждает права SourceCraft. Операторский
 force существует в application, HTTP policy предстоит согласовать.
+
+Для `mvp-v1` AnalysisDetails возвращает шесть category slots и category-level
+`data_coverage`; checks дополнительно содержат documentation, technical_debt, issues,
+cicd, platform_activity. Score — по [SCORING](SCORING.md), текущая policy `mvp-score-v1.1`.
+`head_sha` — фактический snapshot. Старые профили сохраняют check-level coverage и
+nullable baseline. Snapshot failure/недоступный AppSec допускают partial report.
 
 ## Ошибки и приватность
 

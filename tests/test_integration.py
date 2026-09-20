@@ -174,6 +174,94 @@ class PersistenceTests(unittest.TestCase):
                     self.assertNotIn("private runtime error", response.text)
                     self.assertEqual(client.get(f"/api/v1/analyses/{run.id}/report.md").status_code, 200)
 
+    def test_mvp_import_queue_report_leaderboard_and_cache(self):
+        """Real HTTP/RQ/PostgreSQL/Redis; external platform and sandbox are fixtures."""
+        from unittest.mock import Mock
+
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+        from tests.mvp_fixtures import SHA, runtime_payload, sourcecraft_transport
+
+        class TestWorker(SimpleWorker):
+            death_penalty_class = TimerDeathPenalty
+
+        settings = self.settings.model_copy(update={"analysis_profile": "mvp-v1"})
+        transport = sourcecraft_transport(self.ref.repository_slug)
+
+        def source_client(**kwargs):
+            return SourceCraftClient(transport=transport, **kwargs)
+
+        runtime = Mock()
+        runtime.analyze.return_value = runtime_payload()
+        app = create_app(settings, sessions=self.sessions, redis=self.redis)
+        with (TestClient(app, base_url="https://testserver") as client,
+              patch.object(app.state.auth, "current_user", return_value={"id": str(uuid4())}),
+              patch("sourcehealth.integrations.sourcecraft.client.SourceCraftClient", side_effect=source_client),
+              patch("sourcehealth.application.jobs.SourceCraftClient", side_effect=source_client),
+              patch("sourcehealth.application.jobs.Settings", return_value=settings),
+              patch("sourcehealth.application.jobs.configured_runtime", return_value=runtime)):
+            headers = {"Origin": "https://testserver"}
+            body = {"url": self.ref.canonical_url}
+            self.assertEqual(client.post("/api/v1/repositories", json=body).status_code, 403)
+            self.assertEqual(client.post("/api/v1/repositories", json={"url": "https://example.com/x/y"}, headers=headers).status_code, 422)
+            imported = client.post("/api/v1/repositories", json=body, headers=headers)
+            self.assertEqual(imported.status_code, 201, imported.text)
+            self.assertEqual(imported.json()["id"], str(self.repository_id))
+            self.assertEqual(imported.json()["language"], "Python")
+            repeat = client.post("/api/v1/repositories", json=body, headers=headers)
+            self.assertEqual(repeat.json()["id"], str(self.repository_id))
+            response = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={}, headers=headers)
+            self.assertEqual(response.status_code, 202, response.text)
+            run_id = response.json()["id"]
+            self.assertIn(run_id, Queue("analysis-code", connection=self.redis).job_ids)
+            self.assertNotIn(run_id, Queue("analysis", connection=self.redis).job_ids)
+            TestWorker([Queue("analysis-code", connection=self.redis)], connection=self.redis).work(burst=True, logging_level="WARNING")
+            result = client.get(f"/api/v1/analyses/{run_id}")
+            self.assertEqual(result.status_code, 200, result.text)
+            payload = result.json()
+            self.assertEqual(payload["status"], "partial")  # Official AppSec is still unconfirmed.
+            self.assertEqual(len(payload["category_scores"]), 6)
+            self.assertIsInstance(payload["health_score"], (int, float))
+            self.assertEqual(payload["scoring_policy_version"], "mvp-score-v1.1")
+            self.assertIsNone(payload["category_scores"]["security"]["score"])
+            self.assertEqual(payload["category_scores"]["security"]["availability"], "no_data")
+            self.assertEqual(payload["score_coverage"]["nominal_weight_percent"], 80)
+            self.assertEqual(payload["score_coverage"]["unscored_categories"], ["security"])
+            self.assertEqual(payload["head_sha"], SHA)
+            for forbidden in ("untrusted", "do-not-store", "private name", "error_messages"):
+                self.assertNotIn(forbidden, result.text)
+            markdown = client.get(f"/api/v1/analyses/{run_id}/report.md")
+            self.assertEqual(markdown.status_code, 200)
+            self.assertIn(r"mvp\-score\-v1\.1", markdown.text)
+            listing = client.get("/api/v1/repositories", params={"limit": 100}).json()
+            listed = next(row for row in listing["items"] if row["id"] == str(self.repository_id))
+            self.assertEqual(listed["health_score"], payload["health_score"])
+            cached = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={}, headers=headers)
+            self.assertEqual(cached.json()["id"], run_id)
+            runtime.analyze.assert_called_once()
+        with self.sessions() as db:
+            row = db.get(AnalysisRun, UUID(run_id))
+            self.assertEqual(row.head_sha, SHA)
+            self.assertEqual(row.results["category_scores"], row.category_scores)
+            self.assertEqual(row.results["recommendations"], row.recommendations)
+            self.assertEqual(len(row.data_coverage), 6)
+
+    def test_import_rejects_unverified_private_and_unauthenticated(self):
+        from sourcehealth.application.services import ServiceError
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        app = create_app(self.settings, sessions=self.sessions, redis=self.redis)
+        with TestClient(app, base_url="https://testserver") as client:
+            self.assertEqual(client.post("/api/v1/repositories", json={"url": self.ref.canonical_url},
+                                         headers={"Origin": "https://testserver"}).status_code, 401)
+        for status, payload in ((200, {"visibility": "private"}), (401, {}), (404, {}), (503, {})):
+            with self.subTest(status=status):
+                with SourceCraftClient(transport=httpx.MockTransport(lambda request: httpx.Response(status, json=payload)), sleep=lambda _: None) as source:
+                    with self.assertRaises(ServiceError) as error:
+                        self.service.import_public_repository(self.ref.canonical_url, client=source)
+                    self.assertEqual(error.exception.code, "public_repository_unverified")
+        with self.sessions() as db:
+            self.assertIsNone(db.get(Repository, self.repository_id).sourcecraft_id)
+
     def test_recovery_does_not_fail_live_lock_holder(self):
         run = self.service.request_analysis(self.repository_id)
         self.service.transition(run.id, "collecting")

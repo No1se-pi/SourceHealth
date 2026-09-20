@@ -53,6 +53,7 @@ def main(argv: list[str] | None = None, *, legacy: bool = False,
     parser.add_argument("--with-git", action="store_true", default=with_git_default,
                         help="Добавить анализ Git-активности")
     parser.add_argument("--no-git", dest="with_git", action="store_false", help="Не собирать Git-историю")
+    parser.add_argument("--with-mvp", action="store_true", help="Добавить documentation и technical debt snapshot checks")
     parser.add_argument("--exclude", action="append", default=[], help="Исключение fnmatch для относительного пути")
     parser.add_argument("--timeout", type=float, default=30, help="Лимит времени SAST, секунды")
     parser.add_argument("--max-file-bytes", type=int, default=1_048_576)
@@ -89,7 +90,7 @@ def main(argv: list[str] | None = None, *, legacy: bool = False,
         config = ScanConfig(timeout_seconds=args.timeout, max_file_bytes=args.max_file_bytes,
                             max_findings=args.max_findings, exclude_globs=tuple(exclusions),
                             max_total_bytes=args.max_total_bytes, max_files=args.max_files)
-        analysis = analyze_repository(args.path, SASTScanner(config, rules), with_git=args.with_git)
+        analysis = analyze_repository(args.path, SASTScanner(config, rules), with_git=args.with_git, with_mvp=args.with_mvp)
         report = to_legacy_report(analysis) if legacy or args.format == "sarif" else analysis.to_dict()
         write_report(to_sarif(report, rules) if args.format == "sarif" else report, args.output)
     except (SASTScanError, OSError, ValueError):

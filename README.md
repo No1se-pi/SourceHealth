@@ -1,7 +1,7 @@
 # SourceHealth
 
 Сервис оценки здоровья репозиториев SourceCraft для ЛЦТ 2026.
-Текущий этап — модульный архитектурный фундамент для команды из трёх человек.
+Текущий этап — MVP аналитики поверх modular monolith для команды из трёх человек.
 
 **Начать с [документации команды](docs/README.md)**:
 [требования](docs/REQUIREMENTS.md), [архитектура](docs/ARCHITECTURE.md),
@@ -13,13 +13,17 @@
 - API-only AnalysisContext, repository identity, availability и evidence contracts.
 - FastAPI, PostgreSQL/Alembic, Redis/RQ, lifecycle и дедупликация запусков.
 - Фоновый code-v1: Git + local SAST через один Docker runtime на отдельном trusted worker.
+- mvp-v1: Documentation, Issues, CI/CD, Git/platform Activity, Code Health/debt,
+  детерминированный Score и рекомендации с evidence.
 - SourceCraft metadata client/collector, Я ID Authorization Code + PKCE/server sessions.
-- React/TypeScript foundation, HTTP DTO/OpenAPI и Markdown report.
+- React/TypeScript интерфейс, public URL import, HTTP DTO/OpenAPI и Markdown report.
 
-**Score пока null**: методика не утверждена. AppSec SourceCraft и механизм доступа
+**Score рассчитывается в mvp-v1** при достаточном coverage; старые профили сохраняют null.
+AppSec SourceCraft и механизм доступа
 пользователя Я ID к его SourceCraft repositories ещё не подключены. Локальный SAST
 считается code health и не подменяет официальный Security. Private repos запрещены.
-Точные проверки и ограничения — [закрытие foundation](docs/FOUNDATION_CLOSURE.md).
+Точные проверки и ограничения — [MVP analytics](docs/MVP_ANALYTICS.md),
+формулы — [SCORING](docs/SCORING.md). Live SourceCraft пока требует подтверждённого доступа.
 
 ## Быстрый запуск
 

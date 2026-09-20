@@ -46,6 +46,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  importRepository: (url: string) => request<RepositoryDetails>('/repositories', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }),
+  }),
   repositories: (offset = 0, sort = 'health_score', language = '') =>
     request<RepositoryPage>(
       `/repositories?${new URLSearchParams({

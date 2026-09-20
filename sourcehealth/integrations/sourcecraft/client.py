@@ -27,6 +27,7 @@ class SourceCraftError(RuntimeError):
 class SourceCraftClient:
     def __init__(self, *, pat: str | None = None, base_url: str = "https://api.sourcecraft.tech",
                  timeout: float = 15, max_pages: int = 100, max_response_bytes: int = 4_194_304,
+                 deadline_seconds: float | None = None,
                  transport: httpx.BaseTransport | None = None, sleep: Callable[[float], None] = time.sleep) -> None:
         if base_url.rstrip("/") != "https://api.sourcecraft.tech":
             raise ValueError("untrusted SourceCraft API host")
@@ -40,6 +41,8 @@ class SourceCraftClient:
         self.max_pages = max_pages
         self.max_response_bytes = max_response_bytes
         self._sleep = sleep
+        self._deadline = time.monotonic() + deadline_seconds if deadline_seconds is not None else None
+        self._timeout = timeout
 
     def close(self) -> None:
         self._http.close()
@@ -63,8 +66,12 @@ class SourceCraftClient:
             raise ValueError("relative API path required")
         request_id = str(uuid4())
         for attempt in range(3):
+            remaining = self._deadline - time.monotonic() if self._deadline is not None else self._timeout
+            if remaining <= 0:
+                raise SourceCraftError("collection_budget_exceeded")
             try:
-                with self._http.stream("GET", path, params=params, headers={"X-Request-ID": request_id}) as response:
+                with self._http.stream("GET", path, params=params, headers={"X-Request-ID": request_id},
+                                       timeout=min(self._timeout, remaining)) as response:
                     if response.status_code == 429 or response.status_code >= 500:
                         if attempt == 2:
                             raise SourceCraftError("source_unavailable")
@@ -76,6 +83,8 @@ class SourceCraftClient:
                     else:
                         content = bytearray()
                         for chunk in response.iter_bytes(chunk_size=65536):
+                            if self._deadline is not None and time.monotonic() >= self._deadline:
+                                raise SourceCraftError("collection_budget_exceeded")
                             content.extend(chunk)
                             if len(content) > self.max_response_bytes:
                                 raise SourceCraftError("response_limit")

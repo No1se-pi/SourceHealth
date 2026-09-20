@@ -1,5 +1,6 @@
 """Совместимость старого JSON 1.0 и SARIF с единым AnalysisReport 2.0."""
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -9,11 +10,25 @@ from sourcehealth.runner import AnalysisRunner, prepare_context
 from sourcehealth.sast import SASTScanner, ScanResult
 
 
-def analyze_repository(path: str | Path, scanner: SASTScanner, *, with_git: bool = True) -> AnalysisReport:
+def analyze_repository(path: str | Path, scanner: SASTScanner, *, with_git: bool = True, with_mvp: bool = False) -> AnalysisReport:
     analyzers = [SASTAnalyzerAdapter(scanner)]
     if with_git:
         analyzers.append(GitActivityAnalyzerAdapter())
-    runner = AnalysisRunner(analyzers, context_factory=prepare_context if with_git else AnalysisContext)
+    factory = prepare_context if with_git else AnalysisContext
+    if with_mvp:
+        from sourcehealth.analyzers.snapshot import DocumentationAnalyzer, TechnicalDebtAnalyzer
+        from sourcehealth.snapshot import SnapshotCollector
+
+        analyzers.extend([DocumentationAnalyzer(), TechnicalDebtAnalyzer()])
+
+        def factory(path):
+            context = prepare_context(path) if with_git else AnalysisContext(path)
+            try:
+                snapshot = SnapshotCollector().collect(path, context.started_at)
+            except Exception:
+                snapshot = None  # No Git stderr or host paths in public failure output.
+            return replace(context, metadata={"snapshot": snapshot})
+    runner = AnalysisRunner(analyzers, context_factory=factory)
     return runner.analyze(path)
 
 

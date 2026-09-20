@@ -10,6 +10,9 @@ interface ErrorStateProps {
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
+  authentication_required: 'Войдите через Яндекс ID, чтобы добавить репозиторий или запустить анализ.',
+  invalid_sourcecraft_url: 'Укажите HTTPS-ссылку вида https://sourcecraft.dev/org/repo.',
+  public_repository_unverified: 'Не удалось подтвердить публичность репозитория. Проверьте ссылку и доступность SourceCraft.',
   repository_not_found: 'Репозиторий не найден или к нему нет доступа.',
   analysis_not_found: 'Сессия анализа не найдена.',
   report_not_ready: 'Отчёт ещё формируется или анализ завершился с ошибкой.',

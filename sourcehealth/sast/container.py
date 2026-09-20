@@ -43,7 +43,7 @@ def _docker(arguments: list[str], *, timeout: float = 30) -> str:
     return completed.stdout
 
 
-def run_repository(url: str, *, image: str = "sourcehealth-sast", timeout: float = 180) -> dict:
+def run_repository(url: str, *, image: str = "sourcehealth-sast", timeout: float = 180, with_mvp: bool = False) -> dict:
     """Выполнить две стадии и вернуть общий отчёт, включая ошибки очистки.
 
     ``timeout`` ограничивает каждую стадию отдельно. Жёсткий лимит памяти/CPU
@@ -92,7 +92,7 @@ def run_repository(url: str, *, image: str = "sourcehealth-sast", timeout: float
         _docker([
             "create", "--name", scan_name, *limits, "--network=none",
             "--mount", f"type=volume,source={volume},target=/workspace,readonly",
-            image, "/workspace/repo", "--with-git",
+            image, "/workspace/repo", "--with-git", *(["--with-mvp"] if with_mvp else []),
         ])
         containers.append(scan_name)
         # CLI=2 всё равно содержит полезный JSON неполной проверки.

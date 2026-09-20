@@ -7,6 +7,7 @@ import { ScoreDisplay } from '../components/common/ScoreDisplay';
 import { LoadingState } from '../components/common/LoadingState';
 import { EmptyState } from '../components/common/EmptyState';
 import { ErrorState } from '../components/common/ErrorState';
+import { RepositoryImport } from '../components/common/RepositoryImport';
 
 const POPULAR_LANGUAGES = [
   'TypeScript',
@@ -104,6 +105,7 @@ export const LeaderboardPage: React.FC = () => {
         </p>
       </div>
 
+      <RepositoryImport />
       <Card
         headerAction={
           <div

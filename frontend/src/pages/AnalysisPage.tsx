@@ -4,6 +4,7 @@ import { api, type Analysis } from '../api/client';
 import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
 import { ScoreDisplay } from '../components/common/ScoreDisplay';
+import { ScoreCoverage } from '../components/common/ScoreCoverage';
 import { AvailabilityBadge } from '../components/common/AvailabilityBadge';
 import { LoadingState } from '../components/common/LoadingState';
 import { ErrorState } from '../components/common/ErrorState';
@@ -162,6 +163,7 @@ export const AnalysisPage: React.FC = () => {
                 </Badge>
               )}
               <ScoreDisplay score={run.health_score} size="lg" />
+              <ScoreCoverage analysis={run} />
             </div>
           }
           footer={

@@ -6,6 +6,17 @@ permissions:
   contents: read
 
 jobs:
+  mvp-snapshot-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: docker build -f sourcehealth/sast/Dockerfile -t sourcehealth-sast .
+      - run: python scripts/mvp_snapshot_smoke.py
+
   compose-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 15

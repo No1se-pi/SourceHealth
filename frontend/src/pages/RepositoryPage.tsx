@@ -5,6 +5,7 @@ import { Card } from '../components/common/Card';
 import { Button, getButtonStyles } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
 import { ScoreDisplay } from '../components/common/ScoreDisplay';
+import { ScoreCoverage } from '../components/common/ScoreCoverage';
 import { AvailabilityBadge } from '../components/common/AvailabilityBadge';
 import { LoadingState } from '../components/common/LoadingState';
 import { EmptyState } from '../components/common/EmptyState';
@@ -212,6 +213,7 @@ export const RepositoryPage: React.FC = () => {
                   Repo Health Score
                 </div>
                 <ScoreDisplay score={repo.health_score} size="lg" />
+                <ScoreCoverage analysis={latestAnalysis?.id === repo.latest_analysis_id ? latestAnalysis : undefined} />
               </div>
             }
           >
