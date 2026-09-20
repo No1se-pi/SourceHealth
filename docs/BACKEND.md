@@ -54,5 +54,7 @@ Request validation не отражает присланные значения, 
 Чтение открытых repository/run/report реализовано. POST анализа требует реальную
 сессию Я ID и правильный Origin, возвращает queued/cached run. Операторская CLI
 `register` проверяет публичность через SourceCraft и ставит первый run.
-HTTP endpoint произвольного import URL отсутствует. Private repos и force refresh
+HTTP `POST /api/v1/repositories` проверяет canonical SourceCraft URL через collector,
+требует явно public visibility, сессию и exact Origin, делает upsert. Произвольный
+Git host не принимается. Private repos и force refresh
 через HTTP закрыты до реализации авторизации SourceCraft и допустимой refresh policy.
