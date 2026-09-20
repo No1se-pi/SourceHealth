@@ -13,7 +13,7 @@ if ENABLED:
     import httpx
     from pydantic import SecretStr
 
-    from sourcehealth.application.__main__ import main
+    from sourcehealth.application.__main__ import main, worker_class
     from sourcehealth.application.acceptance import preflight, probe_sourcecraft
     from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
     from sourcehealth.settings import Settings
@@ -29,6 +29,10 @@ def settings_with_pat():
 
 @unittest.skipUnless(ENABLED, "install server dependencies for operator command tests")
 class ProbeSourceCraftTests(unittest.TestCase):
+    def test_worker_uses_non_forking_rq_implementation_on_windows(self):
+        self.assertEqual(worker_class("nt").__name__, "SimpleWorker")
+        self.assertEqual(worker_class("posix").__name__, "Worker")
+
     def run_probe(self, transport):
         with SourceCraftClient(transport=transport, sleep=lambda _: None) as client:
             return probe_sourcecraft(settings_with_pat(), REPOSITORY_URL, client=client)

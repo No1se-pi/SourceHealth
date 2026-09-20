@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 
 from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
 from sourcehealth.logging_config import configure_logging
@@ -13,6 +14,13 @@ class SafeParser(argparse.ArgumentParser):
         # argparse normally echoes rejected input; URLs/accidental secret arguments are not diagnostics.
         print(json.dumps({"overall": "error", "error": "invalid_arguments"}))
         raise SystemExit(2)
+
+
+def worker_class(platform=None):
+    """RQ's fork worker is unavailable on Windows; SimpleWorker preserves the same queue contract."""
+    from rq import SimpleWorker, Worker
+
+    return SimpleWorker if (platform or os.name) == "nt" else Worker
 
 
 def main(argv=None):
@@ -39,7 +47,7 @@ def main(argv=None):
     if args.command in {"accept-public", "doctor"}:
         return operator_command(args, settings)
 
-    from rq import Queue, Worker
+    from rq import Queue
 
     from sourcehealth.storage.database import create_database
 
@@ -55,7 +63,7 @@ def main(argv=None):
             if args.command == "worker-code" and not settings.code_runtime_enabled:
                 parser.exit(2, "worker-code requires explicit CODE_RUNTIME_ENABLED=true on a trusted host\n")
             queue = "analysis-code" if args.command == "worker-code" else "analysis"
-            Worker([Queue(queue, connection=redis)], connection=redis).work()
+            worker_class()([Queue(queue, connection=redis)], connection=redis).work()
         elif args.command == "register":
             if not args.url:
                 parser.error("register requires a SourceCraft URL")

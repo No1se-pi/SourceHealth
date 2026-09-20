@@ -32,6 +32,9 @@ raw response, имён, email, descriptions, comments, release notes или зн
 `CODE_RUNTIME_ENABLED=true`. PostgreSQL, Redis, API и trusted `worker-code` должны быть
 запущены по [DEPLOYMENT](DEPLOYMENT.md). Быстрая безопасная диагностика:
 
+На Windows команда `worker-code` автоматически использует RQ `SimpleWorker`, поскольку
+операционная система не предоставляет `fork`; на Linux используется обычный RQ Worker.
+
 ```powershell
 python -m sourcehealth.application doctor
 ```
