@@ -1,78 +1,134 @@
 # Интеграция SourceCraft
 
-Обновление 16 сентября: команда предоставила `SCS_API_1.0.0_draft.pdf` с описанием
-отдельного Security API. Методы и оставшиеся пробелы вынесены в [SOURCECRAFT_SECURITY_DRAFT](SOURCECRAFT_SECURITY_DRAFT.md).
-Ниже сведения о публичной Swagger от 15 сентября; отсутствие AppSec в ней больше
-не означает отсутствие документации Security API. Draft не подтверждает live доступ.
+Проверено по официальной [Swagger](https://api.sourcecraft.tech/docs/sourcecraft.swagger.json)
+19.09.2026: info.version `0.0.1`, SHA-256 скачанного файла
+`c3b1d84647cdf553cda63ff6e6ddf59d00ee36a5aa40470ad44607320639d7c3`.
+Версия может не меняться при изменении методов. Fixtures в tests/mvp_fixtures.py
+переписаны вручную по схемам, **не являются live responses**.
 
-Проверено 2026-09-15 по официальным ресурсам:
+Дополнительные источники: [REST API](https://sourcecraft.dev/portal/docs/ru/sourcecraft/operations/api-start),
+[CI/CD configuration](https://sourcecraft.dev/portal/docs/en/sourcecraft/ci-cd-ref/).
+Отдельный предоставленный SCS draft 1.0.0 разобран в
+[SOURCECRAFT_SECURITY_DRAFT](SOURCECRAFT_SECURITY_DRAFT.md); он не подтверждает
+base URL/auth/security mapping.
 
-- [Работа с REST API](https://sourcecraft.dev/portal/docs/ru/sourcecraft/operations/api-start).
-- [Интерактивная документация](https://api.sourcecraft.tech/docs/index.html).
-- [Публичная Swagger specification](https://api.sourcecraft.tech/docs/sourcecraft.swagger.json),
-  версия info `0.0.1`, «Bleeding edge of Public REST API of SourceCraft».
-- [Документация платформы](https://sourcecraft.dev/portal/docs/ru/).
+## Клиент и бюджеты
 
-Спецификация может меняться без смены info.version. Перед новой интеграцией читать
-конкретную response schema, сохранять sanitized fixture и дату проверки в PR.
+Base URL строго `https://api.sourcecraft.tech`, PAT в Authorization Bearer.
+Redirects запрещены; пользователь не задаёт host. GET-only, максимум 3 попытки при
+transport errors/429/5xx. Retry-After до 10с; более долгий возвращает rate_limited.
+401/403/404 не ретраятся. Response до 4 MiB, timeout по умолчанию 15с; User-Agent и
+X-Request-ID задаёт клиент. Ошибки возвращают только безопасный code, не response body.
 
-## Клиент
+Pagination: page_size/page_token/next_page_token. Default клиента 100 страниц,
+analytics profile ограничивает до 5 страниц на resource и 2000 уникальных items.
+Общий deadline платформенной аналитики 120с, timeout запроса ≤10с. Import — deadline
+45с. Коллектор сохраняет полученные items при последующей ошибке и ставит partial;
+до первого item — source_unavailable. Полный пустой ответ — available, complete=true.
+Дедупликация id не превращает ограниченный batch в полный snapshot каталога.
 
-Base URL `https://api.sourcecraft.tech`. PAT передаётся в `Authorization: Bearer`.
-Нет redirects и пользовательского произвольного base URL. Все реализованные запросы
-GET, максимум 3 попытки для transport errors/429/5xx. Retry-After соблюдается до 10с;
-большая задержка возвращает rate_limited для последующего повтора scheduler.
-401/403/404 и прочие 4xx не ретраятся. Timeout 15с, response до 4 MiB,
-pagination по page_size/page_token/next_page_token, default max 100 страниц.
-Повторяющийся token, неверный payload и превышение лимита — явная ошибка.
+## Реализованные collectors
 
-User-Agent и X-Request-ID устанавливает клиент. Наличие подтверждённого response
-request ID у платформы не предполагается. Ошибки содержат только safe code, не body.
-`iter_items()` отдаёт items по мере чтения; collector обязан сохранить уже собранную
-часть и выставить partial при сбое последующей страницы. Не превращать partial в
-нулевое число открытых issues.
+Префикс R = `/repos/{org_slug}/{repo_slug}`. Все методы подтверждены Swagger;
+успешная live приёмка фиксируется только результатом операторских команд из
+[LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md); contract fixtures сами по себе её не подтверждают.
 
-## Integration checklist
+Перед запуском инфраструктуры `probe-sourcecraft URL` проверяет metadata, Issues, CI/CD,
+pull requests, contributors и releases. Команда не открывает PostgreSQL/Redis и печатает
+только allowlisted JSON summary. Exit code: 0 — полный ответ, 1 — partial/outage ресурса,
+2 — configuration/auth/repository/schema error.
 
-Префикс `R = /repos/{org_slug}/{repo_slug}`. PAT означает официальный способ
-аутентификации; anonymous/public доступ каждого метода отдельно не принят сквозным тестом.
+| Collector | Endpoint / ключ списка | Сохраняемые поля и правила |
+|---|---|---|
+| RepositoryCollector | GET R | id, slug, явно public visibility, default_branch, is_empty, безопасный language.name |
+| IssuesCollector | GET R/issues / issues | Без несовместимого filter query; private отбрасывается по visibility; id/slug, status.status_type, created_at/updated_at/completed_at |
+| Issues comments enrichment | GET R/issues/{issue_slug}/comments / issue_comments | created_at; author.id сравнивается с issue.author.id только в памяти, self исключаются |
+| CICollector | GET R/cicd/runs / runs | id/status, dates.created_at/started_at/finished_at, duration |
+| PullRequestsCollector | GET R/pulls / pull_requests | id/status/created_at/updated_at |
+| ContributorsCollector | GET R/contributors / contributors | Только id, без names/emails |
+| ReleasesCollector | GET R/releases / releases | Только status=published; id/released_at, без notes |
+| CatalogCollector | GET /repos / repositories | Глобальный public discovery; sort_by=created_at |
+| CatalogCollector | GET /orgs/{org_slug}/repos / repositories | Org-scoped discovery; без неподдерживаемого sort_by |
 
-| Data | Требуется ТЗ | Official source | Endpoint/interface | Auth | Implemented | Open question |
-|---|---|---|---|---|---|---|
-| Repository metadata | Да | Swagger GetRepository | GET R | PAT | Client + allowlist collector | Public live acceptance; rename reconciliation |
-| Issues | Да | ListRepositoryIssues | GET R/issues, items=issues | PAT | Общая pagination, бизнес-collector planned | Filter/windows, private issues в public repo |
-| CI/CD | Да | ListRuns | GET R/cicd/runs, items=runs | PAT/публичность workflow | Client foundation | Доступный объём history, критерий not_configured |
-| AppSec SAST | Да | SCS Backend API 1.0.0 draft, 16.09 | Отдельные /v1/scans, /v1/defect-groups, /v1/findings | Не подтверждено | Boundary, NO_DATA | Base URL, auth, schemas, mapping; см. draft notes |
-| AppSec SCA | Да | Тот же SCS draft | Те же методы; engine type согласовать со схемой | Не подтверждено | Boundary | Exact schema + live fixture |
-| Secret scanning | Да | Тот же SCS draft | Те же методы; SECRETS указан для отчётов | Не подтверждено | Boundary | Enum конкретного метода + live fixture |
-| PR/MR | Да, activity | Swagger Pull Requests | GET R/pulls | PAT | Foundation клиента | Полнота полей/времени/статусов |
-| Reviews | Бонус | Swagger pull comments/reviewers/decision | GET R/pulls/{pull_request_slug}/comments, /reviewers | PAT | Planned | История review transitions и длительности |
-| Contributors | Да, activity | Swagger contributors | GET R/contributors | PAT | Planned | Bots, aliases, privacy email |
-| Releases | Да, activity | Swagger releases | GET R/releases | PAT | Planned | Draft/released и нужное окно |
-| Likes/rating | Да, leaderboard | Repository.rating / RepositoryRating | GET R, поле rating | PAT | Поле storage nullable; сбор planned | Правило mapping reaction_counts в likes |
-| Git clone | Для code/history | SourceCraft HTTPS clone | https://git.sourcecraft.dev/org/repo.git | Public clone | Прежний Docker workflow | Code profile, точный SHA, дисковая квота |
-| Общий каталог public repo | Да, желательно полный охват | Каталог платформы | UI find/repositories; org-scoped GET /orgs/{org_slug}/repos | PAT для API | Planned | Подтверждённый глобальный discovery interface |
+Wire статусы Issues: initial/in_progress/paused/completed/cancelled; completed_at
+маппится в closed_at. CI: created/prepared/processing/success/failed/canceled/timeout/
+skipped/awaiting_approval/rejected; timestamps вложены в dates. Pull requests:
+draft/open/discarded/merging/merged. Releases: draft/published/discarded, сохраняются
+только published. Неизвестные enum/невалидные даты означают неполное наблюдение,
+а не успешную догадку. Closed/response/duration semantics — [ANALYTICS](ANALYTICS.md).
 
-**GET R/rating возвращает реакцию текущего пользователя**, а не общий счётчик лайков.
-Использовать Repository.rating только после согласования семантики. Не выдавать
-число rating.value за likes без объяснения. **R/secrets управляет CI-секретами**,
-это не выгрузка результатов secret scanning; этот endpoint клиент продукта не вызывает.
+Для comments budget — первые 10 issues, не более 2000 comments на issue и 5 страниц.
+Неполная comments история оставляет latency null, не уничтожая полные issue counts.
+Внешний ответ требует известного author.id у issue и каждого comment. Author IDs
+не сохраняются в facts. Unanswered count и response rate также null при неполной истории.
+Bodies, descriptions, release notes, CI error messages и персональные поля не
+попадают в facts/report. Ключи и timestamp проходят allowlist/validation.
 
-## AppSec boundary
+## Каталог и import
 
-`AppSecCollector` сейчас возвращает `source=sourcecraft_appsec, availability=no_data,
-error=appsec_interface_unconfirmed`. Это статус незавершённой интеграции, не факт
-отсутствия сканирования у проекта. Нельзя подменить его данными нашего scanner.
+Глобальный `GET /repos` **теперь подтверждён официальным контрактом**; прежний вопрос
+о неизвестном endpoint снят. DiscoverRepositories возвращает публичные repositories
+в public организациях/проектах. Pagination не гарантирует snapshot consistency при
+смене visibility/удалениях; не заявляем «все SourceCraft repositories».
 
-Перед реализацией запросить у организаторов/документации: официальный интерфейс
-выгрузки (полная OpenAPI SCS draft, base URL/auth), permissions, pagination, scanner type, severity, open/resolved/false-positive,
-fingerprint/reference, scan timestamp, соответствие HEAD, ограничения по private repo.
-Сохранить fixture без secret values и source snippets; добавить contract test и ссылку
-на источник. Лишь затем подключать collector и численную Security policy.
+CLI `discover [--organization SLUG] --limit 20` выполняет ограниченный batch
+(1..100 repos, до 5 страниц, общий deadline 120с), повторно проверяет каждую public
+запись через RepositoryCollector, делает idempotent upsert и ставит analysis в очередь.
+HTTP POST /api/v1/repositories принимает только SourceCraft URL с session/Origin;
+описание flow в [API](API.md), команды в [DEPLOYMENT](DEPLOYMENT.md).
+Реальное наполнение каталога требует рабочего API доступа.
 
-## Что сохраняется
+## Live наблюдение 19.09.2026
 
-RepositoryCollector сейчас сохраняет allowlist id/slug/default_branch/visibility/is_empty,
-принимает только явно public metadata. description, clone_url, произвольные links,
-исходные тексты и credentials не попадают в report. Unit HTTP fixtures не требуют PAT.
-Отдельный live smoke включается переменными из [TESTING](TESTING.md).
+На `sourcecraft/documentation` выполнены GET repository metadata, issues,
+CI runs, pulls, contributors, releases и отдельный GET /repos. Все семь попыток
+дали `authentication_required` (HTTP 401); успешных items — 0. Raw bodies/PAT не
+сохранялись. Это подтверждает обработку отказа доступа, **не** успешность wire mapping
+на живых данных. Следующая приёмка: рабочий read PAT → sanitized fixtures → public
+import → trusted worker → отчёт. Я ID session не заменяет SourceCraft PAT.
+
+## Live наблюдение 20.09.2026
+
+Рабочий read PAT подтвердил metadata и все analytics resources целевого public repository.
+Первый probe обнаружил HTTP 400 для Issues только при `filter=visibility=public`; запрос без
+неподдержанного параметра вернул 200. Commit `8516317` удалил filter, сохранив отбрасывание
+private items по полю visibility. После исправления probe завершился exit 0, opt-in live test
+прошёл, а полный import → RQ worker-code → Docker Git/SAST → score → persistence/Markdown
+вернул overall=ok. Точные безопасные результаты — [LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md).
+
+Историческое наблюдение 19.09 выше сохраняется как доказательство корректной обработки 401,
+но больше не описывает текущий доступ к public API. Global discovery и private access этим
+прогоном не принимались.
+
+## AppSec boundary и другие открытые вопросы
+
+AppSecCollector возвращает source=sourcecraft_appsec, availability=no_data,
+error=appsec_interface_unconfirmed. Это ограничение интеграции, не отсутствие
+уязвимостей. Нельзя подменять Security локальным SAST. Для подключения нужны base URL,
+auth, полная OpenAPI, enums/severity/resolution, repository identity mapping и real
+sanitized fixture. Policy имеет только внутренний нормализованный input, не fake client.
+
+Private repository flow запрещён до подтверждения Я ID → SourceCraft permission bridge.
+Likes остаются nullable: Repository.rating.value не объявляется числом likes.
+**GET R/rating — реакция текущего пользователя; R/secrets — управление CI secrets,
+а не secret scanning findings.** Ни один из них не используется для Security.
+
+Clone остаётся public HTTPS `https://git.sourcecraft.dev/org/repo.git`, без передачи
+PAT в clone URL. Issues/CI collectors не используют Git HEAD как ключ свежести.
+
+## Повторный AppSec review 21.09.2026
+
+Проверены все 167 paths и definitions официального Swagger 0.0.1
+(SHA256 `c3b1d84647cdf553cda63ff6e6ddf59d00ee36a5aa40470ad44607320639d7c3`).
+Поддерживаемого AppSec/SAST/SCA/vulnerability/SARIF/findings route или schema не найдено;
+единственное совпадение `incident` относится к типу комментария Pull Request. Локальный
+SourceCraft CLI в среде отсутствовал. Для реализации нужны документированный endpoint,
+auth/scopes, severity/status enums, pagination и очищенный реальный response от организаторов.
+# Уточнения live-контракта 20.09.2026
+
+`Repository.likes` берётся только из `rating.reaction_counts` типа `positive_low`.
+Heart/Diamond, rating.value и percentile не подменяют likes. Невалидный/отсутствующий
+rating остаётся null; полный sparse массив без positive_low означает 0.
+CI Run публичный `id` пока отсутствует по Swagger; устойчивый ключ — `slug`.
+Дата Unix epoch для незавершённой стадии не считается фактическим завершением.
+Проверки и оставшаяся работа: [MANDATORY_100_CLOSURE](MANDATORY_100_CLOSURE.md).

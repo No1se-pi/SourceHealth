@@ -1,7 +1,8 @@
 # Документация SourceHealth
 
 SourceHealth — сервис здоровья репозиториев SourceCraft для ЛЦТ 2026.
-Текущий этап: **архитектурный фундамент**, а не готовый продукт с шестью оценками.
+Текущий этап: **MVP analytics** — пять реализованных категорий и честный AppSec NO_DATA;
+численный scoring, рекомендации, public import и существующий React интерфейс.
 Ни `null` Score, ни успешный сбор metadata не означают «проект здоров».
 
 ## Начать работу
@@ -16,8 +17,8 @@ SourceHealth — сервис здоровья репозиториев SourceCr
 
 | Участник | Читать в первую очередь | Первая независимая задача |
 |---|---|---|
-| Frontend | [FRONTEND](FRONTEND.md), [API](API.md), [DOMAIN_MODEL](DOMAIN_MODEL.md) | Экран категорий, evidence и состояний по существующим DTO |
-| Анализаторы | [ANALYTICS](ANALYTICS.md), [DEVELOPMENT](DEVELOPMENT.md), [METRICS](METRICS.md) | IssuesCollector + IssuesAnalyzer на fixture, без HTTP/router/БД изменений |
+| Frontend | [FRONTEND](FRONTEND.md), [API](API.md), [DOMAIN_MODEL](DOMAIN_MODEL.md) | Live приёмка import → analysis → evidence/Markdown после настройки входа |
+| Анализаторы | [ANALYTICS](ANALYTICS.md), [SCORING](SCORING.md), [METRICS](METRICS.md) | Проверить реальные datasets против contract fixtures; расширять метрики без переписывания foundation |
 | Backend / интеграция / ML | [BACKEND](BACKEND.md), [SOURCECRAFT](SOURCECRAFT.md), [DATABASE](DATABASE.md), [JOBS_AND_CACHE](JOBS_AND_CACHE.md) | Подтвердить AppSec API и SourceCraft authorization, подключить новую пару collector/analyzer |
 
 ## Полный каталог
@@ -41,6 +42,10 @@ SourceHealth — сервис здоровья репозиториев SourceCr
 - [DEPLOYMENT](DEPLOYMENT.md) — воспроизводимый локальный запуск и эксплуатация.
 - [DEVELOPMENT](DEVELOPMENT.md) — совместная работа, ownership, review и примеры.
 - [ROADMAP](ROADMAP.md) — последовательность P0/P1/P2 и зависимые решения.
+- [MVP_ANALYTICS](MVP_ANALYTICS.md) — поставка 19 сентября, проверенные сценарии и оставшиеся блокеры.
+- [LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md) — probe, полный live pipeline, коды выхода и чек-лист приёмки.
+- [DEMO](DEMO.md) — короткий сценарий показа и честные ограничения.
+- [MANDATORY_100_CLOSURE](MANDATORY_100_CLOSURE.md) — итоговый журнал обязательной приёмки.
 - [METRICS](METRICS.md) — сохранённый точный справочник Git-метрик.
 - [ADR](adr/README.md) — принятые архитектурные решения.
 
@@ -52,6 +57,7 @@ SourceHealth — сервис здоровья репозиториев SourceCr
 «догадаться об endpoint». Проверка с mock подтверждает наш код, не доступность внешнего сервиса.
 
 Документация обновляется в том же PR, что и поведение. Точные результаты последней
-проверки фиксируются в [FOUNDATION_CLOSURE](FOUNDATION_CLOSURE.md); исходная поставка
+проверки фиксируются в [MVP_ANALYTICS](MVP_ANALYTICS.md); предыдущая поставка —
+[FOUNDATION_CLOSURE](FOUNDATION_CLOSURE.md), исходная поставка
 15 сентября — [DELIVERY.md](DELIVERY.md). Это результаты конкретных проверок,
 а не постоянная гарантия или подтверждение готовности всех продуктовых категорий.

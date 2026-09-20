@@ -29,7 +29,7 @@ transition, finish, enqueue_due. `application/jobs.py` — доставка и �
    быть переиспользован завершённый run со старым набором анализаторов.
 7. Добавить unit fixtures и обновить ANALYTICS/SOURCECRAFT. Core/DTO/migration обычно не меняются.
 
-Поддерживаются `platform-v1` и `code-v1`; неизвестный профиль отклоняется Settings.
+Поддерживаются `platform-v1`, `code-v1` и `mvp-v1`; неизвестный профиль отклоняется Settings.
 `jobs.queue_name()` маршрутизирует persisted profile, поэтому dispatcher может доставлять
 обе очереди независимо от собственной настройки. `code-v1` добавляет Git/SAST через
 `AnalysisRuntime`, а `runtime_results.py` преобразует legacy JSON с allowlist метрик,
@@ -54,5 +54,7 @@ Request validation не отражает присланные значения, 
 Чтение открытых repository/run/report реализовано. POST анализа требует реальную
 сессию Я ID и правильный Origin, возвращает queued/cached run. Операторская CLI
 `register` проверяет публичность через SourceCraft и ставит первый run.
-HTTP endpoint произвольного import URL отсутствует. Private repos и force refresh
+HTTP `POST /api/v1/repositories` проверяет canonical SourceCraft URL через collector,
+требует явно public visibility, сессию и exact Origin, делает upsert. Произвольный
+Git host не принимается. Private repos и force refresh
 через HTTP закрыты до реализации авторизации SourceCraft и допустимой refresh policy.

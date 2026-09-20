@@ -23,6 +23,10 @@ npm ci --prefix frontend
 npm run dev --prefix frontend
 ```
 
+Миграции и backend внутри образа запускаются через `python -m alembic` и
+`python -m uvicorn`. Это сохраняет запуск в hardened-окружениях, где исполнение
+установленных console scripts запрещено политикой mount (`operation not permitted`).
+
 Не копировать .env.example поверх своего заполненного .env. Linux/macOS activation:
 `source .venv/bin/activate`. `requirements-server.lock` фиксирует runtime dependency
 snapshot; npm ci использует package-lock.json. Обновление lock — отдельный проверяемый PR.
@@ -50,6 +54,9 @@ python -m uvicorn sourcehealth.api.app:create_app --factory --host 127.0.0.1 --p
 ## Добавить настоящий публичный SourceCraft repo
 
 Если API требует PAT, заполнить SOURCECRAFT_PAT локально; не добавлять его в Git.
+До запуска Compose доступ можно проверить без DB/Redis командой `probe-sourcecraft`, а
+сквозной pipeline после запуска инфраструктуры — `accept-public`; точные команды и коды
+завершения описаны в [LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md).
 Операторская команда проверяет visibility через настоящий SourceCraft API:
 
 ```powershell
@@ -58,15 +65,21 @@ python -m sourcehealth.application register https://sourcecraft.dev/ORGANIZATION
 
 Подставить существующие slugs. Команда печатает repository_id и analysis_id.
 По умолчанию фоновый анализ собирает metadata; `code-v1` добавляет Git/SAST через trusted
-worker ниже. Partial и null Score при неподключённых AppSec/методике ожидаемы.
+worker ниже. `mvp-v1` добавляет обязательную аналитику и численную policy; partial
+из-за AppSec NO_DATA ожидаем, но не требует null overall при достаточном coverage.
 Непубличный/unverified repo не принимается.
 
 ## Trusted code worker — отдельный execution profile
 
-Это операторский Linux host/VM с Docker Engine/CLI, установленным SourceHealth той же
-ревизии и сетевым доступом к сервисным PostgreSQL/Redis. Процесс имеет привилегии Docker
-daemon на **выделенной машине**. Не переносить этот доступ в API или generic Compose worker.
-RQ `worker-code` использует fork; на Windows запускать на отдельном Linux host/VM.
+Обычный `docker compose up` поднимает PostgreSQL, Redis, migrations, API и generic worker.
+Он не потребляет очередь `analysis-code`: для полного `mvp-v1` нужен отдельный trusted
+`worker-code`. Это операторский Linux host/VM с Docker Engine/CLI, установленным
+SourceHealth той же ревизии и сетевым доступом к сервисным PostgreSQL/Redis. Процесс имеет
+привилегии Docker daemon на **выделенной машине**. Не переносить этот доступ в API или
+generic Compose worker и не монтировать туда Docker socket.
+
+Production recommendation — отдельный Linux trusted host. Для локального Windows demo
+допустим проверенный путь через существующий `SimpleWorker` и Docker Desktop.
 
 На trusted host, из checkout проверенной ревизии:
 
@@ -77,6 +90,7 @@ python -m pip install -r requirements-server.lock
 python -m pip install -e '.[server]'
 docker build -f sourcehealth/sast/Dockerfile -t sourcehealth-sast .
 # DATABASE_URL / REDIS_URL — сервисные адреса через environment/secret storage.
+export ANALYSIS_PROFILE=mvp-v1
 export CODE_RUNTIME_ENABLED=true
 export CODE_RUNTIME_IMAGE=sourcehealth-sast
 export CODE_RUNTIME_TIMEOUT=180
@@ -84,17 +98,35 @@ export ANALYSIS_TIMEOUT=600
 python -m sourcehealth.application worker-code
 ```
 
-Для создания code runs задать `ANALYSIS_PROFILE=code-v1` у API, register и scheduler,
+Для полного MVP задать `ANALYSIS_PROFILE=mvp-v1` у API, register и scheduler
+(`code-v1` остаётся совместимым старым профилем),
 перезапустить соответствующие процессы. Обычный worker можно оставить для старых
 `platform-v1` jobs. Dispatcher сам выбирает очередь по сохранённому профилю run.
 API не нуждается в `CODE_RUNTIME_ENABLED=true`: настройка включается только у
 trusted code worker. Image — настройка оператора, не пользовательский HTTP параметр.
 
-Один вызов runtime делает clone → offline Git/SAST → cleanup. Никаких install/test/build
+Один вызов runtime делает clone → offline Git/SAST/documentation/debt → cleanup. Никаких install/test/build
 команд целевого repo. Clone не получает PAT; поддерживаются только verified public repo.
 Timeout/clone error/отсутствие Docker → partial report с сохранением platform facts.
 Выделенный runtime включать сначала в контролируемой среде: disk quotas,
-уборка после SIGKILL и фиксация точного SHA/cache не входят в эту closure-поставку.
+уборка после SIGKILL и code cache ещё требуют операционной приёмки. mvp-v1 уже сохраняет
+фактический SHA, но не принимает пользовательский SHA для pinning.
+
+## Public import и ограниченное discovery
+
+После входа Я ID форма на leaderboard принимает SourceCraft URL, проверяет public
+через API и открывает страницу repo; запуск — существующей кнопкой. SOURCECRAFT_PAT
+настраивается оператором отдельно от OAuth Я ID. Private пока запрещены.
+
+```powershell
+python -m sourcehealth.application discover --organization ORGANIZATION --limit 20
+python -m sourcehealth.application discover --limit 20
+```
+
+Без organization используется подтверждённый Swagger endpoint GET /repos. Каждая
+найденная запись повторно проверяется, импортируется и ставится на анализ. Это один
+ограниченный batch (limit 1..100, 120с), а не полный обход каталога. Вывод содержит число
+импортов и availability; partial не означает полный каталог. Live доступ ещё не принят.
 
 ## Изолированный Compose smoke
 
@@ -153,3 +185,10 @@ DB/Redis shared; PG locks удерживают single-flight. Соблюдать
 нужны HTTPS reverse proxy, секреты, DB roles/backups, private network, rate limits,
 cron, monitoring и restore drill. Не монтировать Docker socket в web API или обычный
 platform worker. Code workers выделять по [SECURITY](SECURITY.md).
+# Дополнительная настройка подключения SourceCraft
+
+Для пользовательского PAT connection задайте отдельный `SOURCECRAFT_CREDENTIAL_KEY`:
+base64 от 32 случайных байтов (`openssl rand -base64 32`). Не используйте SESSION_SECRET
+повторно и не коммитьте значение. SOURCECRAFT_CONNECTION_TTL по умолчанию 1800с.
+При смене ключа прежние подключения потребуют повторного ввода PAT.
+Это не включает private analysis и не заменяет настройку Яндекс OAuth.

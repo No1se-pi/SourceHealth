@@ -19,8 +19,10 @@ ENABLED = bool(os.environ.get("TEST_DATABASE_URL") and os.environ.get("TEST_REDI
 if ENABLED:
     import httpx
     from fastapi.testclient import TestClient
+    from pydantic import SecretStr
     from redis import Redis
     from rq import Queue, SimpleWorker
+    from rq.job import Job
     from rq.timeouts import TimerDeathPenalty
     from sqlalchemy import delete, select, text, update
     from sqlalchemy.engine import make_url
@@ -66,6 +68,97 @@ class PersistenceTests(unittest.TestCase):
         self.ref = RepositoryRef.from_url(f"https://sourcecraft.dev/test/repo-{uuid4().hex}", visibility="public")
         self.repository_id = self.service.register_repository(self.ref)
 
+    def test_sourcecraft_connection_lifecycle(self):
+        import base64
+        import json
+
+        from sourcehealth.application.services import ServiceError
+        from sourcehealth.auth.sourcecraft import SourceCraftConnection
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        settings = self.settings.model_copy(update={"sourcecraft_credential_key": SecretStr(
+            base64.urlsafe_b64encode(os.urandom(32)).decode())})
+        auth = AuthService(settings, self.redis, self.sessions)
+        token, other = uuid4().hex, uuid4().hex
+        credential = "unit-" + uuid4().hex
+        for session in (token, other):
+            self.redis.set(auth._key("session", session), json.dumps({"id": str(uuid4())}), ex=120)
+
+        def respond(request):
+            self.assertEqual(request.headers["authorization"], "Bearer " + credential)
+            if request.url.path == "/user":
+                return httpx.Response(200, json={"id": "user-1"})
+            return httpx.Response(200, json={"repositories": [
+                {"slug": "public-repo", "visibility": "public"},
+                {"slug": "private-repo", "visibility": "private"}]})
+
+        service = SourceCraftConnection(auth, client_factory=lambda **kw: SourceCraftClient(
+            transport=httpx.MockTransport(respond), **kw))
+        try:
+            result = service.connect(token, credential)
+            self.assertTrue(result["connected"])
+            self.assertLessEqual(result["expires_in"], 120)
+            self.assertNotIn(credential.encode(), self.redis.get(auth._key("sourcecraft", token)))
+            self.assertFalse(service.status(other)["connected"])
+            repos = service.repositories(token, "test")
+            self.assertEqual([r["can_analyze"] for r in repos["items"]], [True, False])
+            cipher_key = auth._key("sourcecraft", token)
+            self.redis.set(cipher_key, b"invalid-ciphertext", ex=30)
+            with self.assertRaises(ServiceError):
+                service.repositories(token, "test")
+            self.assertIsNone(self.redis.get(cipher_key))
+            service.connect(token, credential)
+            self.redis.expire(cipher_key, 0)
+            self.assertFalse(service.status(token)["connected"])
+            service.disconnect(token)
+            self.assertFalse(service.status(token)["connected"])
+            service.connect(token, credential)
+            auth.logout(token)
+            self.assertIsNone(self.redis.get(auth._key("sourcecraft", token)))
+            with self.assertRaises(ServiceError):
+                service.connect(token, credential)
+        finally:
+            auth.logout(token)
+            auth.logout(other)
+
+    def test_connection_http_guards(self):
+        import json
+
+        auth = AuthService(self.settings, self.redis, self.sessions)
+        token = uuid4().hex
+        self.redis.set(auth._key("session", token), json.dumps({"id": str(uuid4())}), ex=60)
+        try:
+            with TestClient(create_app(self.settings, sessions=self.sessions, redis=self.redis),
+                            base_url="https://testserver") as client:
+                self.assertEqual(client.get("/api/v1/sourcecraft/connection").status_code, 401)
+                client.cookies.set("sh_session", token)
+                credential = "test-" + uuid4().hex
+                response = client.post("/api/v1/sourcecraft/connection", json={"pat": credential},
+                                       headers={"origin": "https://wrong.example"})
+                self.assertEqual(response.status_code, 403)
+                self.assertNotIn(credential, response.text)
+                response = client.post("/api/v1/sourcecraft/connection", json={"pat": {"value": credential}},
+                                       headers={"origin": "https://testserver"})
+                self.assertEqual(response.status_code, 422)
+                self.assertNotIn(credential, response.text)
+                self.assertEqual(response.headers["cache-control"], "no-store")
+        finally:
+            auth.logout(token)
+
+    def test_rating_import_updates_and_clears_unknown(self):
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        metadata = {"id": "rating-test", "slug": self.ref.repository_slug, "visibility": "public",
+                    "rating": {"reaction_counts": [{"type": "positive_low", "count": "7"}]}}
+        with SourceCraftClient(transport=httpx.MockTransport(lambda _: httpx.Response(200, json=metadata))) as client:
+            self.service.import_public_repository(self.ref.canonical_url, client=client)
+            with self.sessions() as db:
+                self.assertEqual(db.get(Repository, self.repository_id).likes, 7)
+            metadata.pop("rating")
+            self.service.import_public_repository(self.ref.canonical_url, client=client)
+            with self.sessions() as db:
+                self.assertIsNone(db.get(Repository, self.repository_id).likes)
+
     def tearDown(self):
         with self.sessions.begin() as db:
             ids = list(db.scalars(select(AnalysisRun.id).where(AnalysisRun.repository_id == self.repository_id)))
@@ -102,6 +195,16 @@ class PersistenceTests(unittest.TestCase):
         self.assertNotIn(str(run.id), Queue("analysis", connection=self.redis).job_ids)
         dispatch_pending(self.sessions, self.redis)
         self.assertIn(str(run.id), Queue("analysis", connection=self.redis).job_ids)
+
+    def test_dispatch_repairs_orphaned_queued_rq_job(self):
+        run = self.service.request_analysis(self.repository_id)
+        queue = Queue("analysis", connection=self.redis)
+        dispatch_pending(self.sessions, self.redis)
+        queue.remove(str(run.id))  # Keep the RQ job hash, reproducing dequeue-before-start shutdown.
+        self.assertEqual(Job.fetch(str(run.id), connection=self.redis).get_status(refresh=True), "queued")
+        self.assertNotIn(str(run.id), queue.job_ids)
+        self.assertEqual(dispatch_pending(self.sessions, self.redis), 1)
+        self.assertIn(str(run.id), queue.job_ids)
 
     def test_worker_persists_public_report_and_cache_reuses_run(self):
         run = self.service.request_analysis(self.repository_id)
@@ -173,6 +276,179 @@ class PersistenceTests(unittest.TestCase):
                     self.assertEqual(payload["category_scores"]["security"]["availability"], "no_data")
                     self.assertNotIn("private runtime error", response.text)
                     self.assertEqual(client.get(f"/api/v1/analyses/{run.id}/report.md").status_code, 200)
+
+    def test_mvp_import_queue_report_leaderboard_and_cache(self):
+        """Real HTTP/RQ/PostgreSQL/Redis; external platform and sandbox are fixtures."""
+        from unittest.mock import Mock
+
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+        from tests.mvp_fixtures import SHA, runtime_payload, sourcecraft_transport
+
+        class TestWorker(SimpleWorker):
+            death_penalty_class = TimerDeathPenalty
+
+        settings = self.settings.model_copy(update={"analysis_profile": "mvp-v1"})
+        transport = sourcecraft_transport(self.ref.repository_slug)
+
+        def source_client(**kwargs):
+            return SourceCraftClient(transport=transport, **kwargs)
+
+        runtime = Mock()
+        runtime.analyze.return_value = runtime_payload()
+        app = create_app(settings, sessions=self.sessions, redis=self.redis)
+        with (TestClient(app, base_url="https://testserver") as client,
+              patch.object(app.state.auth, "current_user", return_value={"id": str(uuid4())}),
+              patch("sourcehealth.integrations.sourcecraft.client.SourceCraftClient", side_effect=source_client),
+              patch("sourcehealth.application.jobs.SourceCraftClient", side_effect=source_client),
+              patch("sourcehealth.application.jobs.Settings", return_value=settings),
+              patch("sourcehealth.application.jobs.configured_runtime", return_value=runtime)):
+            headers = {"Origin": "https://testserver"}
+            body = {"url": self.ref.canonical_url}
+            self.assertEqual(client.post("/api/v1/repositories", json=body).status_code, 403)
+            self.assertEqual(client.post("/api/v1/repositories", json={"url": "https://example.com/x/y"}, headers=headers).status_code, 422)
+            imported = client.post("/api/v1/repositories", json=body, headers=headers)
+            self.assertEqual(imported.status_code, 201, imported.text)
+            self.assertEqual(imported.json()["id"], str(self.repository_id))
+            self.assertEqual(imported.json()["language"], "Python")
+            repeat = client.post("/api/v1/repositories", json=body, headers=headers)
+            self.assertEqual(repeat.json()["id"], str(self.repository_id))
+            response = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={}, headers=headers)
+            self.assertEqual(response.status_code, 202, response.text)
+            run_id = response.json()["id"]
+            self.assertIn(run_id, Queue("analysis-code", connection=self.redis).job_ids)
+            self.assertNotIn(run_id, Queue("analysis", connection=self.redis).job_ids)
+            TestWorker([Queue("analysis-code", connection=self.redis)], connection=self.redis).work(burst=True, logging_level="WARNING")
+            result = client.get(f"/api/v1/analyses/{run_id}")
+            self.assertEqual(result.status_code, 200, result.text)
+            payload = result.json()
+            self.assertEqual(payload["status"], "partial")  # Official AppSec is still unconfirmed.
+            self.assertEqual(len(payload["category_scores"]), 6)
+            self.assertIsInstance(payload["health_score"], (int, float))
+            self.assertEqual(payload["scoring_policy_version"], "mvp-score-v1.2")
+            self.assertIsNone(payload["category_scores"]["security"]["score"])
+            self.assertEqual(payload["category_scores"]["security"]["availability"], "no_data")
+            self.assertEqual(payload["score_coverage"]["nominal_weight_percent"], 80)
+            self.assertEqual(payload["score_coverage"]["unscored_categories"], ["security"])
+            self.assertEqual(payload["head_sha"], SHA)
+            for forbidden in ("untrusted", "do-not-store", "private name", "error_messages"):
+                self.assertNotIn(forbidden, result.text)
+            markdown = client.get(f"/api/v1/analyses/{run_id}/report.md")
+            self.assertEqual(markdown.status_code, 200)
+            self.assertIn(r"mvp\-score\-v1\.2", markdown.text)
+            listing = client.get("/api/v1/repositories", params={"limit": 100}).json()
+            listed = next(row for row in listing["items"] if row["id"] == str(self.repository_id))
+            self.assertEqual(listed["health_score"], payload["health_score"])
+            cached = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={}, headers=headers)
+            self.assertEqual(cached.json()["id"], run_id)
+            runtime.analyze.assert_called_once()
+        with self.sessions() as db:
+            row = db.get(AnalysisRun, UUID(run_id))
+            self.assertEqual(row.head_sha, SHA)
+            self.assertEqual(row.results["category_scores"], row.category_scores)
+            self.assertEqual(row.results["recommendations"], row.recommendations)
+            self.assertEqual(len(row.data_coverage), 6)
+
+    def test_public_analysis_history_is_stable_paginated_and_private_safe(self):
+        queued_at = datetime(2026, 9, 20, 12, tzinfo=UTC)
+        ids = [UUID("10000000-0000-0000-0000-000000000001"),
+               UUID("10000000-0000-0000-0000-000000000002"),
+               UUID("10000000-0000-0000-0000-000000000003")]
+        with self.sessions.begin() as db:
+            db.add_all([
+                AnalysisRun(id=ids[0], repository_id=self.repository_id, status="completed", trigger="manual",
+                            profile="mvp-v1", fingerprint="1" * 64, queued_at=queued_at,
+                            completed_at=queued_at, scoring_policy_version="mvp-score-v1.1"),
+                AnalysisRun(id=ids[1], repository_id=self.repository_id, status="failed", trigger="system",
+                            profile="platform-v1", fingerprint="2" * 64, queued_at=queued_at,
+                            completed_at=queued_at, error_code="fixture_failure"),
+                AnalysisRun(id=ids[2], repository_id=self.repository_id, status="queued", trigger="refresh",
+                            profile="code-v1", fingerprint="3" * 64, queued_at=queued_at),
+            ])
+        with TestClient(create_app(self.settings, sessions=self.sessions, redis=self.redis),
+                        base_url="https://testserver") as client:
+            first = client.get(f"/api/v1/repositories/{self.repository_id}/analyses", params={"limit": 2})
+            self.assertEqual(first.status_code, 200, first.text)
+            self.assertEqual([item["id"] for item in first.json()["items"]], [str(ids[2]), str(ids[1])])
+            self.assertEqual([item["profile"] for item in first.json()["items"]], ["code-v1", "platform-v1"])
+            self.assertTrue(first.json()["has_more"])
+            second = client.get(f"/api/v1/repositories/{self.repository_id}/analyses",
+                                params={"limit": 2, "offset": 2}).json()
+            self.assertEqual([item["id"] for item in second["items"]], [str(ids[0])])
+            self.assertFalse(second["has_more"])
+            with self.sessions.begin() as db:
+                db.get(Repository, self.repository_id).visibility = "private"
+            self.assertEqual(client.get(f"/api/v1/repositories/{self.repository_id}/analyses").status_code, 404)
+
+    def test_accept_public_runs_existing_mvp_pipeline_and_validates_persistence(self):
+        from unittest.mock import Mock
+
+        from sourcehealth.application.acceptance import accept_public
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+        from tests.mvp_fixtures import runtime_payload, sourcecraft_transport
+
+        settings = self.settings.model_copy(update={"analysis_profile": "mvp-v1",
+                                                    "sourcecraft_pat": SecretStr("test" + "-credential")})
+        transport = sourcecraft_transport(self.ref.repository_slug)
+
+        def source_client(**kwargs):
+            return SourceCraftClient(transport=transport, **kwargs)
+
+        runtime = Mock()
+        runtime.analyze.return_value = runtime_payload()
+
+        def execute_pending(sessions, redis, timeout):
+            with sessions() as db:
+                run_id = db.scalar(select(AnalysisRun.id).where(
+                    AnalysisRun.repository_id == self.repository_id, AnalysisRun.status == "queued"))
+            execute_analysis(str(run_id))
+
+        env = {"DATABASE_URL": os.environ["TEST_DATABASE_URL"], "REDIS_URL": os.environ["TEST_REDIS_URL"]}
+        with (SourceCraftClient(transport=transport) as client,
+              patch.dict(os.environ, env),
+              patch("sourcehealth.application.jobs.SourceCraftClient", side_effect=source_client),
+              patch("sourcehealth.application.jobs.Settings", return_value=settings),
+              patch("sourcehealth.application.jobs.configured_runtime", return_value=runtime)):
+            result, code = accept_public(settings, self.ref.canonical_url, self.sessions, self.redis,
+                                         client=client, dispatch=execute_pending, sleep=lambda _: None)
+        self.assertEqual(code, 0, result)
+        self.assertEqual(result["overall"], "ok")
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(result["score_coverage"]["nominal_weight_percent"], 80)
+        self.assertEqual(result["categories"]["security"]["availability"], "no_data")
+
+    def test_accept_timeout_keeps_durable_run_queued(self):
+        from sourcehealth.application.acceptance import accept_public
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+        from tests.mvp_fixtures import sourcecraft_transport
+
+        settings = self.settings.model_copy(update={"analysis_profile": "mvp-v1",
+                                                    "sourcecraft_pat": SecretStr("test" + "-credential")})
+        ticks = iter((0.0, 0.0, 0.0, 2.0, 2.0))
+        with SourceCraftClient(transport=sourcecraft_transport(self.ref.repository_slug)) as client:
+            result, code = accept_public(settings, self.ref.canonical_url, self.sessions, self.redis, timeout=1,
+                                         client=client, dispatch=lambda *args: None,
+                                         clock=lambda: next(ticks), sleep=lambda _: None)
+        self.assertEqual(code, 1)
+        self.assertEqual(result["error"], "acceptance_timeout")
+        with self.sessions() as db:
+            self.assertEqual(db.get(AnalysisRun, UUID(result["analysis_id"])).status, "queued")
+
+    def test_import_rejects_unverified_private_and_unauthenticated(self):
+        from sourcehealth.application.services import ServiceError
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        app = create_app(self.settings, sessions=self.sessions, redis=self.redis)
+        with TestClient(app, base_url="https://testserver") as client:
+            self.assertEqual(client.post("/api/v1/repositories", json={"url": self.ref.canonical_url},
+                                         headers={"Origin": "https://testserver"}).status_code, 401)
+        for status, payload in ((200, {"visibility": "private"}), (401, {}), (404, {}), (503, {})):
+            with self.subTest(status=status):
+                with SourceCraftClient(transport=httpx.MockTransport(lambda request: httpx.Response(status, json=payload)), sleep=lambda _: None) as source:
+                    with self.assertRaises(ServiceError) as error:
+                        self.service.import_public_repository(self.ref.canonical_url, client=source)
+                    self.assertEqual(error.exception.code, "public_repository_unverified")
+        with self.sessions() as db:
+            self.assertIsNone(db.get(Repository, self.repository_id).sourcecraft_id)
 
     def test_recovery_does_not_fail_live_lock_holder(self):
         run = self.service.request_analysis(self.repository_id)

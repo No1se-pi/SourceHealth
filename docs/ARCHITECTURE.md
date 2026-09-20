@@ -33,7 +33,9 @@ RepositoryRef
 Он доставляется в отдельную очередь `analysis-code`, которую обслуживает trusted
 `worker-code`. Обычный Compose worker не получает доступ к Docker. Runtime error
 оставляет platform checks и переводит code checks в NO_DATA; отчёт сохраняется partial.
-Scoring возвращает шесть nullable категорий. Это foundation, не полный продукт ТЗ.
+`mvp-v1` расширяет тот же pipeline collectors Issues/CI/PR/contributors/releases и
+snapshot documentation/debt. `MVPPolicy` рассчитывает шесть category slots, overall
+при достаточном coverage и рекомендации. Security остаётся nullable AppSec boundary.
 
 ## Дерево
 
@@ -111,7 +113,7 @@ POST создаёт/reuses run в транзакции. PostgreSQL row lock + pa
 
 ## Ограничения
 
-Не подключены все категории, Score formula, private permissions, каталог всех
+Не подключены official AppSec, private permissions, полный live каталог
 SourceCraft repo, ML/LLM, PDF и production deployment. AppSec API и Я ID → SourceCraft
 authorization bridge открыты. GitCollector собирает список истории в память;
 streaming/incremental путь нужен после измерений, shallow clone не подменяет историю.

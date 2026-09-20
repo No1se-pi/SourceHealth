@@ -35,6 +35,8 @@ Secret хранить в .env/secret manager; не коммитить. Rotation 
 инвалидирует существующие сессии/pending state.
 
 Для локального HTTP допустимы только localhost/127.0.0.1 и явный COOKIE_SECURE=false.
+Готовый dev-набор в `.env.example` использует `http://127.0.0.1:5173` одновременно для
+PUBLIC_ORIGIN и YANDEX_REDIRECT_URI; менять один адрес без второго нельзя.
 Origin frontend и redirect backend должны совпадать через Vite proxy. См.
 [DEPLOYMENT](DEPLOYMENT.md). Для публичного стенда только HTTPS Secure cookies.
 Access logs reverse proxy должны исключать callback query: code/state не логировать.
@@ -48,10 +50,19 @@ Docker command Uvicorn запускается с --no-access-log.
 имени, slug или наличия token Я ID. Нельзя применять service PAT как права любого
 вошедшего пользователя.
 
-Нужно подтвердить у организаторов: supported delegated auth/token exchange, scopes,
-mapping identity, list accessible repositories, проверки права читать/анализировать,
-отзыв доступа. Если разрешён отдельный ввод PAT, это отдельное продуктово-безопасностное
-решение: encrypted storage, scopes, revoke, audit и user consent. Сейчас такой flow не создан.
+У организаторов всё ещё нужно подтвердить supported delegated auth/token exchange, scopes,
+mapping identity, list accessible repositories, проверки права читать/анализировать и
+отзыв доступа. Вместо неподтверждённого bridge реализован явный fallback:
+
+```text
+Я ID session → ввод отдельного SourceCraft PAT → GET /user verification
+→ encrypted Redis credential → список доступных repositories организации
+→ анализ выбранного public repo
+```
+
+Это user-provided PAT, а не credential, делегированный Яндексом. Он не разрешает private
+analysis: private/internal repositories можно увидеть только в текущей сессии, но нельзя
+импортировать или анализировать.
 
 ## Текущее ограничение доступа
 
@@ -66,4 +77,31 @@ API показывает только сохранённые verified-public rep
 Интеграционные используют настоящий PostgreSQL/Redis и mocked Я ID HTTP. Они не
 подтверждают реальную регистрацию приложения, scopes и успешный login пользователя.
 Live acceptance: войти в браузере, проверить redirect, /me, logout, повтор callback,
+затем пройти чек-лист [LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md). Операторские probe/accept
+не автоматизируют браузерный OAuth и не являются доказательством этого сценария.
 неверный Origin и отсутствие токенов в logs/network payload приложения.
+## Пользовательское подключение SourceCraft
+
+После Я ID доступен `/sourcecraft`: отдельный PAT проверяется GET /user.
+Яндекс OAuth не используется как SourceCraft credential. Исследованные официальные
+PAT/IAM документы не подтверждают автоматический delegated bridge из нашей Я ID сессии.
+
+PAT передаётся same-origin POST, не попадает в React state/storage/URL, DTO repr
+маскируется SecretStr. Сервер сохраняет AES-GCM ciphertext только в Redis с AAD,
+привязанным к HMAC ключу текущей сессии. Отдельный 32-byte base64
+`SOURCECRAFT_CREDENTIAL_KEY` обязателен только для подключения; запрещено совпадение
+с SESSION_SECRET. TTL ограничен остатком сессии и SOURCECRAFT_CONNECTION_TTL (до 3600с).
+Atomic Redis script предотвращает запись credential после concurrent logout.
+Logout удаляет connection; DELETE connection удаляет только локальное подключение,
+не отзывает PAT на стороне SourceCraft. TTL не продлевается при чтении.
+
+Список `/orgs/{organization}/repos` ограничен первыми 100 элементами и 20с.
+Private/internal видны только владельцу сессии, не сохраняются и не анализируются.
+Public выбор использует существующий public import/analysis. Нет утверждения,
+что видимый public repository принадлежит пользователю: доступность определяет SourceCraft.
+21.09 OAuth client/secret, exact localhost callback, session secret и отдельный credential key
+настроены локально. HTTP login вернул 302 на `oauth.yandex.ru`, HttpOnly `sh_oauth` и
+`Cache-Control: no-store`. Это подтверждает начало протокола, но не ручной browser acceptance:
+подключение браузерного инструмента остановилось до открытия страницы с ошибкой окружения
+`missing field sandboxPolicy`. Успешный вход пользователя, callback, `/me` и logout ещё нужно
+пройти вручную в обычном браузере.

@@ -1,7 +1,7 @@
 # SourceHealth
 
 Сервис оценки здоровья репозиториев SourceCraft для ЛЦТ 2026.
-Текущий этап — модульный архитектурный фундамент для команды из трёх человек.
+Текущий этап — MVP аналитики поверх modular monolith для команды из трёх человек.
 
 **Начать с [документации команды](docs/README.md)**:
 [требования](docs/REQUIREMENTS.md), [архитектура](docs/ARCHITECTURE.md),
@@ -13,13 +13,19 @@
 - API-only AnalysisContext, repository identity, availability и evidence contracts.
 - FastAPI, PostgreSQL/Alembic, Redis/RQ, lifecycle и дедупликация запусков.
 - Фоновый code-v1: Git + local SAST через один Docker runtime на отдельном trusted worker.
-- SourceCraft metadata client/collector, Я ID Authorization Code + PKCE/server sessions.
-- React/TypeScript foundation, HTTP DTO/OpenAPI и Markdown report.
+- mvp-v1: Documentation, Issues, CI/CD, Git/platform Activity, Code Health/debt,
+  детерминированный Score и рекомендации с evidence.
+- Live SourceCraft collectors/discovery, Я ID Authorization Code + PKCE/server sessions и
+  сессионное подключение пользовательского PAT для выбора доступного public repository.
+- React/TypeScript интерфейс, public URL import, HTTP DTO/OpenAPI и Markdown report.
 
-**Score пока null**: методика не утверждена. AppSec SourceCraft и механизм доступа
-пользователя Я ID к его SourceCraft repositories ещё не подключены. Локальный SAST
-считается code health и не подменяет официальный Security. Private repos запрещены.
-Точные проверки и ограничения — [закрытие foundation](docs/FOUNDATION_CLOSURE.md).
+**Score рассчитывается в mvp-v1** при достаточном coverage; старые профили сохраняют null.
+Public SourceCraft pipeline и выбор public repository через пользовательское подключение
+подтверждены API/integration/live-приёмкой. Официальный AppSec и delegated private access
+не подтверждены; локальный SAST считается Code Health и не подменяет Security. Private
+analysis остаётся запрещённым.
+Точные проверки и ограничения — [MVP analytics](docs/MVP_ANALYTICS.md),
+формулы — [SCORING](docs/SCORING.md), live-процедура — [LIVE_ACCEPTANCE](docs/LIVE_ACCEPTANCE.md).
 
 ## Быстрый запуск
 

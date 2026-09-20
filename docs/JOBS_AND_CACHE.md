@@ -27,8 +27,10 @@ Trigger: manual/scheduled/refresh/system. Partial означает полезн�
 Active dedupe сильнее snapshot key: один активный run профиля на repo даже при
 неизвестном/изменившемся HEAD. Новый commit во время run попадёт в следующий запуск.
 `code-v1` сейчас анализирует полную историю default branch на момент clone; запрошенный
-SHA не pin-ится. Фактический SHA и сверка snapshot остаются следующей задачей: code cache
-не используется, неизвестный HEAD не превращается в обещание snapshot consistency.
+SHA не pin-ится. `mvp-v1` сохраняет фактический HEAD свежего clone в run/repository/evidence.
+Переиспользование code cache пока не включено; пользовательский запрос точного SHA
+не поддерживается. Первый run обновляет fingerprint после получения фактического SHA,
+поэтому следующий запрос в пределах TTL использует готовый результат.
 
 ## Восстановление
 
@@ -36,6 +38,9 @@ SHA не pin-ится. Фактический SHA и сверка snapshot ос�
 строку для команды dispatch. Потеря Redis восстанавливается из PG. Сбой после
 enqueue закрывают RQ unique ID и DB lock. POST может вернуть 202 при недоступном
 Redis: факт приёма уже сохранён, доставку повторит reconciliation.
+Если worker остановился между dequeue и записью `started`, RQ hash может остаться `queued`,
+хотя ID уже отсутствует в списке очереди. Dispatcher проверяет оба факта и под коротким
+per-run Redis lock заменяет orphaned job, используя PostgreSQL row как source of truth.
 
 Deadline = analysis_timeout + 60с. Recover ищет просроченные active runs и пробует
 тот же advisory lock: живой держатель не объявляется failed. После смерти процесса
@@ -57,7 +62,11 @@ Cache failure = miss. Хранятся только очищенные versioned
 HEAD запрещён для code key. Ошибочные metadata не кэшируются как успех. CollectedFacts
 содержит collected_at; source timestamps/ETag нужно подключать отдельно, если
 официальный resource их предоставляет. Code timestamp и platform freshness — разные вещи.
-Изменение issues/CI/AppSec должно обновлять результат без clone и без нового HEAD.
+В `mvp-v1` Issues/CI/PR/contributors/releases собираются заново при каждом новом run
+независимо от SHA; metadata сохраняет прежний TTL. Общий API budget 120с, до 5 страниц
+на resource и 2000 items. Повторный finished run живёт RESULT_CACHE_TTL (по умолчанию
+5 минут), после чего platform обновляется даже без нового HEAD. Новый run пока также
+делает clone: независимое переиспользование code results остаётся оптимизацией.
 
 Private workflow требует scoped cache и актуальной проверки доступа перед выдачей
 cached result. Пока он запрещён. Потеря Redis завершает сессии, но не теряет пользователей.
@@ -77,13 +86,14 @@ dispatch recovery. Compose scheduler — one-shot profile, не скрытый l
 
 ## Дальнейшая работа
 
-Квоты/приоритеты, budget API, TTL ресурсов, code cache и точный SHA.
+Квоты/приоритеты, отдельные TTL ресурсов, code cache и pinning запрошенного SHA.
 Наличие code_cache_key не означает, что worker уже переиспользует SAST.
 
 ## Execution profiles
 
 - `platform-v1` → очередь `analysis` → обычный `worker`, без Docker доступа.
 - `code-v1` → очередь `analysis-code` → отдельный `worker-code` на trusted Linux host/VM.
+- `mvp-v1` → та же `analysis-code` → полный analytics batch с `mvp-score-v1.2`.
 
 Настройка `ANALYSIS_PROFILE` применяется при создании run; queued run сохраняет свой
 профиль даже после перезапуска API с другой настройкой. Worker читает профиль из БД.

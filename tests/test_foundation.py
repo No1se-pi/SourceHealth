@@ -115,6 +115,7 @@ try:
     from sourcehealth.api.app import create_app
     from sourcehealth.application.cache import code_cache_key, fingerprint, platform_cache_key
     from sourcehealth.integrations.sourcecraft.client import SourceCraftClient, SourceCraftError
+    from sourcehealth.settings import Settings
     SERVER_AVAILABLE = True
 except ImportError:
     SERVER_AVAILABLE = False
@@ -132,7 +133,7 @@ class ServerFoundationTests(unittest.TestCase):
             code_cache_key("r", "", "analyzer", "1", "config")
 
     def test_health_and_validation_do_not_need_persistent_services(self):
-        with TestClient(create_app(sessions=Mock(), redis=Mock())) as client:
+        with TestClient(create_app(Settings(_env_file=None), sessions=Mock(), redis=Mock())) as client:
             health = client.get("/api/v1/health")
             self.assertEqual(health.status_code, 200)
             self.assertEqual(health.json()["status"], "ok")

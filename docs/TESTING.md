@@ -46,7 +46,8 @@ Remove-Item Env:DATABASE_URL, Env:TEST_DATABASE_URL, Env:TEST_REDIS_URL
 
 Тесты создают уникальные repo и удаляют собственные записи. Проверяют десять
 конкурентных запросов/пять dispatchers, DB unique constraint, недоставленный queued,
-RQ execution, сохранение report, cached/force поведение, recovery guard, private
+RQ execution, восстановление orphaned `queued` RQ job из durable DB outbox,
+сохранение report, cached/force поведение, recovery guard, private
 report deny, Markdown и Я ID state/PKCE/session/logout. Я ID и collection HTTP в этих
 тестах mocked: real persistence не означает live внешнюю acceptance.
 
@@ -78,17 +79,48 @@ Upgrade/`alembic check` обязательны. Downgrade/upgrade проверя
 `*_test` БД: downgrade удаляет таблицы и историю. Offline SQL `upgrade head --sql`
 показывает DDL, но не доказывает успешное применение на настоящем PostgreSQL.
 
+## MVP analytics: воспроизводимая проверка
+
+`tests/test_mvp_collectors.py` проверяет официальный shape, allowlist, pagination,
+пустые/partial/invalid/outage ответы, comment budget и ограниченное discovery.
+`tests/test_mvp_snapshot.py` создаёт настоящие Git repositories: документация, debt,
+blame age, partial budget, symlink и полный scanner → normalizer roundtrip.
+`tests/test_mvp_analytics.py` проверяет метрики, шесть slots, монотонность, coverage,
+replay, Security boundary и валидность evidence recommendations.
+
+`test_mvp_import_queue_report_leaderboard_and_cache` в integration suite выполняет
+HTTP import → настоящий RQ worker → collectors → analyzers → score → PostgreSQL →
+GET AnalysisDetails/Markdown/leaderboard и повтор из кэша. SourceCraft transport и
+code runtime — fixtures; DB/Redis/RQ/HTTP настоящие. Дополнительно проверяются
+неверный URL, Origin, отсутствие сессии, private/unverified repository.
+
+```powershell
+python -m unittest tests.test_mvp_collectors tests.test_mvp_analytics tests.test_mvp_snapshot -v
+docker build -f sourcehealth/sast/Dockerfile -t sourcehealth-sast .
+python scripts/mvp_snapshot_smoke.py
+```
+
+Результаты поставки и live blockers: [MVP_ANALYTICS](MVP_ANALYTICS.md).
+Snapshot smoke использует настоящий offline Docker scanner и synthetic Git repository,
+проверяет HEAD/docs/debt/Git/SAST и отсутствие исполнения target code. Собственный
+unique volume удаляется в finally. Это не live clone SourceCraft.
+Отдельный Ubuntu job `mvp-snapshot-smoke` в `.github/workflows/tests.yml` собирает scanner
+image и выполняет этот smoke. Review regressions покрывают self-comments, unanswered,
+unknown authors, независимую полноту docs/debt и backend weighted coverage.
+
 ## Live SourceCraft opt-in
 
 ```powershell
-$env:SOURCECRAFT_LIVE_TEST='1'
-$env:SOURCECRAFT_TEST_REPOSITORY='https://sourcecraft.dev/ORGANIZATION/REPOSITORY'
-python -m unittest tests.test_sourcecraft_live -v
+$env:SOURCEHEALTH_LIVE_REPO_URL='https://sourcecraft.dev/org/repo'
+python -m unittest tests.test_live_sourcecraft -v
 ```
 
-PAT при необходимости задаётся отдельно environment, не command-line URL.
-Обычный CI не имеет настоящих credentials. После запуска удалить test flags.
+PAT задаётся отдельно environment. Обычный CI не имеет настоящих credentials. После
+запуска удалить обе переменные из текущей shell session.
 Successful live metadata не подтверждает AppSec или права закрытых repo.
+Тест запускается только при одновременном наличии `SOURCECRAFT_PAT` и
+`SOURCEHEALTH_LIVE_REPO_URL`, не выполняет discovery и не сохраняет raw payload.
+Полная операторская процедура и формат доказательств: [LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md).
 
 ## Большие репозитории и runtime
 
@@ -101,3 +133,15 @@ commit SHA, число tracked files/commits/размер, memory/time, coverage
 Не повторять дорогие benchmarks без изменения/регрессии. Browser acceptance отдельно:
 loading/error/empty/no-data/partial, navigation, auth, report download. Build и HTTP
 200 не означают проверку пикселей или полного пользовательского пути.
+# Mandatory closure проверки
+
+`tests.test_repository_rating` и `tests.test_ci_live_contract` покрывают sparse reactions,
+невалидные uint counters, Run slug и epoch незавершённых стадий.
+Integration suite проверяет AES-GCM Redis storage, TTL ограничения, изоляцию сессий,
+disconnect/logout и import → persisted likes/null. HTTP SourceCraft в этих integration
+сценариях подменён; это не live пользовательская авторизация.
+
+`.sourcecraft/ci.yaml` использует отдельные Python 3.11 и Node 24 cubes.
+Системный Python 3.11.2 из Node Bookworm воспроизводил regex regression; используем
+актуальный Python 3.11 image. Docker/Compose smoke остаются в GitHub, поскольку
+доступ к Docker daemon в SourceCraft runner не подтверждён.
