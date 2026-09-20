@@ -111,6 +111,7 @@ class MVPAnalyticsTests(unittest.TestCase):
         result = PlatformActivityAnalyzer().analyze(self.context)
         self.assertEqual(result.metrics["pr_count"], 1)
         self.assertEqual(result.metrics["merged_count"], 1)
+
         self.context.sourcecraft_facts["releases"]["items"] = []
         result = PlatformActivityAnalyzer().analyze(self.context)
         self.assertEqual(result.metrics["release_count"], 0)
@@ -119,6 +120,18 @@ class MVPAnalyticsTests(unittest.TestCase):
         result = PlatformActivityAnalyzer().analyze(self.context)
         self.assertIsNone(result.metrics["contributors_count"])
         self.assertEqual(result.metrics["merged_count"], 1)
+
+    def test_platform_provenance_distinguishes_entire_set_from_recent_window(self):
+        self.context.sourcecraft_facts["pull_requests"]["items"][0]["updated_at"] = "2026-01-01T00:00:00+00:00"
+        platform = PlatformActivityAnalyzer().analyze(self.context)
+        self.assertEqual(platform.metrics["pr_count"], 1)
+        self.assertEqual(platform.metrics["recent_pr_activity"], 0)
+        for check in (platform, IssuesAnalyzer().analyze(self.context), CIAnalyzer().analyze(self.context)):
+            self.assertNotIn("window_days", check.metadata)
+            self.assertEqual(check.metadata["observation_scope"], "entire_collected_set")
+            self.assertEqual(check.metadata["recent_window_days"], 30)
+            self.assertIn("recent/stale", check.evidence[0].summary)
+        self.assertEqual(IssuesAnalyzer().analyze(self.context).metadata["stale_threshold_days"], 30)
 
     def test_six_slots_security_unavailable_and_weighted_coverage(self):
         report = self.score(self.report())

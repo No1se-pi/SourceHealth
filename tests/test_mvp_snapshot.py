@@ -125,6 +125,29 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(debt.status, "ok")
         self.assertEqual(debt.metrics["marker_density"], 0)
 
+    def test_code_byte_budget_exhaustion_preserves_later_documentation(self):
+        # Git lists A/B before README: the first code file consumes most of its budget.
+        self.files({"A.py": "x=1\n" * 8, "B.py": "x=2\n" * 8,
+                    "README.md": "# Quick Start\npython -m app\n"})
+        docs, debt = self.analyze(max_bytes=40)
+        self.assertEqual(docs.status, "ok")
+        self.assertTrue(docs.metrics["run_instructions"])
+        self.assertEqual(debt.status, "partial")
+        self.assertIsNone(debt.metrics["marker_density"])
+        facts = SnapshotCollector(max_bytes=40).collect(self.root, NOW)
+        self.assertEqual(facts["debt_bytes"], (self.root / "A.py").stat().st_size)
+        self.assertEqual(facts["documentation_bytes"], (self.root / "README.md").stat().st_size)
+        self.assertEqual(facts["bytes_read"], facts["documentation_bytes"] + facts["debt_bytes"])
+
+    def test_documentation_byte_budget_exhaustion_preserves_later_code(self):
+        self.files({"README.md": "# Project\n" * 3, "docs/guide.md": "# Guide\n" * 3,
+                    "main.py": "x=1\n" * 8})
+        docs, debt = self.analyze(max_bytes=40)
+        self.assertEqual(docs.status, "partial")
+        self.assertEqual(debt.status, "ok")
+        self.assertEqual(debt.metrics["code_files"], 1)
+        self.assertEqual(debt.metrics["marker_density"], 0)
+
     def test_symlink_does_not_read_outside_snapshot(self):
         self.files({"main.py": "x=1\n", "README.md": "safe"})
         (self.root / "README.md").unlink()

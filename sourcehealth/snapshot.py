@@ -51,7 +51,9 @@ class SnapshotCollector:
         debt = {"todo_count": 0, "fixme_count": 0, "files_with_debt": 0, "code_files": 0,
                 "large_files": 0, "oldest_marker_age_days": None, "age_complete": True}
         ci_configured = False
-        age_targets, used_bytes = [], 0
+        age_targets = []
+        # Each analysis owns its byte budget; code cannot consume documentation's allowance.
+        documentation_bytes = debt_bytes = 0
         for relative in paths[:self.max_files]:
             if time.monotonic() - started > self.timeout:
                 documentation_complete = debt_complete = ci_complete = False
@@ -99,6 +101,7 @@ class SnapshotCollector:
                 is_doc = kind == "readme" or (path.suffix.lower() in {".md", ".rst", ".txt"} and path.parts[0].lower() == "docs")
                 if not is_code and not is_doc:
                     continue
+                used_bytes = documentation_bytes if is_doc else debt_bytes
                 if info.st_size > self.max_file_bytes or used_bytes + info.st_size > self.max_bytes:
                     if is_doc:
                         documentation_complete = False
@@ -113,7 +116,10 @@ class SnapshotCollector:
                     content = stream.read(self.max_file_bytes + 1)
                 if len(content) > self.max_file_bytes:
                     raise ValueError("file_limit")
-                used_bytes += len(content)
+                if is_doc:
+                    documentation_bytes += len(content)
+                else:
+                    debt_bytes += len(content)
                 text = content.decode("utf-8")
                 if is_doc:
                     if kind == "readme":
@@ -179,4 +185,6 @@ class SnapshotCollector:
                 "documentation_complete": documentation_complete, "debt_complete": debt_complete,
                 "documentation": docs, "locations": locations,
                 "technical_debt": debt, "ci_configured": ci_configured if ci_complete or ci_configured else None,
-                "scope": "tracked_default_branch_excluding_generated", "bytes_read": used_bytes}
+                "scope": "tracked_default_branch_excluding_generated",
+                "documentation_bytes": documentation_bytes, "debt_bytes": debt_bytes,
+                "bytes_read": documentation_bytes + debt_bytes}

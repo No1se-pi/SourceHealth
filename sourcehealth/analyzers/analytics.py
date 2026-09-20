@@ -22,11 +22,13 @@ def result(context, name, category, metrics, availability):
     evidence = []
     if availability in {A.AVAILABLE, A.PARTIAL, A.NOT_CONFIGURED}:
         evidence = [Evidence(id=f"{name}:observation", source="sourcecraft", type="platform_observation",
-                             reference=context.repository.id, summary=f"Наблюдение {name}; окно 30 дней, полный охват указан отдельно.",
+                             reference=context.repository.id,
+                             summary=f"Платформенное наблюдение {name}; только recent/stale метрики используют 30 дней. Полнота набора указана отдельно.",
                              url=context.repository.canonical_url, timestamp=context.started_at.isoformat())]
     return AnalyzerResult(name, status="ok" if availability in {A.AVAILABLE, A.NOT_CONFIGURED} else "partial",
                           category=category, source="sourcecraft", metrics=metrics, availability=availability,
-                          evidence=evidence, metadata={"window_days": 30, "reference_time": context.started_at.isoformat()})
+                          evidence=evidence, metadata={"recent_window_days": 30, "observation_scope": "entire_collected_set",
+                                                       "reference_time": context.started_at.isoformat()})
 
 
 class IssuesAnalyzer:
@@ -57,6 +59,7 @@ class IssuesAnalyzer:
                                      if complete and all(i.get("closed_at") for i in closed) else None)}
         check = result(context, self.name, "issues", metrics, availability)
         check.analyzer_version = "2"
+        check.metadata["stale_threshold_days"] = 30
         return check
 
 

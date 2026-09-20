@@ -24,6 +24,10 @@ Analyzer не обращается к DB, Redis или frontend. Сбой sandbo
 замкнутый интервал `[started_at − 30 дней, started_at]`. Старый GitActivity не переписан:
 его определения в [METRICS](METRICS.md). Snapshot получает reference time своего
 scanner context. В report остаются timestamps наблюдений и фактический HEAD SHA.
+Общие counts и latency medians относятся ко всему собранному набору, не к 30 дням.
+Metadata `observation_scope=entire_collected_set` задаёт этот scope;
+`recent_window_days=30` относится только к recent-метрикам, а Issues
+`stale_threshold_days=30` — к порогу без обновлений. Универсального window_days нет.
 
 Полный пустой ответ API — `available`, известные counts равны 0. Отсутствующий
 collector — `no_data`, ошибка до первого item — `source_unavailable`, ошибка после
@@ -56,7 +60,8 @@ install/build/tests/hooks не исполняются.
 
 Это проверка наличия признаков, не качества текста и не успешности команды. Регулярные
 выражения версионируются вместе с analyzer; LLM не используется. Лимиты: 10 000 tracked
-файлов, 1 MiB на читаемый файл, 64 MiB суммарно, общий бюджет 30с плюс начальные Git
+файлов, 1 MiB на читаемый файл, **по 64 MiB независимо для Documentation и Debt**
+(не более 128 MiB прочитанных данных суммарно), общий бюджет 30с плюс начальные Git
 операции с timeout 10с каждая. Полнота разделена на `documentation_complete` и
 `debt_complete`: большой или не-UTF8 code file делает partial только Debt, а ошибка
 чтения README — только Documentation. Общий обрыв обхода/лимит файлов сохраняет

@@ -19,8 +19,9 @@
 Проверки после поправок: **161 tests, 159 passed, 2 expected skips**, включая 11
 настоящих PostgreSQL/Redis/RQ integration tests; Ruff, OpenAPI/TS generation и frontend
 build прошли. Scanner image пересобран, offline Docker MVP smoke повторно прошёл.
-Новый GitHub job добавлен, но его удалённый запуск ещё не подтверждён; зелёный CI ниже
-относится только к предыдущему коммиту. Browser-проверка не состоялась: подключение
+GitHub [run #23](https://github.com/No1se-pi/SourceHealth/actions/runs/35482813353)
+для b66cb2e завершён успешно, включая новый mvp-snapshot-smoke, integration,
+frontend-contract, Compose и Python 3.11/3.13 Windows/Linux. Browser-проверка не состоялась: подключение
 инструмента отклонено ошибкой `missing field sandboxPolicy` до открытия страницы.
 Поэтому проверка UI пока ограничена контрактом/TypeScript/build, не visual acceptance.
 
@@ -31,6 +32,13 @@ SourceCraft read доступ и live chain, затем калибровка н�
 не сняты. Никаких guessed endpoints или fake production findings не добавлено.
 
 ## Базовая поставка
+
+Перед PR дополнительно разделены byte budgets: по 64 MiB для Documentation и Debt,
+без взаимного расходования. Provenance теперь различает entire_collected_set,
+recent_window_days и stale_threshold_days. Регрессии проверяют оба направления
+исчерпания бюджета и all-time counts вне recent окна. После этих правок: **164 tests,
+162 passed, 2 expected skips**, Ruff, diff check и пересобранный Docker MVP smoke прошли.
+CI #23 выше подтверждает b66cb2e; новый commit должен пройти собственные checks в PR.
 
 Ветка `feature/mvp-analytics`, база `Dev-No1se` на
 `98662373b42a69e83c7eb3cf7ce490a284950c88`. Основная реализация сохранена в
