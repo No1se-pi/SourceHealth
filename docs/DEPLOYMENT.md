@@ -175,3 +175,10 @@ DB/Redis shared; PG locks удерживают single-flight. Соблюдать
 нужны HTTPS reverse proxy, секреты, DB roles/backups, private network, rate limits,
 cron, monitoring и restore drill. Не монтировать Docker socket в web API или обычный
 platform worker. Code workers выделять по [SECURITY](SECURITY.md).
+# Дополнительная настройка подключения SourceCraft
+
+Для пользовательского PAT connection задайте отдельный `SOURCECRAFT_CREDENTIAL_KEY`:
+base64 от 32 случайных байтов (`openssl rand -base64 32`). Не используйте SESSION_SECRET
+повторно и не коммитьте значение. SOURCECRAFT_CONNECTION_TTL по умолчанию 1800с.
+При смене ключа прежние подключения потребуют повторного ввода PAT.
+Это не включает private analysis и не заменяет настройку Яндекс OAuth.

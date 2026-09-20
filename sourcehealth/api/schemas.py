@@ -152,3 +152,24 @@ class RepositoryImport(BaseModel):
 
 class UserDTO(BaseModel):
     id: UUID
+
+
+class SourceCraftConnect(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    pat: str = Field(min_length=1, max_length=4096, repr=False)
+
+
+class SourceCraftConnectionDTO(BaseModel):
+    connected: bool
+    expires_in: int
+
+
+class ConnectedRepositoryDTO(BaseModel):
+    url: str
+    visibility: Literal["public", "private", "internal"]
+    can_analyze: bool
+
+
+class ConnectedRepositoriesDTO(BaseModel):
+    items: list[ConnectedRepositoryDTO]
+    has_more: bool

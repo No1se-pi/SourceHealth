@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     redis_url: SecretStr = SecretStr("redis://127.0.0.1:6379/0")
     sourcecraft_api_base_url: str = "https://api.sourcecraft.tech"
     sourcecraft_pat: SecretStr | None = None
+    sourcecraft_credential_key: SecretStr | None = None
+    sourcecraft_connection_ttl: int = Field(default=1800, ge=60, le=3600)
     sourcecraft_timeout: float = Field(default=15, gt=0, le=60)
     sourcecraft_max_pages: int = Field(default=100, ge=1, le=1000)
     yandex_client_id: str = ""

@@ -71,3 +71,23 @@ Live acceptance: войти в браузере, проверить redirect, /m
 затем пройти чек-лист [LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md). Операторские probe/accept
 не автоматизируют браузерный OAuth и не являются доказательством этого сценария.
 неверный Origin и отсутствие токенов в logs/network payload приложения.
+# Пользовательское подключение SourceCraft
+
+После Я ID доступен `/sourcecraft`: отдельный PAT проверяется GET /user.
+Яндекс OAuth не используется как SourceCraft credential. Исследованные официальные
+PAT/IAM документы не подтверждают автоматический delegated bridge из нашей Я ID сессии.
+
+PAT передаётся same-origin POST, не попадает в React state/storage/URL, DTO repr
+маскируется SecretStr. Сервер сохраняет AES-GCM ciphertext только в Redis с AAD,
+привязанным к HMAC ключу текущей сессии. Отдельный 32-byte base64
+`SOURCECRAFT_CREDENTIAL_KEY` обязателен только для подключения; запрещено совпадение
+с SESSION_SECRET. TTL ограничен остатком сессии и SOURCECRAFT_CONNECTION_TTL (до 3600с).
+Atomic Redis script предотвращает запись credential после concurrent logout.
+Logout удаляет connection; DELETE connection удаляет только локальное подключение,
+не отзывает PAT на стороне SourceCraft. TTL не продлевается при чтении.
+
+Список `/orgs/{organization}/repos` ограничен первыми 100 элементами и 20с.
+Private/internal видны только владельцу сессии, не сохраняются и не анализируются.
+Public выбор использует существующий public import/analysis. Нет утверждения,
+что видимый public repository принадлежит пользователю: доступность определяет SourceCraft.
+Browser acceptance ещё не выполнен: OAuth настройки у команды пока отсутствуют.

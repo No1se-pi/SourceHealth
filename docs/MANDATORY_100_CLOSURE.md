@@ -57,14 +57,22 @@ GET /repos: одна страница, page_size=10, sort_by=created_at; ест�
 
 Это доказательство catalog API, **не** end-to-end leaderboard/UI/calibration acceptance.
 
+## Второй checkpoint
+
+Реализован SourceCraft PAT connection API/UI: AES-GCM Redis, отдельный ключ,
+сессионный TTL, atomic write, logout/disconnect, /user verification, org listing
+до 100 элементов с explicit has_more. Private/internal не сохраняются в public DB.
+Обновлены OpenAPI и generated TS; добавлены cryptography/cffi/pycparser в server lock.
+Это реализация и integration proof, не browser OAuth acceptance.
+16 PostgreSQL/Redis integration tests прошли, Alembic upgrade/check прошли.
+Frontend typecheck/build прошли. SourceCraft CI перенесён в feature tree без push.
+
 ## Продолжение
 
 1. Integration tests import/refresh likes, затем import/discover этих 10 repositories,
    worker-code и 5–10 accept-public; сохранить только безопасные численные результаты.
-2. Реализовать отдельный SourceCraft connection после Я ID: encrypted Redis credential,
-   session TTL/logout/disconnect, GET /user verification, bounded org listing, public selection.
-   Для следующего этапа локально установлен cryptography версии 46.0.7; dependency в проект
-   пока не добавлена. Не использовать зависимость без обновления manifest/lock.
+2. Расширить security tests connection: wrong Origin, malformed PAT no-leak,
+   invalid ciphertext, TTL expiry, concurrent logout. Пройти browser acceptance после OAuth setup.
 3. Scoring control/calibration, empty issues semantics с новой v1.2; large-repo measurement.
 4. AppSec evidence review, security review, SourceCraft CI в feature branch, docs/DEMO.
 5. Полный acceptance gate из пользовательского задания, включая integration/Compose/runtime.

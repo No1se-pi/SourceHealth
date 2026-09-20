@@ -67,6 +67,97 @@ class PersistenceTests(unittest.TestCase):
         self.ref = RepositoryRef.from_url(f"https://sourcecraft.dev/test/repo-{uuid4().hex}", visibility="public")
         self.repository_id = self.service.register_repository(self.ref)
 
+    def test_sourcecraft_connection_lifecycle(self):
+        import base64
+        import json
+
+        from sourcehealth.application.services import ServiceError
+        from sourcehealth.auth.sourcecraft import SourceCraftConnection
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        settings = self.settings.model_copy(update={"sourcecraft_credential_key": SecretStr(
+            base64.urlsafe_b64encode(os.urandom(32)).decode())})
+        auth = AuthService(settings, self.redis, self.sessions)
+        token, other = uuid4().hex, uuid4().hex
+        credential = "unit-" + uuid4().hex
+        for session in (token, other):
+            self.redis.set(auth._key("session", session), json.dumps({"id": str(uuid4())}), ex=120)
+
+        def respond(request):
+            self.assertEqual(request.headers["authorization"], "Bearer " + credential)
+            if request.url.path == "/user":
+                return httpx.Response(200, json={"id": "user-1"})
+            return httpx.Response(200, json={"repositories": [
+                {"slug": "public-repo", "visibility": "public"},
+                {"slug": "private-repo", "visibility": "private"}]})
+
+        service = SourceCraftConnection(auth, client_factory=lambda **kw: SourceCraftClient(
+            transport=httpx.MockTransport(respond), **kw))
+        try:
+            result = service.connect(token, credential)
+            self.assertTrue(result["connected"])
+            self.assertLessEqual(result["expires_in"], 120)
+            self.assertNotIn(credential.encode(), self.redis.get(auth._key("sourcecraft", token)))
+            self.assertFalse(service.status(other)["connected"])
+            repos = service.repositories(token, "test")
+            self.assertEqual([r["can_analyze"] for r in repos["items"]], [True, False])
+            cipher_key = auth._key("sourcecraft", token)
+            self.redis.set(cipher_key, b"invalid-ciphertext", ex=30)
+            with self.assertRaises(ServiceError):
+                service.repositories(token, "test")
+            self.assertIsNone(self.redis.get(cipher_key))
+            service.connect(token, credential)
+            self.redis.expire(cipher_key, 0)
+            self.assertFalse(service.status(token)["connected"])
+            service.disconnect(token)
+            self.assertFalse(service.status(token)["connected"])
+            service.connect(token, credential)
+            auth.logout(token)
+            self.assertIsNone(self.redis.get(auth._key("sourcecraft", token)))
+            with self.assertRaises(ServiceError):
+                service.connect(token, credential)
+        finally:
+            auth.logout(token)
+            auth.logout(other)
+
+    def test_connection_http_guards(self):
+        import json
+
+        auth = AuthService(self.settings, self.redis, self.sessions)
+        token = uuid4().hex
+        self.redis.set(auth._key("session", token), json.dumps({"id": str(uuid4())}), ex=60)
+        try:
+            with TestClient(create_app(self.settings, sessions=self.sessions, redis=self.redis),
+                            base_url="https://testserver") as client:
+                self.assertEqual(client.get("/api/v1/sourcecraft/connection").status_code, 401)
+                client.cookies.set("sh_session", token)
+                credential = "test-" + uuid4().hex
+                response = client.post("/api/v1/sourcecraft/connection", json={"pat": credential},
+                                       headers={"origin": "https://wrong.example"})
+                self.assertEqual(response.status_code, 403)
+                self.assertNotIn(credential, response.text)
+                response = client.post("/api/v1/sourcecraft/connection", json={"pat": {"value": credential}},
+                                       headers={"origin": "https://testserver"})
+                self.assertEqual(response.status_code, 422)
+                self.assertNotIn(credential, response.text)
+                self.assertEqual(response.headers["cache-control"], "no-store")
+        finally:
+            auth.logout(token)
+
+    def test_rating_import_updates_and_clears_unknown(self):
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        metadata = {"id": "rating-test", "slug": self.ref.repository_slug, "visibility": "public",
+                    "rating": {"reaction_counts": [{"type": "positive_low", "count": "7"}]}}
+        with SourceCraftClient(transport=httpx.MockTransport(lambda _: httpx.Response(200, json=metadata))) as client:
+            self.service.import_public_repository(self.ref.canonical_url, client=client)
+            with self.sessions() as db:
+                self.assertEqual(db.get(Repository, self.repository_id).likes, 7)
+            metadata.pop("rating")
+            self.service.import_public_repository(self.ref.canonical_url, client=client)
+            with self.sessions() as db:
+                self.assertIsNone(db.get(Repository, self.repository_id).likes)
+
     def tearDown(self):
         with self.sessions.begin() as db:
             ids = list(db.scalars(select(AnalysisRun.id).where(AnalysisRun.repository_id == self.repository_id)))

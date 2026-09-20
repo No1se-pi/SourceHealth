@@ -110,3 +110,11 @@ npm run build --prefix frontend
 OpenAPI, generated.ts, docs и tests меняются в одном PR. Новые analyzer metrics
 обычно не требуют изменения DTO. Breaking HTTP change требует согласования и новой
 версии либо явной миграции до первого общего deployment.
+# SourceCraft connection endpoints
+
+Все endpoints требуют Я ID сессию; изменения — точный Origin.
+POST `/api/v1/sourcecraft/connection` принимает `{pat}` и возвращает только connected/expires_in.
+GET того же URL — статус; DELETE — удалить локальный credential.
+GET `/api/v1/sourcecraft/repositories?organization=...` возвращает до 100 URL,
+visibility/can_analyze и has_more; ответ no-store, без credential и сторонних descriptions.
+Private/internal элементы существуют только в этом сессионном ответе, не в public каталоге.

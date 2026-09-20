@@ -1,0 +1,31 @@
+on:
+  push:
+    - workflows: [sourcehealth-quality]
+      filter:
+        branches: [main]
+
+workflows:
+  sourcehealth-quality:
+    tasks:
+      - name: python-and-frontend
+        cubes:
+          - name: tests-ruff-openapi
+            image: docker.io/library/python:3.11-bookworm
+            script:
+              - |
+                set -eux
+                python -m pip install --upgrade pip
+                python -m pip install -r requirements-server.lock
+                python -m pip install -e ".[dev,server]"
+                python -B -m unittest discover -s tests -v
+                python -m ruff check .
+                python scripts/export_openapi.py
+          - name: frontend-contract-build
+            image: docker.io/library/node:24-bookworm
+            script:
+              - |
+                set -eux
+                npm ci --prefix frontend
+                npm run types --prefix frontend
+                git diff --exit-code -- docs/openapi.json frontend/src/api/generated.ts
+                npm run build --prefix frontend

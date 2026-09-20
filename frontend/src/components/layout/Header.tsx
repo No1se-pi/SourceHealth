@@ -55,6 +55,7 @@ export const Header: React.FC = () => {
             <span className="brand-logo-badge">beta</span>
           </Link>
           <nav className="app-nav" aria-label="Основная навигация">
+            <Link to="/sourcecraft" className="nav-link">Мой SourceCraft</Link>
             <Link
               to="/"
               className="nav-link"
