@@ -50,6 +50,9 @@ python -m uvicorn sourcehealth.api.app:create_app --factory --host 127.0.0.1 --p
 ## Добавить настоящий публичный SourceCraft repo
 
 Если API требует PAT, заполнить SOURCECRAFT_PAT локально; не добавлять его в Git.
+До запуска Compose доступ можно проверить без DB/Redis командой `probe-sourcecraft`, а
+сквозной pipeline после запуска инфраструктуры — `accept-public`; точные команды и коды
+завершения описаны в [LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md).
 Операторская команда проверяет visibility через настоящий SourceCraft API:
 
 ```powershell

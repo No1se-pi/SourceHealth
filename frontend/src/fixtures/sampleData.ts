@@ -64,6 +64,7 @@ export const mockEmptyRepositoryPage = {
 export const mockCompletedAnalysis = {
   id: 'b0000001-0000-0000-0000-000000000001',
   repository_id: 'a0000001-0000-0000-0000-000000000001',
+  profile: 'mvp-v1',
   status: 'completed',
   trigger: 'manual',
   queued_at: '2026-09-16T14:28:00Z',
@@ -232,6 +233,7 @@ export const mockCompletedAnalysis = {
 export const mockQueuedAnalysis = {
   id: 'b0000003-0000-0000-0000-000000000003',
   repository_id: 'a0000001-0000-0000-0000-000000000001',
+  profile: 'mvp-v1',
   status: 'queued',
   trigger: 'manual',
   queued_at: '2026-09-16T16:00:00Z',
@@ -251,6 +253,7 @@ export const mockQueuedAnalysis = {
 export const mockRunningAnalysis = {
   id: 'b0000004-0000-0000-0000-000000000004',
   repository_id: 'a0000001-0000-0000-0000-000000000001',
+  profile: 'mvp-v1',
   status: 'analyzing',
   trigger: 'manual',
   queued_at: '2026-09-16T16:01:00Z',
@@ -270,6 +273,7 @@ export const mockRunningAnalysis = {
 export const mockFailedAnalysis = {
   id: 'b0000005-0000-0000-0000-000000000005',
   repository_id: 'a0000001-0000-0000-0000-000000000001',
+  profile: 'mvp-v1',
   status: 'failed',
   trigger: 'manual',
   queued_at: '2026-09-16T16:05:00Z',
@@ -289,6 +293,7 @@ export const mockFailedAnalysis = {
 export const mockNoDataAnalysis = {
   id: 'b0000006-0000-0000-0000-000000000006',
   repository_id: 'a0000002-0000-0000-0000-000000000002',
+  profile: 'unconfigured-v1',
   status: 'completed',
   trigger: 'manual',
   queued_at: '2026-09-16T16:10:00Z',
@@ -358,6 +363,7 @@ export const mockNoDataAnalysis = {
 export const mockPartialAnalysis = {
   id: 'b0000002-0000-0000-0000-000000000002',
   repository_id: 'a0000002-0000-0000-0000-000000000002',
+  profile: 'mvp-v1',
   status: 'partial',
   trigger: 'manual',
   queued_at: '2026-09-16T15:00:00Z',

@@ -30,12 +30,18 @@ analytics profile ограничивает до 5 страниц на resource �
 ## Реализованные collectors
 
 Префикс R = `/repos/{org_slug}/{repo_slug}`. Все методы подтверждены Swagger;
-успешная live приёмка данных пока отсутствует.
+успешная live приёмка фиксируется только результатом операторских команд из
+[LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md); contract fixtures сами по себе её не подтверждают.
+
+Перед запуском инфраструктуры `probe-sourcecraft URL` проверяет metadata, Issues, CI/CD,
+pull requests, contributors и releases. Команда не открывает PostgreSQL/Redis и печатает
+только allowlisted JSON summary. Exit code: 0 — полный ответ, 1 — partial/outage ресурса,
+2 — configuration/auth/repository/schema error.
 
 | Collector | Endpoint / ключ списка | Сохраняемые поля и правила |
 |---|---|---|
 | RepositoryCollector | GET R | id, slug, явно public visibility, default_branch, is_empty, безопасный language.name |
-| IssuesCollector | GET R/issues / issues | filter visibility=public; id/slug, status.status_type, created_at/updated_at/completed_at |
+| IssuesCollector | GET R/issues / issues | Без несовместимого filter query; private отбрасывается по visibility; id/slug, status.status_type, created_at/updated_at/completed_at |
 | Issues comments enrichment | GET R/issues/{issue_slug}/comments / issue_comments | created_at; author.id сравнивается с issue.author.id только в памяти, self исключаются |
 | CICollector | GET R/cicd/runs / runs | id/status, dates.created_at/started_at/finished_at, duration |
 | PullRequestsCollector | GET R/pulls / pull_requests | id/status/created_at/updated_at |
@@ -80,6 +86,19 @@ CI runs, pulls, contributors, releases и отдельный GET /repos. Все 
 сохранялись. Это подтверждает обработку отказа доступа, **не** успешность wire mapping
 на живых данных. Следующая приёмка: рабочий read PAT → sanitized fixtures → public
 import → trusted worker → отчёт. Я ID session не заменяет SourceCraft PAT.
+
+## Live наблюдение 20.09.2026
+
+Рабочий read PAT подтвердил metadata и все analytics resources целевого public repository.
+Первый probe обнаружил HTTP 400 для Issues только при `filter=visibility=public`; запрос без
+неподдержанного параметра вернул 200. Commit `8516317` удалил filter, сохранив отбрасывание
+private items по полю visibility. После исправления probe завершился exit 0, opt-in live test
+прошёл, а полный import → RQ worker-code → Docker Git/SAST → score → persistence/Markdown
+вернул overall=ok. Точные безопасные результаты — [LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md).
+
+Историческое наблюдение 19.09 выше сохраняется как доказательство корректной обработки 401,
+но больше не описывает текущий доступ к public API. Global discovery и private access этим
+прогоном не принимались.
 
 ## AppSec boundary и другие открытые вопросы
 

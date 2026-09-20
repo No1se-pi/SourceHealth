@@ -74,7 +74,7 @@ class SourceCraftClient:
                                        timeout=min(self._timeout, remaining)) as response:
                     if response.status_code == 429 or response.status_code >= 500:
                         if attempt == 2:
-                            raise SourceCraftError("source_unavailable")
+                            raise SourceCraftError("rate_limited" if response.status_code == 429 else "source_unavailable")
                         delay = self._retry_delay(response.headers.get("Retry-After"), attempt)
                     elif response.status_code != 200:
                         code = {401: "authentication_required", 403: "access_denied", 404: "not_found"}.get(

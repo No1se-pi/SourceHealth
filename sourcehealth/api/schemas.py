@@ -96,6 +96,7 @@ class AnalysisSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     repository_id: UUID
+    profile: str
     status: RunStatus
     trigger: Literal["manual", "scheduled", "refresh", "system"]
     queued_at: datetime
@@ -106,6 +107,13 @@ class AnalysisSummary(BaseModel):
     scoring_policy_version: str
     analyzer_contract_version: str
     error_code: str | None
+
+
+class AnalysisPage(BaseModel):
+    items: list[AnalysisSummary]
+    limit: int
+    offset: int
+    has_more: bool
 
 
 class ScoreCoverageDTO(BaseModel):

@@ -8,10 +8,11 @@ from sqlalchemy import select
 
 from sourcehealth.application.jobs import dispatch_pending
 from sourcehealth.application.services import ServiceError
-from sourcehealth.storage.models import Repository
+from sourcehealth.storage.models import AnalysisRun, Repository
 
 from ..dependencies import check_origin, public_repository, public_run, require_user
 from ..schemas import (
+    AnalysisPage,
     AnalysisRequest,
     AnalysisSummary,
     RepositoryDetails,
@@ -30,6 +31,8 @@ def import_repository(body: RepositoryImport, request: Request):
     repository_id = request.app.state.service.import_public_repository(body.url)
     with request.app.state.sessions() as db:
         return RepositoryDetails.model_validate(public_repository(db, repository_id))
+
+
 @router.get("/api/v1/repositories", response_model=RepositoryPage)
 def repositories(request: Request, limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0, le=100000),
                  sort: str = Query("health_score", pattern="^(health_score|likes|last_activity)$"),
@@ -58,6 +61,17 @@ def latest(repository_id: UUID, request: Request):
         if repo.latest_analysis_id is None:
             raise ServiceError("analysis_not_found", 404)
         return AnalysisSummary.model_validate(public_run(db, repo.latest_analysis_id))
+
+
+@router.get("/api/v1/repositories/{repository_id}/analyses", response_model=AnalysisPage)
+def history(repository_id: UUID, request: Request, limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0)):
+    with request.app.state.sessions() as db:
+        public_repository(db, repository_id)
+        rows = list(db.scalars(select(AnalysisRun).where(AnalysisRun.repository_id == repository_id)
+                               .order_by(AnalysisRun.queued_at.desc(), AnalysisRun.id.desc())
+                               .offset(offset).limit(limit + 1)))
+        return AnalysisPage(items=[AnalysisSummary.model_validate(row) for row in rows[:limit]],
+                            limit=limit, offset=offset, has_more=len(rows) > limit)
 
 
 @router.post("/api/v1/repositories/{repository_id}/analyses", response_model=AnalysisSummary, status_code=202)

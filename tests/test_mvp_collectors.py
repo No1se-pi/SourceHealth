@@ -46,7 +46,7 @@ class CollectorTests(unittest.TestCase):
                 self.assertNotIn("private name", json.dumps(result.facts))
                 self.assertNotIn("do-not-store", json.dumps(result.facts))
                 if cls is IssuesCollector:
-                    self.assertEqual(requests[0].url.params["filter"], "visibility=public")
+                    self.assertNotIn("filter", requests[0].url.params)
                     self.assertEqual(result.facts["items"][0]["first_external_response_at"], "2026-09-17T01:00:00+00:00")
                 if cls is CICollector:
                     self.assertEqual(result.facts["items"][0]["duration_seconds"], 120)

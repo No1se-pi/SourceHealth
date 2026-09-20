@@ -95,12 +95,14 @@ ConnectionRefused от остановленного Redis. После `docker co
 ## Live и внешние блокеры
 
 19 сентября скачана актуальная официальная Swagger, проверены поля/enum/endpoints;
-точный hash и источники — [SOURCECRAFT](SOURCECRAFT.md). Семь live GET попыток
-(metadata/issues/runs/pulls/contributors/releases/global repos) дали HTTP 401,
-`authentication_required`, успешных items 0. Поэтому **успешный live сбор не заявляется**.
+точный hash и источники — [SOURCECRAFT](SOURCECRAFT.md). Семь live GET попыток 19 сентября
+дали HTTP 401. После выдачи read PAT 20 сентября metadata и пять analytics resources
+целевого public repository успешно прошли probe и opt-in test; полный import → worker →
+Docker Git/SAST → score → persistence/Markdown вернул overall=ok. Точные результаты и
+commit — [LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md).
 
-- Public platform: нужен рабочий read API доступ/PAT и сверка fixtures с реальными
-  ответами; затем public import, first/repeat run и наполнение leaderboard.
+- Public platform: один целевой repository принят на живом API. Остались discovery,
+  first/repeat UI flow и калибровка на нескольких разных repositories.
 - Security: `NO_DATA / appsec_interface_unconfirmed`. Нужны официальный base URL,
   auth, полная schema/enums, repository mapping и sanitized real fixture. Local SAST
   не даёт Security score. Synthetic official fixture проверяет только внутреннюю policy.
@@ -111,7 +113,7 @@ ConnectionRefused от остановленного Redis. После `docker co
 
 ## Реально оставшаяся обязательная работа
 
-Успешная live SourceCraft/OAuth приёмка, official AppSec и private permission bridge,
+OAuth browser acceptance, official AppSec и private permission bridge,
 проверка большого SourceCraft repo по порогу исходного ТЗ, mapping likes, deployment
 и материалы демонстрации. Детали/владельцы в [ROADMAP](ROADMAP.md).
 Browser acceptance не заменена build или HTTP tests. Новый foundation, ML/LLM,
