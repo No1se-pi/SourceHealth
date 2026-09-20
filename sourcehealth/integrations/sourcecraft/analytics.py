@@ -1,6 +1,7 @@
 """Allowlisted факты Public REST API; определения сверены со Swagger 19.09.2026."""
 
 import re
+from dataclasses import replace
 from datetime import UTC, datetime
 from urllib.parse import quote
 
@@ -88,28 +89,35 @@ class IssuesCollector(ListCollector):
             raise SourceCraftError("invalid_response")
         return {"id": identifier(raw["id"]), "slug": identifier(raw["slug"]), "status": status,
                 "created_at": created, "updated_at": updated,
-                "closed_at": completed, "first_response_at": None,
+                "closed_at": completed, "first_external_response_at": None,
+                "_author_id": raw.get("author", {}).get("id") if isinstance(raw.get("author"), dict) else None,
                 "response_complete": False}
 
     def collect(self, repository):
         result = super().collect(repository)
         path = self.client.repository_path(repository.organization_slug, repository.repository_slug)
-        # Bounded enrichment. A first public comment includes author/self comments: no PII is retained.
-        # Missing/partial comment history never becomes a zero-hour response.
+        # Author IDs are compared only in memory and removed before facts leave this collector.
+        # Missing identities/history cannot prove either an external reply or an unanswered issue.
         for issue in result.facts["items"][:self.comment_budget]:
             try:
+                author_id = identifier(issue["_author_id"])
                 dates = []
                 for index, raw in enumerate(self.client.iter_items(f"{path}/issues/{quote(issue['slug'], safe='')}/comments",
                                                                   "issue_comments")):
                     if index >= 2000:
                         raise SourceCraftError("item_limit")
-                    dates.append(timestamp(raw.get("created_at"), required=True))
+                    comment_author = identifier(raw.get("author", {}).get("id"))
+                    created_at = timestamp(raw.get("created_at"), required=True)
+                    if comment_author != author_id:
+                        dates.append(created_at)
                 valid = [d for d in dates if datetime.fromisoformat(d) >= datetime.fromisoformat(issue["created_at"])]
-                issue["first_response_at"] = min(valid, key=datetime.fromisoformat) if valid else None
+                issue["first_external_response_at"] = min(valid, key=datetime.fromisoformat) if valid else None
                 issue["response_complete"] = True
-            except SourceCraftError:
+            except (SourceCraftError, AttributeError, TypeError):
                 pass
-        return result
+        for issue in result.facts["items"]:
+            issue.pop("_author_id", None)
+        return replace(result, schema_version="2")
 
 
 class CICollector(ListCollector):

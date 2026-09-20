@@ -150,7 +150,7 @@ def snapshot_result(name, raw):
                                          reference=sha, location=relative_path(item["location"]),
                                          summary=f"Обнаружен признак {key}."))
     return AnalyzerResult(name, status="ok" if complete else "partial", category=MVP_CLASSIFICATION[name][0],
-                          source="git_snapshot", metrics=safe, evidence=evidence,
+                          source="git_snapshot", metrics=safe, evidence=evidence, analyzer_version="2",
                           metadata={"head_sha": sha, "complete": complete, "ci_configured": configured,
                                     "scope": "tracked_default_branch_excluding_generated"})
 

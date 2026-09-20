@@ -1,9 +1,12 @@
-# Детерминированная методика mvp-score-v1
+# Детерминированная методика mvp-score-v1.1
 
 `MVPPolicy` включена для `mvp-v1`. `platform-v1` и `code-v1` сохраняют
 `UnconfiguredPolicy / unconfigured-v1` с nullable score. Policy не выполняет I/O,
 не использует wall clock, ML, LLM или likes; повтор одинаковых checks даёт тот же score.
 Определения метрик и ограничения охвата — [ANALYTICS](ANALYTICS.md).
+Изменение 20.09.2026: v1.1 исключает self-comments, учитывает долю issues без ответа
+и использует отдельную полноту Documentation/Debt. Старые v1 reports не меняются;
+новая policy version автоматически меняет fingerprint нового запуска.
 
 ## Итог и coverage
 
@@ -28,6 +31,9 @@ NO_DATA/SOURCE_UNAVAILABLE/ERROR не превращаются в 0. Outage ис
 mvp-v1 содержит availability шести категорий; count и nominal weight выводятся из
 slots с `score != null`. PARTIAL может иметь score только из полных независимых
 компонентов Activity/Code Health. Неполные Issues/CI/docs/debt не оцениваются.
+API вычисляет `score_coverage` по известной сохранённой policy; UI показывает рядом
+со Score процент номинального веса, категории без оценки и partial категории.
+Например, 80% и Security без оценки не означают проверенную безопасность.
 
 Обозначение `C(x)=max(0,min(1,x))`. Внутри категории известные компоненты усредняются
 по их внутренним весам; неизвестные исключаются. Numeric score требует evidence.
@@ -44,10 +50,13 @@ README size/headings — диагностические метрики, отде
 | Компонент | Формула 0–100 | Внутренний вес |
 |---|---|---:|
 | Stale | `100 × (1 − C(stale_ratio))` | 60 |
-| First response | `100 × (1 − C(median_first_response_hours / 168))` | 20 |
+| External response | `100 × external_response_rate × (1 − C(median_first_external_response_hours / 168))` | 20 |
 | Close | `100 × (1 − C(median_close_hours / 720))` | 20 |
 
-Stale обязателен; неизвестные latency исключаются. Полный пустой список имеет stale=0,
+Stale обязателен; при неполной comments истории response-компонент исключается.
+Если история полная, но ответов нет, response-компонент равен 0 (rate=0, median=null).
+Медиана считается среди ответивших, rate — среди всех issues; быстрые ответы меньшинству
+не дают всем 100. Self-comment не является ответом. Полный пустой список имеет stale=0,
 latency=null и score=100 по наблюдаемому отсутствию backlog. Это не оценка отзывчивости
 команды без issues. Partial pagination не оценивается. Семантика первого комментария
 и ограниченного comments budget явно указана в ANALYTICS.

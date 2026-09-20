@@ -43,6 +43,7 @@ class SnapshotCollector:
         paths = git(root, "ls-tree", "-r", "--name-only", "-z", sha).decode("utf-8").split("\0")
         paths = [p for p in paths if p and not EXCLUDED.intersection(Path(p).parts)]
         complete = len(paths) <= self.max_files
+        documentation_complete = debt_complete = ci_complete = complete
         docs = {"readme": False, "license": False, "contributing": False, "codeowners": False,
                 "docs_directory": False, "run_instructions": False, "build_instructions": False,
                 "test_instructions": False, "readme_bytes": 0, "readme_headings": 0}
@@ -53,13 +54,19 @@ class SnapshotCollector:
         age_targets, used_bytes = [], 0
         for relative in paths[:self.max_files]:
             if time.monotonic() - started > self.timeout:
-                complete = False
+                documentation_complete = debt_complete = ci_complete = False
                 break
             path = Path(relative)
             if path.is_absolute() or ".." in path.parts or "\\" in relative or ":" in relative or any(ord(c) < 32 for c in relative):
-                complete = False
+                documentation_complete = debt_complete = ci_complete = False
                 continue
             target = root / path
+            lower, name = relative.lower(), path.name.lower()
+            is_code = path.suffix.lower() in CODE_SUFFIXES
+            doc_relevant = (path.parts[0].lower() == "docs" or
+                            name == "codeowners" or
+                            len(path.parts) == 1 and bool(re.fullmatch(
+                                r"(?:readme|license|licence|copying|contributing)(?:\.[a-z]+)?", name)))
             try:
                 # Check every component: a parent symlink must not escape a local workspace.
                 if any(p.is_symlink() or p.is_junction() if hasattr(p, "is_junction") else p.is_symlink()
@@ -93,7 +100,10 @@ class SnapshotCollector:
                 if not is_code and not is_doc:
                     continue
                 if info.st_size > self.max_file_bytes or used_bytes + info.st_size > self.max_bytes:
-                    complete = False
+                    if is_doc:
+                        documentation_complete = False
+                    if is_code:
+                        debt_complete = False
                     continue
                 flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
                 with os.fdopen(os.open(target, flags), "rb") as stream:
@@ -128,9 +138,14 @@ class SnapshotCollector:
                         debt["fixme_count"] += sum(values.count("FIXME") for _, values in markers)
                         age_targets.append((relative, {n for n, _ in markers}))
             except (OSError, ValueError, UnicodeError):
-                complete = False
+                if doc_relevant:
+                    documentation_complete = False
+                if is_code:
+                    debt_complete = False
+                if lower == ".sourcecraft/ci.yaml":
+                    ci_complete = False
         ages = []
-        debt["age_complete"] = complete and len(age_targets) <= self.age_files
+        debt["age_complete"] = debt_complete and len(age_targets) <= self.age_files
         for relative, numbers in age_targets[:self.age_files]:
             try:
                 remaining = self.timeout - (time.monotonic() - started)
@@ -155,11 +170,13 @@ class SnapshotCollector:
         if ages and debt["age_complete"]:
             debt["oldest_marker_age_days"] = max(ages)
         debt["marker_density"] = ((debt["todo_count"] + debt["fixme_count"]) / debt["code_files"]
-                                   if complete and debt["code_files"] else (0 if complete else None))
-        if not complete:
+                                   if debt_complete and debt["code_files"] else (0 if debt_complete else None))
+        if not documentation_complete:
             for key in docs:
                 if docs[key] is False:
                     docs[key] = None
-        return {"head_sha": sha, "complete": complete, "documentation": docs, "locations": locations,
-                "technical_debt": debt, "ci_configured": ci_configured if complete or ci_configured else None,
+        return {"head_sha": sha, "complete": documentation_complete and debt_complete and ci_complete,
+                "documentation_complete": documentation_complete, "debt_complete": debt_complete,
+                "documentation": docs, "locations": locations,
+                "technical_debt": debt, "ci_configured": ci_configured if ci_complete or ci_configured else None,
                 "scope": "tracked_default_branch_excluding_generated", "bytes_read": used_bytes}

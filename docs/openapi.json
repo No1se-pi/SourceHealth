@@ -1320,6 +1320,16 @@
             },
             "type": "object",
             "title": "Checks"
+          },
+          "score_coverage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScoreCoverageDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -2094,6 +2104,44 @@
           "failed"
         ],
         "title": "RunStatus"
+      },
+      "ScoreCoverageDTO": {
+        "properties": {
+          "nominal_weight_percent": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Nominal Weight Percent"
+          },
+          "scored_categories": {
+            "type": "integer",
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Scored Categories"
+          },
+          "unscored_categories": {
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            },
+            "type": "array",
+            "title": "Unscored Categories"
+          },
+          "partial_categories": {
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            },
+            "type": "array",
+            "title": "Partial Categories"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nominal_weight_percent",
+          "scored_categories",
+          "unscored_categories",
+          "partial_categories"
+        ],
+        "title": "ScoreCoverageDTO"
       },
       "UserDTO": {
         "properties": {

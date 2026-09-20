@@ -57,8 +57,11 @@ install/build/tests/hooks не исполняются.
 Это проверка наличия признаков, не качества текста и не успешности команды. Регулярные
 выражения версионируются вместе с analyzer; LLM не используется. Лимиты: 10 000 tracked
 файлов, 1 MiB на читаемый файл, 64 MiB суммарно, общий бюджет 30с плюс начальные Git
-операции с timeout 10с каждая. Превышение/ошибка даёт partial; не найденные в неполном
-обходе признаки — `null`, оценка Documentation не рассчитывается.
+операции с timeout 10с каждая. Полнота разделена на `documentation_complete` и
+`debt_complete`: большой или не-UTF8 code file делает partial только Debt, а ошибка
+чтения README — только Documentation. Общий обрыв обхода/лимит файлов сохраняет
+консервативный partial обоих наборов. Не найденные при неполном documentation обходе
+признаки — `null`, оценка Documentation не рассчитывается. Analyzer version — 2.
 
 ## Issues
 
@@ -68,13 +71,21 @@ install/build/tests/hooks не исполняются.
 `stale_ratio = stale_open_count/open_count`, при полном отсутствии open — 0.
 `recent_created/recent_closed` используют соответствующие timestamps и окно 30 дней.
 
-First response — **первый публичный комментарий**, включая self-comments и bots;
-это не обещание времени ответа другого участника. Сохраняются только timestamp и
-полнота чтения комментариев. Budget — первые 10 issues, не более 2000 comments на issue.
-Median response рассчитывается по ответившим issues только если comments всех issues
-полностью просмотрены; отсутствие комментариев не равно ответу за 0 часов.
-`response_observed_count` показывает число наблюдаемых ответов. При превышении budget
-median неизвестна, но полный список issues остаётся пригодным для counts/stale.
+Issues analyzer version 2: `first_external_response_at` — первый публичный комментарий
+с `comment.author.id != issue.author.id`. ID сравниваются только в памяти collector
+и удаляются из facts перед возвратом; имена/email/body не сохраняются. Другой бот
+считается внешним автором: это не метрика исключительно человеческого ответа.
+Отсутствующий/невалидный author.id делает response history неизвестной.
+Budget — первые 10 issues, не более 2000 comments на issue.
+
+`median_first_external_response_hours` — медиана **среди ответивших**; одновременно
+публикуются `unanswered_count`, `external_response_rate` и `response_observed_count`.
+Все итоговые response metrics требуют полностью просмотренной comments истории
+каждого issue. Неответившие не получают нулевую latency: при полном наборе они входят
+в unanswered_count, а их доля уменьшает response-компонент score. Если никто не
+ответил: median=null, rate=0; если issues вообще нет: unanswered=0, median/rate=null.
+При превышении budget median/rate/unanswered неизвестны, но counts/stale сохранены.
+Старое имя `median_first_response_hours` осталось только в сохранённых v1 reports.
 Median close использует только closed и требует известного времени закрытия каждого.
 Отрицательные durations отвергаются collector. Даты вне окна не попадают в recent.
 

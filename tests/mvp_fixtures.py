@@ -17,9 +17,10 @@ SHA = "a" * 40
 def platform_payloads():
     return {
         "issues": {"issues": [{"id": "issue-1", "slug": "1", "status": {"status_type": "completed"},
-                                "visibility": "public", "created_at": "2026-09-17T00:00:00Z", "updated_at": STAMP,
+                                "visibility": "public", "author": {"id": "issue-author"},
+                                "created_at": "2026-09-17T00:00:00Z", "updated_at": STAMP,
                                 "completed_at": STAMP, "description": "untrusted issue content"}]},
-        "comments": {"issue_comments": [{"id": "comment-1", "created_at": "2026-09-17T01:00:00Z",
+        "comments": {"issue_comments": [{"id": "comment-1", "author": {"id": "responder"}, "created_at": "2026-09-17T01:00:00Z",
                                           "body": "untrusted comment content"}]},
         "runs": {"runs": [{"id": "run-1", "status": "success", "dates": {"created_at": STAMP,
                             "started_at": STAMP, "finished_at": "2026-09-18T00:02:00Z"}, "error_messages": ["untrusted stderr"]}]},

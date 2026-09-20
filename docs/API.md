@@ -41,6 +41,10 @@ snapshot не обещается. Для массового каталога о�
 - AnalysisSummary: UUID id/repository_id; status/trigger; queued_at/started_at/completed_at;
   nullable head_sha/health_score; scoring_policy_version/analyzer_contract_version/error_code.
 - AnalysisDetails: Summary + category_scores/data_coverage/recommendations/checks.
+- AnalysisDetails.score_coverage: nullable объект, вычисленный backend из сохранённых
+  category scores и известных весов policy; nominal_weight_percent, scored_categories,
+  unscored_categories, partial_categories. Для неизвестной policy — null. Не означает
+  процент проверенных файлов или полноту частичных категорий; frontend не копирует веса.
 - CategoryScore: category, nullable score, availability, explanation, evidence_refs.
 - AnalyzerResult: analyzer, status, availability, source, category, versions, metrics,
   findings, metadata, safe error, evidence. Metrics имеют свой analyzer contract.
@@ -73,7 +77,7 @@ force существует в application, HTTP policy предстоит сог
 
 Для `mvp-v1` AnalysisDetails возвращает шесть category slots и category-level
 `data_coverage`; checks дополнительно содержат documentation, technical_debt, issues,
-cicd, platform_activity. Score — по [SCORING](SCORING.md), policy `mvp-score-v1`.
+cicd, platform_activity. Score — по [SCORING](SCORING.md), текущая policy `mvp-score-v1.1`.
 `head_sha` — фактический snapshot. Старые профили сохраняют check-level coverage и
 nullable baseline. Snapshot failure/недоступный AppSec допускают partial report.
 

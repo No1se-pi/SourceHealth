@@ -5,7 +5,7 @@
 - Documentation snapshot analyzer; Issues и CI collectors/analyzers.
 - PR/contributors/published releases, Activity совместно с прежним GitActivity.
 - Local SAST + TODO/FIXME density, bounded blame age и большие code files.
-- mvp-score-v1, minimum coverage, детерминированные рекомендации и Markdown.
+- mvp-score-v1.1, minimum coverage, детерминированные рекомендации и Markdown.
 - Public URL import, ограниченное org/global discovery по официальному Swagger.
 - Один mvp-v1 run через trusted analysis-code, шесть category slots и persistence.
 - Контрактные unit tests и настоящий HTTP/RQ/PostgreSQL/Redis end-to-end с fixtures
@@ -22,6 +22,7 @@
 | Official AppSec | Backend + организаторы | Base URL/auth/full schema/enums/repo mapping и sanitized real fixture; затем подключить collector |
 | Я ID → private SourceCraft permission bridge | Backend + организаторы | Подтверждённый механизм проверки прав; private остаются disabled |
 | Живой public каталог и отчёты | Backend/Analyzer | Import/discover → mvp worker → scores/evidence на реальных repo; сверка wire shapes |
+| Калибровка policy | Analyzer/Backend | 5–10 разных реальных repo: размеры/языки, scores и coverage; проверить Activity thresholds и влияние абсолютных SAST counts |
 | Реальный вход и UI flow | Frontend/Backend | OAuth app, public import → run → partial/evidence/recommendations → Markdown, logout |
 | Большой repository | Analyzer/Backend | SourceCraft repo ≥10 000 tracked files или ≥20 000 commits или ≥500 МБ; time/memory/coverage/cleanup |
 | Лайки рейтинга | Backend | Подтвердить mapping rating/reactions; не выдавать rating.value за likes |

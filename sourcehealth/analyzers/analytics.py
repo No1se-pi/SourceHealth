@@ -38,8 +38,8 @@ class IssuesAnalyzer:
         opened = [i for i in items if i["status"] not in {"completed", "cancelled"}]
         closed = [i for i in items if i["status"] in {"completed", "cancelled"}]
         stale = [i for i in opened if date(i["updated_at"]) <= cutoff]
-        responses = [(date(i["first_response_at"]) - date(i["created_at"])).total_seconds() / 3600
-                     for i in items if i.get("first_response_at") and date(i["first_response_at"]) <= context.started_at]
+        responses = [(date(i["first_external_response_at"]) - date(i["created_at"])).total_seconds() / 3600
+                     for i in items if i.get("first_external_response_at") and date(i["first_external_response_at"]) <= context.started_at]
         closing = [(date(i["closed_at"]) - date(i["created_at"])).total_seconds() / 3600
                    for i in closed if i.get("closed_at") and date(i["closed_at"]) <= context.started_at]
         response_complete = complete and all(i.get("response_complete") for i in items)
@@ -47,13 +47,17 @@ class IssuesAnalyzer:
                    "open_count": len(opened) if complete else None, "closed_count": len(closed) if complete else None,
                    "stale_open_count": len(stale) if complete else None,
                    "stale_ratio": (len(stale) / len(opened) if opened else 0) if complete else None,
-                   "median_first_response_hours": median(responses) if response_complete and responses else None,
+                   "median_first_external_response_hours": median(responses) if response_complete and responses else None,
+                   "unanswered_count": len(items) - len(responses) if response_complete else None,
+                   "external_response_rate": len(responses) / len(items) if response_complete and items else None,
                    "response_observed_count": len(responses), "response_complete": response_complete,
                    "median_close_hours": median(closing) if complete and closing and len(closing) == len(closed) else None,
                    "recent_created": sum(cutoff <= date(i["created_at"]) <= context.started_at for i in items) if complete else None,
                    "recent_closed": (sum(cutoff <= date(i["closed_at"]) <= context.started_at for i in closed)
                                      if complete and all(i.get("closed_at") for i in closed) else None)}
-        return result(context, self.name, "issues", metrics, availability)
+        check = result(context, self.name, "issues", metrics, availability)
+        check.analyzer_version = "2"
+        return check
 
 
 class CIAnalyzer:

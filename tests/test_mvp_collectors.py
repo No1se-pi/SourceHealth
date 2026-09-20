@@ -47,7 +47,7 @@ class CollectorTests(unittest.TestCase):
                 self.assertNotIn("do-not-store", json.dumps(result.facts))
                 if cls is IssuesCollector:
                     self.assertEqual(requests[0].url.params["filter"], "visibility=public")
-                    self.assertEqual(result.facts["items"][0]["first_response_at"], "2026-09-17T01:00:00+00:00")
+                    self.assertEqual(result.facts["items"][0]["first_external_response_at"], "2026-09-17T01:00:00+00:00")
                 if cls is CICollector:
                     self.assertEqual(result.facts["items"][0]["duration_seconds"], 120)
 
@@ -89,7 +89,7 @@ class CollectorTests(unittest.TestCase):
             result = IssuesCollector(client).collect(self.ref)
         self.assertEqual(result.availability, A.AVAILABLE)
         self.assertFalse(result.facts["items"][0]["response_complete"])
-        self.assertIsNone(result.facts["items"][0]["first_response_at"])
+        self.assertIsNone(result.facts["items"][0]["first_external_response_at"])
 
     def test_catalog_deduplication_scope_and_limits(self):
         row = {"id": "r1", "slug": "repo", "organization": {"slug": "org"}, "visibility": "public"}
@@ -101,6 +101,30 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual(len(result.facts["items"]), 1)
         self.assertEqual(requests[0].url.path, "/repos")
         self.assertEqual(requests[0].url.params["sort_by"], "created_at")
+
+    def test_external_response_excludes_self_and_never_retains_author_ids(self):
+        comment = self.payloads["comments"]["issue_comments"][0]
+        own = {**comment, "author": {"id": "issue-author"}, "created_at": "2026-09-17T00:01:00Z"}
+        for comments, expected_complete, expected_time in (
+            ([own, comment], True, "2026-09-17T01:00:00+00:00"),
+            ([own], True, None),
+            ([], True, None),
+            ([{**comment, "author": None}], False, None),
+        ):
+            with self.subTest(comments=comments):
+                with self.client(lambda request: httpx.Response(200, json={"issue_comments": comments}
+                                 if request.url.path.endswith("comments") else self.payloads["issues"])) as client:
+                    collected = IssuesCollector(client).collect(self.ref)
+                item = collected.facts["items"][0]
+                self.assertEqual(item["response_complete"], expected_complete)
+                self.assertEqual(item["first_external_response_at"], expected_time)
+                self.assertNotIn("author", json.dumps(collected.facts))
+                self.assertNotIn("responder", json.dumps(collected.facts))
+        self.payloads["issues"]["issues"][0].pop("author")
+        with self.client(lambda _: httpx.Response(200, json=self.payloads["issues"])) as client:
+            item = IssuesCollector(client).collect(self.ref).facts["items"][0]
+        self.assertFalse(item["response_complete"])
+        self.assertNotIn("_author_id", item)
 
     def test_expired_collection_budget_makes_no_request(self):
         with self.client(lambda _: self.fail("must not request"), deadline_seconds=-1) as client:

@@ -3,6 +3,8 @@
 import html
 import re
 
+from sourcehealth.scoring.coverage import score_coverage
+
 
 def _text(value) -> str:
     # Escape raw HTML and Markdown delimiters from repository-provided strings.
@@ -34,6 +36,12 @@ def render_markdown(report) -> str:
     scored = [name for name, c in report.get("category_scores", {}).items() if c.get("score") is not None]
     lines += ["", f"Охват: рассчитано категорий {len(scored)} из 6. NO_DATA — данных нет; это не нулевая оценка.",
               "", "## Проблемы и ограничения данных", ""]
+    coverage = score_coverage(report.get("scoring_policy_version"), report.get("category_scores", {}))
+    if coverage:
+        lines += [f"Охват оценки по номинальным весам: {coverage['nominal_weight_percent']}%.",
+                  f"Без оценки: {_text(', '.join(coverage['unscored_categories']) or 'нет')}.",
+                  f"Частичные категории: {_text(', '.join(coverage['partial_categories']) or 'нет')}. "
+                  "Процент весов не означает полноту всех проверок.", ""]
     for name, check in sorted(report.get("checks", {}).items()):
         lines.append(f"- {_text(name)}: {_text(check['availability'])}; находок: {len(check.get('findings', []))}.")
         for finding in check.get("findings", []):

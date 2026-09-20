@@ -1,5 +1,37 @@
 # Поставка MVP analytics: 19–20 сентября 2026
 
+## Поправки по review 20 сентября
+
+Базовый протокол ниже относится к `23bcd5a` и последующему docs-коммиту `f6acd36`.
+После review дополнительно исправлено:
+
+- Issues collector schema/analyzer v2: первый внешний автор вместо self-comment;
+  author.id сравнивается только в памяти. Unanswered count и response rate отдельные,
+  неизвестная история не превращается в отсутствие ответов.
+- `mvp-score-v1.1`: response-компонент учитывает долю ответивших; остальные пороги
+  не перекалиброваны без реальных данных. Старые отчёты не переписываются.
+- Documentation/Debt имеют независимую полноту. Ошибка code file не обнуляет охват README.
+- Backend `score_coverage`, новый OpenAPI/TS contract; рядом со Score на страницах
+  repository/analysis видны номинальный процент, missing и partial категории.
+  Markdown показывает тот же backend расчёт. Unknown policy — неизвестный coverage.
+- Ubuntu CI job `mvp-snapshot-smoke` собирает scanner и выполняет новый Docker smoke.
+
+Проверки после поправок: **161 tests, 159 passed, 2 expected skips**, включая 11
+настоящих PostgreSQL/Redis/RQ integration tests; Ruff, OpenAPI/TS generation и frontend
+build прошли. Scanner image пересобран, offline Docker MVP smoke повторно прошёл.
+Новый GitHub job добавлен, но его удалённый запуск ещё не подтверждён; зелёный CI ниже
+относится только к предыдущему коммиту. Browser-проверка не состоялась: подключение
+инструмента отклонено ошибкой `missing field sandboxPolicy` до открытия страницы.
+Поэтому проверка UI пока ограничена контрактом/TypeScript/build, не visual acceptance.
+
+Ссылки на этот файл уже были исправлены в f6acd36. Следующий приоритет — рабочий
+SourceCraft read доступ и live chain, затем калибровка на 5–10 разных проектах.
+Дополнительный maintainability signal (например, длина Python-функций) остаётся
+отдельной задачей перед финалом; в этой поправке не реализован. AppSec/private блокеры
+не сняты. Никаких guessed endpoints или fake production findings не добавлено.
+
+## Базовая поставка
+
 Ветка `feature/mvp-analytics`, база `Dev-No1se` на
 `98662373b42a69e83c7eb3cf7ce490a284950c88`. Основная реализация сохранена в
 `23bcd5aab62ea989efc0c663a6471f4ef636769c` (`precommit(analyz)`). PR и merge не выполнялись

@@ -95,6 +95,36 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(results["technical_debt"].metrics["todo_count"], 1)
         self.assertNotIn(str(self.root), str({k: v.to_dict() for k, v in results.items()}))
 
+    def test_code_read_failure_does_not_invalidate_documentation(self):
+        self.files({"README.md": "# Quick Start\npython -m app\n", "main.py": "x=1\n"})
+        for content, limits in ((b"\xff", {}), (b"x" * 200, {"max_file_bytes": 100})):
+            with self.subTest(limits=limits):
+                (self.root / "main.py").write_bytes(content)
+                self.git("add", ".")
+                self.git("commit", "-qm", "code fixture")
+                docs, debt = self.analyze(**limits)
+                self.assertEqual(docs.status, "ok")
+                self.assertTrue(docs.metrics["run_instructions"])
+                self.assertEqual(debt.status, "partial")
+                self.assertIsNone(debt.metrics["marker_density"])
+        (self.root / "main.py").write_bytes(b"\xff")
+        self.git("add", ".")
+        self.git("commit", "-qm", "invalid encoding")
+        payload = to_legacy_report(analyze_repository(self.root, SASTScanner(), with_mvp=True))
+        normalized = normalize_runtime_report(payload, with_mvp=True)
+        self.assertEqual(normalized["documentation"].status, "ok")
+        self.assertEqual(normalized["technical_debt"].status, "partial")
+
+    def test_documentation_read_failure_does_not_invalidate_debt(self):
+        self.files({"README.md": "# Project", "main.py": "x=1\n"})
+        (self.root / "README.md").write_bytes(b"\xff")
+        self.git("add", ".")
+        self.git("commit", "-qm", "invalid documentation")
+        docs, debt = self.analyze()
+        self.assertEqual(docs.status, "partial")
+        self.assertEqual(debt.status, "ok")
+        self.assertEqual(debt.metrics["marker_density"], 0)
+
     def test_symlink_does_not_read_outside_snapshot(self):
         self.files({"main.py": "x=1\n", "README.md": "safe"})
         (self.root / "README.md").unlink()

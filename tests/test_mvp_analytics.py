@@ -28,7 +28,7 @@ class MVPAnalyticsTests(unittest.TestCase):
 
     def test_issues_healthy_empty_stale_and_partial(self):
         healthy = IssuesAnalyzer().analyze(self.context)
-        self.assertEqual(healthy.metrics["median_first_response_hours"], 1)
+        self.assertEqual(healthy.metrics["median_first_external_response_hours"], 1)
         self.assertEqual(healthy.metrics["median_close_hours"], 24)
         self.assertEqual(healthy.metrics["closed_count"], 1)
         for mode in ("empty", "stale", "partial"):
@@ -42,7 +42,7 @@ class MVPAnalyticsTests(unittest.TestCase):
             result = IssuesAnalyzer().analyze(context)
             if mode == "empty":
                 self.assertEqual(result.metrics["open_count"], 0)
-                self.assertIsNone(result.metrics["median_first_response_hours"])
+                self.assertIsNone(result.metrics["median_first_external_response_hours"])
             elif mode == "stale":
                 self.assertEqual(result.metrics["stale_ratio"], 1)
             else:
@@ -73,6 +73,39 @@ class MVPAnalyticsTests(unittest.TestCase):
             else:
                 self.assertIsNone(result.metrics["success_rate"])
                 self.assertNotEqual(result.availability, A.NOT_CONFIGURED)
+
+    def test_unanswered_issues_lower_response_component_and_partial_is_unknown(self):
+        healthy = self.score(self.report()).category_scores["issues"]["score"]
+        issue = self.context.sourcecraft_facts["issues"]["items"][0]
+        self.context.sourcecraft_facts["issues"]["items"].append({**issue, "id": "unanswered", "first_external_response_at": None})
+        metrics = IssuesAnalyzer().analyze(self.context).metrics
+        self.assertEqual(metrics["unanswered_count"], 1)
+        self.assertEqual(metrics["external_response_rate"], 0.5)
+        self.assertEqual(metrics["median_first_external_response_hours"], 1)  # Explicitly among answered.
+        self.assertLess(self.score(self.report()).category_scores["issues"]["score"], healthy)
+        issue["first_external_response_at"] = None
+        metrics = IssuesAnalyzer().analyze(self.context).metrics
+        self.assertEqual(metrics["unanswered_count"], 2)
+        self.assertEqual(metrics["external_response_rate"], 0)
+        self.assertIsNone(metrics["median_first_external_response_hours"])
+        self.assertLess(self.score(self.report()).category_scores["issues"]["score"], healthy)
+        issue["response_complete"] = False
+        metrics = IssuesAnalyzer().analyze(self.context).metrics
+        self.assertIsNone(metrics["unanswered_count"])
+        self.assertIsNone(metrics["external_response_rate"])
+        self.assertIsNone(metrics["median_first_external_response_hours"])
+
+    def test_coverage_weight_is_not_category_count_or_full_scan_claim(self):
+        from sourcehealth.scoring.coverage import score_coverage
+
+        report = self.score(self.report())
+        coverage = score_coverage(report.scoring_policy_version, report.category_scores)
+        self.assertEqual(coverage["nominal_weight_percent"], 80)
+        self.assertEqual(coverage["scored_categories"], 5)
+        self.assertEqual(coverage["unscored_categories"], ["security"])
+        report.category_scores["activity"]["availability"] = "partial"
+        self.assertEqual(score_coverage(report.scoring_policy_version, report.category_scores)["partial_categories"], ["activity"])
+        self.assertIsNone(score_coverage("future-unknown", report.category_scores))
 
     def test_platform_activity_complete_no_release_and_partial(self):
         result = PlatformActivityAnalyzer().analyze(self.context)

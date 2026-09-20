@@ -20,11 +20,12 @@ class DocumentationAnalyzer:
             evidence.extend(Evidence(id=f"documentation:{key}", source="git_snapshot", type="documentation_marker",
                                      reference=facts["head_sha"], location=path, summary=f"Обнаружен признак {key}.")
                             for key, path in sorted(facts["locations"].items()))
-        return AnalyzerResult(self.name, status="ok" if facts["complete"] else "partial",
-                              availability=A.AVAILABLE if facts["complete"] else A.PARTIAL,
+        complete = facts["documentation_complete" if self.name == "documentation" else "debt_complete"]
+        return AnalyzerResult(self.name, status="ok" if complete else "partial", analyzer_version="2",
+                              availability=A.AVAILABLE if complete else A.PARTIAL,
                               category=self.category, source="git_snapshot", metrics=facts[self.name], evidence=evidence,
                               metadata={"head_sha": facts["head_sha"], "scope": facts["scope"],
-                                        "ci_configured": facts["ci_configured"], "complete": facts["complete"]})
+                                        "ci_configured": facts["ci_configured"], "complete": complete})
 
 
 class TechnicalDebtAnalyzer(DocumentationAnalyzer):

@@ -36,7 +36,7 @@ analytics profile ограничивает до 5 страниц на resource �
 |---|---|---|
 | RepositoryCollector | GET R | id, slug, явно public visibility, default_branch, is_empty, безопасный language.name |
 | IssuesCollector | GET R/issues / issues | filter visibility=public; id/slug, status.status_type, created_at/updated_at/completed_at |
-| Issues comments enrichment | GET R/issues/{issue_slug}/comments / issue_comments | Только created_at; первый публичный комментарий, включая self/bots |
+| Issues comments enrichment | GET R/issues/{issue_slug}/comments / issue_comments | created_at; author.id сравнивается с issue.author.id только в памяти, self исключаются |
 | CICollector | GET R/cicd/runs / runs | id/status, dates.created_at/started_at/finished_at, duration |
 | PullRequestsCollector | GET R/pulls / pull_requests | id/status/created_at/updated_at |
 | ContributorsCollector | GET R/contributors / contributors | Только id, без names/emails |
@@ -53,6 +53,8 @@ draft/open/discarded/merging/merged. Releases: draft/published/discarded, сох
 
 Для comments budget — первые 10 issues, не более 2000 comments на issue и 5 страниц.
 Неполная comments история оставляет latency null, не уничтожая полные issue counts.
+Внешний ответ требует известного author.id у issue и каждого comment. Author IDs
+не сохраняются в facts. Unanswered count и response rate также null при неполной истории.
 Bodies, descriptions, release notes, CI error messages и персональные поля не
 попадают в facts/report. Ключи и timestamp проходят allowlist/validation.
 

@@ -21,7 +21,7 @@ def usable(check):
 
 
 class MVPPolicy:
-    version = "mvp-score-v1"
+    version = "mvp-score-v1.1"
 
     def evaluate(self, results):
         categories = {}
@@ -58,11 +58,13 @@ class MVPPolicy:
         if usable(check) and check.metrics.get("complete") and check.metrics.get("stale_ratio") is not None:
             m = check.metrics
             components = [(60, 100 * (1 - clamp(m["stale_ratio"])))]
-            if m.get("median_first_response_hours") is not None:
-                components.append((20, 100 * (1 - clamp(m["median_first_response_hours"] / 168))))
+            if m.get("external_response_rate") is not None:
+                latency = m.get("median_first_external_response_hours")
+                speed = 1 - clamp(latency / 168) if latency is not None else 0
+                components.append((20, 100 * clamp(m["external_response_rate"]) * speed))
             if m.get("median_close_hours") is not None:
                 components.append((20, 100 * (1 - clamp(m["median_close_hours"] / 720))))
-            assign("issues", components, [check], explanation="Stale 60; ответ до 7 дней 20; закрытие до 30 дней 20. Неизвестные времена исключены.")
+            assign("issues", components, [check], explanation="Stale 60; внешний ответ до 7 дней × доля ответивших 20; закрытие до 30 дней 20. Неполная история ответов исключена.")
 
         check = results.get("cicd")
         if usable(check):

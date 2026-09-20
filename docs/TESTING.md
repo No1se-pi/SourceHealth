@@ -103,6 +103,9 @@ python scripts/mvp_snapshot_smoke.py
 Snapshot smoke использует настоящий offline Docker scanner и synthetic Git repository,
 проверяет HEAD/docs/debt/Git/SAST и отсутствие исполнения target code. Собственный
 unique volume удаляется в finally. Это не live clone SourceCraft.
+Отдельный Ubuntu job `mvp-snapshot-smoke` в `.github/workflows/tests.yml` собирает scanner
+image и выполняет этот smoke. Review regressions покрывают self-comments, unanswered,
+unknown authors, независимую полноту docs/debt и backend weighted coverage.
 
 ## Live SourceCraft opt-in
 

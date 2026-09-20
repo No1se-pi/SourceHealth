@@ -250,6 +250,7 @@ export interface components {
             checks: {
                 [key: string]: components["schemas"]["AnalyzerResultDTO"];
             };
+            score_coverage?: components["schemas"]["ScoreCoverageDTO"] | null;
         };
         /** AnalysisRequest */
         AnalysisRequest: {
@@ -499,6 +500,17 @@ export interface components {
          * @enum {string}
          */
         RunStatus: "queued" | "collecting" | "analyzing" | "scoring" | "completed" | "partial" | "failed";
+        /** ScoreCoverageDTO */
+        ScoreCoverageDTO: {
+            /** Nominal Weight Percent */
+            nominal_weight_percent: number;
+            /** Scored Categories */
+            scored_categories: number;
+            /** Unscored Categories */
+            unscored_categories: components["schemas"]["Category"][];
+            /** Partial Categories */
+            partial_categories: components["schemas"]["Category"][];
+        };
         /** UserDTO */
         UserDTO: {
             /**

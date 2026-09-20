@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from sourcehealth.core.domain import Category, DataAvailability, RunStatus
 
@@ -108,11 +108,28 @@ class AnalysisSummary(BaseModel):
     error_code: str | None
 
 
+class ScoreCoverageDTO(BaseModel):
+    nominal_weight_percent: int = Field(ge=0, le=100)
+    scored_categories: int = Field(ge=0, le=6)
+    unscored_categories: list[Category]
+    partial_categories: list[Category]
+
+
 class AnalysisDetails(AnalysisSummary):
     category_scores: dict[str, CategoryScoreDTO]
     data_coverage: dict[str, DataAvailability]
     recommendations: list[RecommendationDTO]
     checks: dict[str, AnalyzerResultDTO]
+    score_coverage: ScoreCoverageDTO | None = None
+
+    @model_validator(mode="after")
+    def derive_score_coverage(self):
+        from sourcehealth.scoring.coverage import score_coverage
+
+        coverage = score_coverage(self.scoring_policy_version,
+                                  {name: category.model_dump() for name, category in self.category_scores.items()})
+        self.score_coverage = ScoreCoverageDTO(**coverage) if coverage is not None else None
+        return self
 
 
 class AnalysisRequest(BaseModel):
