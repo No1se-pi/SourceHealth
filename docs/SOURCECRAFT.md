@@ -115,6 +115,15 @@ Likes остаются nullable: Repository.rating.value не объявляет
 
 Clone остаётся public HTTPS `https://git.sourcecraft.dev/org/repo.git`, без передачи
 PAT в clone URL. Issues/CI collectors не используют Git HEAD как ключ свежести.
+
+## Повторный AppSec review 21.09.2026
+
+Проверены все 167 paths и definitions официального Swagger 0.0.1
+(SHA256 `c3b1d84647cdf553cda63ff6e6ddf59d00ee36a5aa40470ad44607320639d7c3`).
+Поддерживаемого AppSec/SAST/SCA/vulnerability/SARIF/findings route или schema не найдено;
+единственное совпадение `incident` относится к типу комментария Pull Request. Локальный
+SourceCraft CLI в среде отсутствовал. Для реализации нужны документированный endpoint,
+auth/scopes, severity/status enums, pagination и очищенный реальный response от организаторов.
 # Уточнения live-контракта 20.09.2026
 
 `Repository.likes` берётся только из `rating.reaction_counts` типа `positive_low`.

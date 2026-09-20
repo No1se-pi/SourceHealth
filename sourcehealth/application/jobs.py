@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from redis import Redis
+from redis.exceptions import LockError
 from rq import Queue
 from rq.exceptions import DuplicateJobError, NoSuchJobError
 from rq.job import Job
@@ -52,19 +53,33 @@ def dispatch_pending(sessions, redis: Redis, timeout: int = 600) -> int:
     for run_id, profile in rows:
         queue = Queue(queue_name(profile), connection=redis)
         job_id = str(run_id)
+        lock = redis.lock(f"sourcehealth:dispatch:{job_id}", timeout=30, blocking_timeout=0)
+        if not lock.acquire(blocking=False):
+            continue
         try:
-            job = Job.fetch(job_id, connection=redis)
-            if job.get_status(refresh=True) in {"queued", "started", "deferred", "scheduled"}:
-                continue
-            job.delete()
-        except NoSuchJobError:
-            pass
-        try:
-            queue.enqueue(execute_analysis, job_id, job_id=job_id, job_timeout=timeout,
-                          result_ttl=0, failure_ttl=86400, unique=True)
-            count += 1
-        except DuplicateJobError:
-            pass  # Another dispatcher won the atomic Redis enqueue.
+            try:
+                job = Job.fetch(job_id, connection=redis)
+                status = job.get_status(refresh=True)
+                if status in {"started", "deferred", "scheduled"}:
+                    continue
+                if status == "queued" and job_id in queue.job_ids:
+                    continue
+                # A worker may stop after dequeue and before started status is saved.
+                # The DB row remains the outbox; replace that orphaned RQ object.
+                job.delete()
+            except NoSuchJobError:
+                pass
+            try:
+                queue.enqueue(execute_analysis, job_id, job_id=job_id, job_timeout=timeout,
+                              result_ttl=0, failure_ttl=86400, unique=True)
+                count += 1
+            except DuplicateJobError:
+                pass
+        finally:
+            try:
+                lock.release()
+            except LockError:
+                pass
     return count
 
 

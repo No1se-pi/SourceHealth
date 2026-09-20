@@ -23,6 +23,10 @@ npm ci --prefix frontend
 npm run dev --prefix frontend
 ```
 
+Миграции и backend внутри образа запускаются через `python -m alembic` и
+`python -m uvicorn`. Это сохраняет запуск в hardened-окружениях, где исполнение
+установленных console scripts запрещено политикой mount (`operation not permitted`).
+
 Не копировать .env.example поверх своего заполненного .env. Linux/macOS activation:
 `source .venv/bin/activate`. `requirements-server.lock` фиксирует runtime dependency
 snapshot; npm ci использует package-lock.json. Обновление lock — отдельный проверяемый PR.

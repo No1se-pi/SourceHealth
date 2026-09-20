@@ -46,7 +46,8 @@ Remove-Item Env:DATABASE_URL, Env:TEST_DATABASE_URL, Env:TEST_REDIS_URL
 
 Тесты создают уникальные repo и удаляют собственные записи. Проверяют десять
 конкурентных запросов/пять dispatchers, DB unique constraint, недоставленный queued,
-RQ execution, сохранение report, cached/force поведение, recovery guard, private
+RQ execution, восстановление orphaned `queued` RQ job из durable DB outbox,
+сохранение report, cached/force поведение, recovery guard, private
 report deny, Markdown и Я ID state/PKCE/session/logout. Я ID и collection HTTP в этих
 тестах mocked: real persistence не означает live внешнюю acceptance.
 

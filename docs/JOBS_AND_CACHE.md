@@ -38,6 +38,9 @@ SHA не pin-ится. `mvp-v1` сохраняет фактический HEAD �
 строку для команды dispatch. Потеря Redis восстанавливается из PG. Сбой после
 enqueue закрывают RQ unique ID и DB lock. POST может вернуть 202 при недоступном
 Redis: факт приёма уже сохранён, доставку повторит reconciliation.
+Если worker остановился между dequeue и записью `started`, RQ hash может остаться `queued`,
+хотя ID уже отсутствует в списке очереди. Dispatcher проверяет оба факта и под коротким
+per-run Redis lock заменяет orphaned job, используя PostgreSQL row как source of truth.
 
 Deadline = analysis_timeout + 60с. Recover ищет просроченные active runs и пробует
 тот же advisory lock: живой держатель не объявляется failed. После смерти процесса
@@ -90,7 +93,7 @@ dispatch recovery. Compose scheduler — one-shot profile, не скрытый l
 
 - `platform-v1` → очередь `analysis` → обычный `worker`, без Docker доступа.
 - `code-v1` → очередь `analysis-code` → отдельный `worker-code` на trusted Linux host/VM.
-- `mvp-v1` → та же `analysis-code` → полный analytics batch с `mvp-score-v1`.
+- `mvp-v1` → та же `analysis-code` → полный analytics batch с `mvp-score-v1.2`.
 
 Настройка `ANALYSIS_PROFILE` применяется при создании run; queued run сохраняет свой
 профиль даже после перезапуска API с другой настройкой. Worker читает профиль из БД.

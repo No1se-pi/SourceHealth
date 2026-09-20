@@ -44,6 +44,8 @@ SourceHealth — сервис здоровья репозиториев SourceCr
 - [ROADMAP](ROADMAP.md) — последовательность P0/P1/P2 и зависимые решения.
 - [MVP_ANALYTICS](MVP_ANALYTICS.md) — поставка 19 сентября, проверенные сценарии и оставшиеся блокеры.
 - [LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md) — probe, полный live pipeline, коды выхода и чек-лист приёмки.
+- [DEMO](DEMO.md) — короткий сценарий показа и честные ограничения.
+- [MANDATORY_100_CLOSURE](MANDATORY_100_CLOSURE.md) — итоговый журнал обязательной приёмки.
 - [METRICS](METRICS.md) — сохранённый точный справочник Git-метрик.
 - [ADR](adr/README.md) — принятые архитектурные решения.
 

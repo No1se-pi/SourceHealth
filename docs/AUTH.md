@@ -90,4 +90,9 @@ Logout удаляет connection; DELETE connection удаляет только 
 Private/internal видны только владельцу сессии, не сохраняются и не анализируются.
 Public выбор использует существующий public import/analysis. Нет утверждения,
 что видимый public repository принадлежит пользователю: доступность определяет SourceCraft.
-Browser acceptance ещё не выполнен: OAuth настройки у команды пока отсутствуют.
+21.09 OAuth client/secret, exact localhost callback, session secret и отдельный credential key
+настроены локально. HTTP login вернул 302 на `oauth.yandex.ru`, HttpOnly `sh_oauth` и
+`Cache-Control: no-store`. Это подтверждает начало протокола, но не ручной browser acceptance:
+подключение браузерного инструмента остановилось до открытия страницы с ошибкой окружения
+`missing field sandboxPolicy`. Успешный вход пользователя, callback, `/me` и logout ещё нужно
+пройти вручную в обычном браузере.

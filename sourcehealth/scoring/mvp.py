@@ -21,7 +21,7 @@ def usable(check):
 
 
 class MVPPolicy:
-    version = "mvp-score-v1.1"
+    version = "mvp-score-v1.2"
 
     def evaluate(self, results):
         categories = {}
@@ -55,7 +55,8 @@ class MVPPolicy:
                    explanation="README 20, LICENSE 15, запуск 20, сборка 10, тесты 15, CONTRIBUTING 5, CODEOWNERS 5, docs 10.")
 
         check = results.get("issues")
-        if usable(check) and check.metrics.get("complete") and check.metrics.get("stale_ratio") is not None:
+        if (usable(check) and check.metrics.get("complete") and check.metrics.get("observed_count", 0) > 0
+                and check.metrics.get("stale_ratio") is not None):
             m = check.metrics
             components = [(60, 100 * (1 - clamp(m["stale_ratio"])))]
             if m.get("external_response_rate") is not None:
@@ -79,7 +80,9 @@ class MVPPolicy:
         git, platform = results.get("git_activity"), results.get("platform_activity")
         if usable(git) and git.metrics.get("days_since_last_commit") is not None:
             m = git.metrics
-            components = [(40, 100 * clamp(m["commits_last_30_days"] / 20)),
+            # A same-day commit burst cannot max the recent activity component.
+            recent = min(clamp(m["commits_last_30_days"] / 20), clamp(m["active_days_last_30_days"] / 5))
+            components = [(40, 100 * recent),
                           (40, 100 * (1 - clamp(m["days_since_last_commit"] / 90)))]
             checks = [git]
             if platform:
@@ -96,7 +99,7 @@ class MVPPolicy:
                 if platform.evidence:
                     checks.append(platform)
             assign("activity", components, checks,
-                   explanation="Git: 20 commits/30д и давность до 90д (40+40); PR 10, contributors 5, releases 5. Likes не учитываются.")
+                   explanation="Git: min(20 commits, 5 active days)/30д и давность до 90д (40+40); PR 10, contributors 5, releases 5. Likes не учитываются.")
         elif usable(git) and git.metrics.get("total_commits") == 0:
             assign("activity", [(1, 0)], [git], explanation="Полностью наблюдаемая пустая Git-история: 0.")
 

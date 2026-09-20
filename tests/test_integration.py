@@ -22,6 +22,7 @@ if ENABLED:
     from pydantic import SecretStr
     from redis import Redis
     from rq import Queue, SimpleWorker
+    from rq.job import Job
     from rq.timeouts import TimerDeathPenalty
     from sqlalchemy import delete, select, text, update
     from sqlalchemy.engine import make_url
@@ -195,6 +196,16 @@ class PersistenceTests(unittest.TestCase):
         dispatch_pending(self.sessions, self.redis)
         self.assertIn(str(run.id), Queue("analysis", connection=self.redis).job_ids)
 
+    def test_dispatch_repairs_orphaned_queued_rq_job(self):
+        run = self.service.request_analysis(self.repository_id)
+        queue = Queue("analysis", connection=self.redis)
+        dispatch_pending(self.sessions, self.redis)
+        queue.remove(str(run.id))  # Keep the RQ job hash, reproducing dequeue-before-start shutdown.
+        self.assertEqual(Job.fetch(str(run.id), connection=self.redis).get_status(refresh=True), "queued")
+        self.assertNotIn(str(run.id), queue.job_ids)
+        self.assertEqual(dispatch_pending(self.sessions, self.redis), 1)
+        self.assertIn(str(run.id), queue.job_ids)
+
     def test_worker_persists_public_report_and_cache_reuses_run(self):
         run = self.service.request_analysis(self.repository_id)
         env = {"DATABASE_URL": os.environ["TEST_DATABASE_URL"], "REDIS_URL": os.environ["TEST_REDIS_URL"]}
@@ -313,7 +324,7 @@ class PersistenceTests(unittest.TestCase):
             self.assertEqual(payload["status"], "partial")  # Official AppSec is still unconfirmed.
             self.assertEqual(len(payload["category_scores"]), 6)
             self.assertIsInstance(payload["health_score"], (int, float))
-            self.assertEqual(payload["scoring_policy_version"], "mvp-score-v1.1")
+            self.assertEqual(payload["scoring_policy_version"], "mvp-score-v1.2")
             self.assertIsNone(payload["category_scores"]["security"]["score"])
             self.assertEqual(payload["category_scores"]["security"]["availability"], "no_data")
             self.assertEqual(payload["score_coverage"]["nominal_weight_percent"], 80)
@@ -323,7 +334,7 @@ class PersistenceTests(unittest.TestCase):
                 self.assertNotIn(forbidden, result.text)
             markdown = client.get(f"/api/v1/analyses/{run_id}/report.md")
             self.assertEqual(markdown.status_code, 200)
-            self.assertIn(r"mvp\-score\-v1\.1", markdown.text)
+            self.assertIn(r"mvp\-score\-v1\.2", markdown.text)
             listing = client.get("/api/v1/repositories", params={"limit": 100}).json()
             listed = next(row for row in listing["items"] if row["id"] == str(self.repository_id))
             self.assertEqual(listed["health_score"], payload["health_score"])

@@ -107,6 +107,33 @@ class MVPAnalyticsTests(unittest.TestCase):
         self.assertEqual(score_coverage(report.scoring_policy_version, report.category_scores)["partial_categories"], ["activity"])
         self.assertIsNone(score_coverage("future-unknown", report.category_scores))
 
+    def test_empty_issues_are_observed_but_not_scored(self):
+        self.context.sourcecraft_facts["issues"]["items"] = []
+        report = self.score(self.report())
+        self.assertEqual(report.checks["issues"].metrics["observed_count"], 0)
+        self.assertEqual(report.category_scores["issues"]["availability"], "available")
+        self.assertIsNone(report.category_scores["issues"]["score"])
+        from sourcehealth.scoring.coverage import score_coverage
+        self.assertEqual(score_coverage(report.scoring_policy_version, report.category_scores)[
+            "nominal_weight_percent"], 65)
+
+    def test_same_day_commit_burst_cannot_max_recent_activity(self):
+        report = self.report()
+        git = report.checks["git_activity"]
+        git.metrics.update(commits_last_30_days=20, active_days_last_30_days=1, days_since_last_commit=0)
+        burst = self.score(deepcopy(report)).category_scores["activity"]["score"]
+        git.metrics["active_days_last_30_days"] = 5
+        sustained = self.score(report).category_scores["activity"]["score"]
+        self.assertLessEqual(burst, 80)
+        self.assertGreater(sustained - burst, 15)
+
+    def test_repository_scale_alone_does_not_change_score(self):
+        report = self.report()
+        baseline = self.score(deepcopy(report)).health_score
+        report.checks["technical_debt"].metrics["code_files"] = 10000
+        report.checks["sast"].metrics["code_files_lexed"] = 10000
+        self.assertEqual(self.score(report).health_score, baseline)
+
     def test_platform_activity_complete_no_release_and_partial(self):
         result = PlatformActivityAnalyzer().analyze(self.context)
         self.assertEqual(result.metrics["pr_count"], 1)
