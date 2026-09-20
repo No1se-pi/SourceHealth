@@ -69,7 +69,6 @@ class ListCollector:
 
 class IssuesCollector(ListCollector):
     name, suffix, key = "issues", "/issues", "issues"
-    params = {"filter": "visibility=public"}
 
     def __init__(self, client, *, max_items=2000, comment_budget=10):
         super().__init__(client, max_items=max_items)

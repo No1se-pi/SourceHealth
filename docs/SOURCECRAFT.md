@@ -41,7 +41,7 @@ pull requests, contributors и releases. Команда не открывает 
 | Collector | Endpoint / ключ списка | Сохраняемые поля и правила |
 |---|---|---|
 | RepositoryCollector | GET R | id, slug, явно public visibility, default_branch, is_empty, безопасный language.name |
-| IssuesCollector | GET R/issues / issues | filter visibility=public; id/slug, status.status_type, created_at/updated_at/completed_at |
+| IssuesCollector | GET R/issues / issues | Без несовместимого filter query; private отбрасывается по visibility; id/slug, status.status_type, created_at/updated_at/completed_at |
 | Issues comments enrichment | GET R/issues/{issue_slug}/comments / issue_comments | created_at; author.id сравнивается с issue.author.id только в памяти, self исключаются |
 | CICollector | GET R/cicd/runs / runs | id/status, dates.created_at/started_at/finished_at, duration |
 | PullRequestsCollector | GET R/pulls / pull_requests | id/status/created_at/updated_at |
