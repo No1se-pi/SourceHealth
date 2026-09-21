@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api, type User } from '../../api/client';
 import { Button } from '../common/Button';
@@ -8,6 +8,8 @@ export const Header: React.FC = () => {
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -36,6 +38,36 @@ export const Header: React.FC = () => {
     }
   };
 
+  // Close mobile menu on route change unless mobileNav param is present
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('mobileNav') === '1') {
+      setMobileMenuOpen(true);
+    } else {
+      setMobileMenuOpen(false);
+    }
+  }, [location.pathname, location.search]);
+
+  // Accessible keyboard & click outside handling for mobile menu
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileMenuOpen(false);
+    };
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMobileMenuOpen(false);
+      }
+    };
+    if (mobileMenuOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [mobileMenuOpen]);
+
   // Run session check once on mount. Unauthenticated visitors get 401, which is handled gracefully.
   useEffect(() => {
     let active = true;
@@ -60,6 +92,7 @@ export const Header: React.FC = () => {
     try {
       await api.logout();
       setUser(null);
+      setMobileMenuOpen(false);
       navigate('/');
     } catch {
       setLogoutError('Не удалось выйти. Повторите попытку.');
@@ -76,11 +109,23 @@ export const Header: React.FC = () => {
       <div className="app-header-content">
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
           <Link to="/" className="brand-logo-link" aria-label="SourceHealth главная">
-            <img
-              src={theme === 'dark' ? '/brand/sourcehealth-logo-dark.png' : '/brand/sourcehealth-logo.png'}
-              alt="SourceHealth"
-              className="brand-logo-img"
-            />
+            <div
+              className="brand-logo-pill"
+              style={{
+                backgroundColor: theme === 'dark' ? '#ffffff' : 'transparent',
+                padding: theme === 'dark' ? '3px 8px' : 0,
+                borderRadius: theme === 'dark' ? 'var(--sh-radius-sm)' : 0,
+                display: 'inline-flex',
+                alignItems: 'center',
+                transition: 'background var(--sh-transition)',
+              }}
+            >
+              <img
+                src="/brand/sourcehealth-logo.png"
+                alt="SourceHealth"
+                className="brand-logo-img"
+              />
+            </div>
             <span className="brand-logo-badge">beta</span>
           </Link>
           <nav className="app-nav" aria-label="Основная навигация">
@@ -99,7 +144,8 @@ export const Header: React.FC = () => {
           </nav>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        {/* Desktop actions */}
+        <div className="header-actions-desktop" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           {/* Theme switcher */}
           <button
             type="button"
@@ -207,7 +253,143 @@ export const Header: React.FC = () => {
             </a>
           )}
         </div>
+
+        {/* Mobile menu trigger */}
+        <button
+          type="button"
+          className="mobile-menu-btn"
+          onClick={() => setMobileMenuOpen((prev) => !prev)}
+          aria-label={mobileMenuOpen ? 'Закрыть меню' : 'Открыть меню навигации'}
+          aria-expanded={mobileMenuOpen}
+          aria-controls="mobile-nav-panel"
+        >
+          <span aria-hidden="true">{mobileMenuOpen ? '✕' : '☰'}</span>
+        </button>
       </div>
+
+      {/* Accessible mobile drawer panel */}
+      {mobileMenuOpen && (
+        <div id="mobile-nav-panel" className="mobile-nav-panel" ref={menuRef} role="region" aria-label="Мобильное меню">
+          <nav className="mobile-nav-links" aria-label="Мобильная навигация">
+            <Link
+              to="/"
+              className={`mobile-nav-link ${isLeaderboardActive ? 'active' : ''}`}
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Лидерборд
+            </Link>
+            <Link
+              to="/sourcecraft"
+              className={`mobile-nav-link ${isSourceCraftActive ? 'active' : ''}`}
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Мой SourceCraft
+            </Link>
+          </nav>
+
+          <div className="mobile-nav-divider" />
+
+          <div className="mobile-nav-actions">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <span style={{ fontSize: '0.88rem', color: 'var(--sh-text-secondary)', fontWeight: 500 }}>
+                Тема:
+              </span>
+              <button
+                type="button"
+                className="theme-toggle-btn"
+                onClick={toggleTheme}
+                aria-label={`Переключить тему (сейчас: ${theme === 'dark' ? 'тёмная' : 'светлая'})`}
+              >
+                {theme === 'dark' ? '🌙 Тёмная' : '☀ Светлая'}
+              </button>
+            </div>
+
+            {user ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%', marginTop: '0.25rem' }}>
+                <div
+                  className="auth-status-badge"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    fontSize: '0.82rem',
+                    color: 'var(--sh-text-secondary)',
+                    backgroundColor: 'var(--sh-bg-surface-elevated)',
+                    padding: '0.35rem 0.65rem',
+                    borderRadius: 'var(--sh-radius-sm)',
+                    border: '1px solid var(--sh-border-default)',
+                  }}
+                >
+                  <span
+                    style={{
+                      width: '7px',
+                      height: '7px',
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--sh-health-good)',
+                      display: 'inline-block',
+                    }}
+                    aria-hidden="true"
+                  />
+                  <span>ID: {user.id ? user.id.slice(0, 14) : 'Сессия активна'}</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="md"
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  aria-label="Выйти из аккаунта"
+                  style={{ width: '100%' }}
+                >
+                  {loggingOut ? 'Выход…' : 'Выйти'}
+                </Button>
+              </div>
+            ) : (
+              <div style={{ width: '100%', marginTop: '0.25rem' }}>
+                <a
+                  href="/api/v1/auth/yandex/login"
+                  className="auth-login-btn"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    width: '100%',
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    color: 'var(--sh-text-primary)',
+                    backgroundColor: 'var(--sh-bg-surface-elevated)',
+                    border: '1px solid var(--sh-border-default)',
+                    padding: '0.5rem 1rem',
+                    borderRadius: 'var(--sh-radius-sm)',
+                    textDecoration: 'none',
+                  }}
+                  aria-label="Войти через Яндекс ID"
+                >
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '18px',
+                      height: '18px',
+                      backgroundColor: '#fc3f1d',
+                      color: '#ffffff',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      lineHeight: 1,
+                    }}
+                    aria-hidden="true"
+                  >
+                    Я
+                  </span>
+                  <span>Войти через Яндекс ID</span>
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   );
 };

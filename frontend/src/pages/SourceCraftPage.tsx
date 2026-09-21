@@ -1,14 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, ApiError } from '../api/client';
 import type { components } from '../api/generated';
 import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
+import { getSafeExternalUrl } from '../utils/analysis';
+
+function formatRemainingTime(seconds: number): string {
+  if (seconds <= 0) return 'срок действия истёк';
+  const mins = Math.round(seconds / 60);
+  if (mins < 60) return `~${mins} мин`;
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return remMins > 0 ? `~${hours} ч ${remMins} мин` : `~${hours} ч`;
+}
 
 export const SourceCraftPage: React.FC = () => {
   const navigate = useNavigate();
   const [connected, setConnected] = useState(false);
+  const [expiresIn, setExpiresIn] = useState<number | null>(null);
   const [organization, setOrganization] = useState('');
   const [items, setItems] = useState<components['schemas']['ConnectedRepositoryDTO'][]>([]);
   const [more, setMore] = useState(false);
@@ -21,12 +32,26 @@ export const SourceCraftPage: React.FC = () => {
     api
       .sourcecraftStatus()
       .then((s) => {
-        if (active) setConnected(s.connected);
-      })
-      .catch(() => {
         if (active) {
-          setMessage('Для подключения SourceCraft сначала выполните вход через Яндекс ID.');
-          setIsError(false);
+          setConnected(s.connected);
+          if (typeof s.expires_in === 'number') {
+            setExpiresIn(s.expires_in);
+          }
+        }
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          if (err instanceof ApiError && err.status === 401) {
+            setMessage('Для подключения SourceCraft сначала выполните вход через Яндекс ID.');
+            setIsError(false);
+          } else if (err instanceof ApiError) {
+            const reqId = err.requestId ? ` (ID: ${err.requestId})` : '';
+            setMessage(`Ошибка сервиса SourceHealth [${err.code}]. Повторите попытку позже${reqId}.`);
+            setIsError(true);
+          } else {
+            setMessage('Сетевая ошибка при проверке статуса SourceCraft. Попробуйте обновить страницу.');
+            setIsError(true);
+          }
         }
       });
     return () => {
@@ -45,12 +70,22 @@ export const SourceCraftPage: React.FC = () => {
     setMessage('');
     setIsError(false);
     try {
-      await pending;
-      setConnected(true);
+      const conn = await pending;
+      setConnected(conn.connected);
+      if (typeof conn.expires_in === 'number') {
+        setExpiresIn(conn.expires_in);
+      }
       setMessage('SourceCraft успешно подключён к текущей сессии.');
       setIsError(false);
-    } catch {
-      setMessage('Не удалось подключиться. Проверьте правильность токена PAT.');
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 401) {
+        setMessage('Сессия истекла. Пожалуйста, выполните вход через Яндекс ID.');
+      } else if (err instanceof ApiError) {
+        const reqId = err.requestId ? ` (ID: ${err.requestId})` : '';
+        setMessage(`Не удалось подключиться: ${err.code}${reqId}. Проверьте правильность токена PAT.`);
+      } else {
+        setMessage('Не удалось подключиться. Проверьте правильность токена PAT.');
+      }
       setIsError(true);
     } finally {
       setBusy(false);
@@ -63,11 +98,13 @@ export const SourceCraftPage: React.FC = () => {
     try {
       await api.disconnectSourcecraft();
       setConnected(false);
+      setExpiresIn(null);
       setItems([]);
       setMessage('Подключение к SourceCraft отключено.');
       setIsError(false);
-    } catch {
-      setMessage('Отключение не подтверждено сервером. Повторите попытку.');
+    } catch (err: unknown) {
+      const reqId = err instanceof ApiError && err.requestId ? ` (ID: ${err.requestId})` : '';
+      setMessage(`Отключение не подтверждено сервером${reqId}. Повторите попытку.`);
       setIsError(true);
     } finally {
       setBusy(false);
@@ -88,8 +125,15 @@ export const SourceCraftPage: React.FC = () => {
       if (result.items.length === 0) {
         setMessage('В организации не найдено доступных репозиториев.');
       }
-    } catch {
-      setMessage('Не удалось получить список репозиториев. Проверьте имя организации и срок действия PAT.');
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 401) {
+        setMessage('Сессия истекла или токен SourceCraft недействителен. Повторите подключение.');
+      } else if (err instanceof ApiError) {
+        const reqId = err.requestId ? ` (ID: ${err.requestId})` : '';
+        setMessage(`Не удалось получить список репозиториев: ${err.code}${reqId}. Проверьте имя организации.`);
+      } else {
+        setMessage('Не удалось получить список репозиториев. Проверьте имя организации и соединение.');
+      }
       setIsError(true);
     } finally {
       setBusy(false);
@@ -104,8 +148,9 @@ export const SourceCraftPage: React.FC = () => {
       const repo = await api.importRepository(url);
       const run = await api.start(repo.id);
       navigate(`/analyses/${run.id}`);
-    } catch {
-      setMessage('Не удалось запустить публичный анализ репозитория.');
+    } catch (err: unknown) {
+      const reqId = err instanceof ApiError && err.requestId ? ` (ID: ${err.requestId})` : '';
+      setMessage(`Не удалось запустить публичный анализ репозитория${reqId}.`);
       setIsError(true);
     } finally {
       setBusy(false);
@@ -140,11 +185,10 @@ export const SourceCraftPage: React.FC = () => {
           🛡️
         </span>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-          <strong style={{ color: 'var(--sh-text-primary)' }}>Безопасность сессии:</strong>
+          <strong style={{ color: 'var(--sh-text-primary)' }}>Безопасность подключения:</strong>
           <span style={{ color: 'var(--sh-text-secondary)' }}>
-            Персональный токен SourceCraft хранится исключительно в оперативной памяти сервера на время
-            текущей сессии и никогда не сохраняется в локальном хранилище браузера (localStorage/sessionStorage).
-            Вход через Яндекс ID обеспечивает идентификацию пользователя, а PAT — доступ к репозиториям платформы.
+            Токен не сохраняется в браузере. SourceHealth хранит его на сервере в зашифрованном виде
+            только на время текущего подключения.
           </span>
         </div>
       </div>
@@ -230,10 +274,12 @@ export const SourceCraftPage: React.FC = () => {
               </Button>
             }
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <Badge variant="success">✓ Подключено к SourceCraft</Badge>
               <span style={{ fontSize: '0.85rem', color: 'var(--sh-text-muted)' }}>
-                Токен активен в рамках текущей сессии
+                {expiresIn !== null && expiresIn > 0
+                  ? `Подключение активно ещё ${formatRemainingTime(expiresIn)}`
+                  : 'Токен активен в рамках текущей сессии'}
               </span>
             </div>
           </Card>
@@ -302,41 +348,51 @@ export const SourceCraftPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {items.map((repo) => (
-                        <tr key={repo.url}>
-                          <td>
-                            <a
-                              href={repo.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{ fontWeight: 600, color: 'var(--sh-text-primary)' }}
-                            >
-                              {repo.url.replace(/^https?:\/\/[^/]+\//, '')}
-                            </a>
-                          </td>
-                          <td>
-                            <Badge variant={repo.visibility === 'public' ? 'success' : 'neutral'}>
-                              {repo.visibility === 'public' ? 'Публичный' : repo.visibility}
-                            </Badge>
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            {repo.can_analyze ? (
-                              <Button
-                                size="sm"
-                                variant="primary"
-                                disabled={busy}
-                                onClick={() => analyze(repo.url)}
-                              >
-                                Анализировать
-                              </Button>
-                            ) : (
-                              <span style={{ fontSize: '0.8rem', color: 'var(--sh-text-muted)' }}>
-                                Закрытый репозиторий
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                      {items.map((repo) => {
+                        const safeRepoUrl = getSafeExternalUrl(repo.url);
+                        const displaySlug = repo.url.replace(/^https?:\/\/[^/]+\//, '');
+                        return (
+                          <tr key={repo.url}>
+                            <td>
+                              {safeRepoUrl ? (
+                                <a
+                                  href={safeRepoUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ fontWeight: 600, color: 'var(--sh-text-primary)' }}
+                                >
+                                  {displaySlug}
+                                </a>
+                              ) : (
+                                <span style={{ fontWeight: 600, color: 'var(--sh-text-primary)' }}>
+                                  {displaySlug}
+                                </span>
+                              )}
+                            </td>
+                            <td>
+                              <Badge variant={repo.visibility === 'public' ? 'success' : 'neutral'}>
+                                {repo.visibility === 'public' ? 'Публичный' : repo.visibility}
+                              </Badge>
+                            </td>
+                            <td style={{ textAlign: 'right' }}>
+                              {repo.can_analyze ? (
+                                <Button
+                                  size="sm"
+                                  variant="primary"
+                                  disabled={busy}
+                                  onClick={() => analyze(repo.url)}
+                                >
+                                  Анализировать
+                                </Button>
+                              ) : (
+                                <span style={{ fontSize: '0.8rem', color: 'var(--sh-text-muted)' }}>
+                                  Закрытый репозиторий
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

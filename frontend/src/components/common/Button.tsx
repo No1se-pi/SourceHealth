@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'brand';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 export function getButtonStyles(
@@ -28,6 +28,12 @@ export function getButtonStyles(
 
   const variantStyles: Record<ButtonVariant, React.CSSProperties> = {
     primary: {
+      backgroundColor: 'var(--sh-btn-primary-bg)',
+      color: 'var(--sh-btn-primary-text)',
+      border: '1px solid var(--sh-btn-primary-border)',
+      fontWeight: 600,
+    },
+    brand: {
       backgroundColor: 'var(--sh-brand)',
       color: '#ffffff',
       border: '1px solid var(--sh-brand)',

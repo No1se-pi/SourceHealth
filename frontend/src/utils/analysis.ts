@@ -32,11 +32,11 @@ export const STATUS_CONFIG: Record<RunStatus, { label: string; variant: BadgeVar
 export function getPriorityMeta(priority: number): { label: string; variant: BadgeVariant } {
   switch (priority) {
     case 1:
-      return { label: 'P1 · Высокий', variant: 'danger' };
+      return { label: 'P1 · Высокий приоритет', variant: 'warning' };
     case 2:
-      return { label: 'P2 · Средний', variant: 'warning' };
+      return { label: 'P2 · Средний приоритет', variant: 'neutral' };
     case 3:
-      return { label: 'P3 · Низкий', variant: 'brand' };
+      return { label: 'P3 · Низкий приоритет', variant: 'neutral' };
     default:
       return { label: `P${priority}`, variant: 'neutral' };
   }

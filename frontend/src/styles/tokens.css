@@ -27,10 +27,17 @@
 
   /* Brand / Action Colors (SourceHealth Red #f93333) */
   --sh-brand: #f93333;
+  --sh-brand-text: #dc2626; /* WCAG 2.1 AA compliant (4.63:1 on white) */
   --sh-brand-hover: #e02424;
   --sh-brand-active: #c51919;
   --sh-brand-subtle: rgba(249, 51, 51, 0.08);
   --sh-brand-border: rgba(249, 51, 51, 0.28);
+
+  /* SourceCraft Native Action Button Controls */
+  --sh-btn-primary-bg: #1f2328;
+  --sh-btn-primary-text: #ffffff;
+  --sh-btn-primary-border: #1f2328;
+  --sh-btn-primary-hover: #323842;
 
   /* Health Semantics (High Contrast Light Mode) */
   --sh-health-good: #1a7f37;
@@ -96,18 +103,25 @@
   --sh-border-hover: #3d4c6d;
   --sh-border-strong: #556891;
 
-  /* Typography Colors */
+  /* Typography Colors — Elevated contrast for WCAG AA compliance */
   --sh-text-primary: #f1f5f9;
-  --sh-text-secondary: #94a3b8;
-  --sh-text-muted: #64748b;
+  --sh-text-secondary: #cbd5e1; /* 10.5:1 on #090d16 */
+  --sh-text-muted: #94a3b8;     /* 5.8:1 on #090d16 (fixes 3.6:1 failure) */
   --sh-text-inverse: #090d16;
 
   /* Brand / Action Colors */
   --sh-brand: #f93333;
+  --sh-brand-text: #f87171; /* 8.5:1 on #090d16 */
   --sh-brand-hover: #ff4d4d;
   --sh-brand-active: #ff6666;
   --sh-brand-subtle: rgba(249, 51, 51, 0.15);
   --sh-brand-border: rgba(249, 51, 51, 0.35);
+
+  /* SourceCraft Native Action Button Controls */
+  --sh-btn-primary-bg: #f1f5f9;
+  --sh-btn-primary-text: #090d16;
+  --sh-btn-primary-border: #f1f5f9;
+  --sh-btn-primary-hover: #ffffff;
 
   /* Health Semantics (Tuned for Dark Mode) */
   --sh-health-good: #34d399;

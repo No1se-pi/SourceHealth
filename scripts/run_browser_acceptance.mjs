@@ -37,15 +37,15 @@ const mockServer = http.createServer((req, res) => {
         },
         {
           id: 'a0000002-0000-0000-0000-000000000002',
-          organization_slug: 'lct-hackaton-2026',
-          repository_slug: 'case-18-repo-health-score-team-41',
-          canonical_url: 'https://sourcecraft.dev/lct-hackaton-2026/case-18-repo-health-score-team-41',
+          organization_slug: 'newbie-corp',
+          repository_slug: 'empty-starter',
+          canonical_url: 'https://sourcecraft.tech/newbie-corp/empty-starter',
           visibility: 'public',
-          health_score: 78,
+          health_score: null, // NO_DATA fixture in leaderboard
           language: 'Python',
-          likes: 128,
-          last_activity_at: '2026-09-21T09:15:00Z',
-          latest_analysis_id: 'b0000001-0000-0000-0000-000000000001'
+          likes: null,
+          last_activity_at: null,
+          latest_analysis_id: 'b0000006-0000-0000-0000-000000000006'
         },
         {
           id: 'a0000003-0000-0000-0000-000000000003',
@@ -73,15 +73,15 @@ const mockServer = http.createServer((req, res) => {
         },
         {
           id: 'a0000005-0000-0000-0000-000000000005',
-          organization_slug: 'newbie-corp',
-          repository_slug: 'empty-starter',
-          canonical_url: 'https://sourcecraft.tech/newbie-corp/empty-starter',
+          organization_slug: 'lct-hackaton-2026',
+          repository_slug: 'case-18-repo-health-score-team-41',
+          canonical_url: 'https://sourcecraft.dev/lct-hackaton-2026/case-18-repo-health-score-team-41',
           visibility: 'public',
-          health_score: null,
+          health_score: 78,
           language: 'Python',
-          likes: null,
-          last_activity_at: null,
-          latest_analysis_id: null
+          likes: 128,
+          last_activity_at: '2026-09-21T09:15:00Z',
+          latest_analysis_id: 'b0000001-0000-0000-0000-000000000001'
         }
       ],
       limit: 20,
@@ -90,6 +90,7 @@ const mockServer = http.createServer((req, res) => {
     }));
   }
 
+  // Repository details: healthy
   if (url.pathname === '/api/v1/repositories/a0000001-0000-0000-0000-000000000001') {
     res.writeHead(200);
     return res.end(JSON.stringify({
@@ -109,6 +110,26 @@ const mockServer = http.createServer((req, res) => {
     }));
   }
 
+  // Repository details: NO_DATA
+  if (url.pathname === '/api/v1/repositories/a0000002-0000-0000-0000-000000000002') {
+    res.writeHead(200);
+    return res.end(JSON.stringify({
+      id: 'a0000002-0000-0000-0000-000000000002',
+      organization_slug: 'newbie-corp',
+      repository_slug: 'empty-starter',
+      canonical_url: 'https://sourcecraft.tech/newbie-corp/empty-starter',
+      visibility: 'public',
+      health_score: null,
+      language: 'Python',
+      likes: null,
+      last_activity_at: null,
+      latest_analysis_id: 'b0000006-0000-0000-0000-000000000006',
+      sourcecraft_id: 'sc-112233',
+      default_branch: 'main',
+      head_sha: 'abcdef1234567890abcdef1234567890abcdef12'
+    }));
+  }
+
   if (url.pathname.startsWith('/api/v1/repositories/a0000001-0000-0000-0000-000000000001/analyses')) {
     res.writeHead(200);
     return res.end(JSON.stringify({
@@ -122,16 +143,6 @@ const mockServer = http.createServer((req, res) => {
           queued_at: '2026-09-20T14:28:00Z',
           completed_at: '2026-09-20T14:28:45Z',
           health_score: 88
-        },
-        {
-          id: 'b0000002-0000-0000-0000-000000000002',
-          repository_id: 'a0000001-0000-0000-0000-000000000001',
-          profile: 'mvp-v1',
-          status: 'completed',
-          trigger: 'manual',
-          queued_at: '2026-09-15T10:00:00Z',
-          completed_at: '2026-09-15T10:00:40Z',
-          health_score: 85
         }
       ],
       limit: 10,
@@ -140,6 +151,28 @@ const mockServer = http.createServer((req, res) => {
     }));
   }
 
+  if (url.pathname.startsWith('/api/v1/repositories/a0000002-0000-0000-0000-000000000002/analyses')) {
+    res.writeHead(200);
+    return res.end(JSON.stringify({
+      items: [
+        {
+          id: 'b0000006-0000-0000-0000-000000000006',
+          repository_id: 'a0000002-0000-0000-0000-000000000002',
+          profile: 'unconfigured-v1',
+          status: 'completed',
+          trigger: 'manual',
+          queued_at: '2026-09-20T16:10:00Z',
+          completed_at: '2026-09-20T16:10:15Z',
+          health_score: null
+        }
+      ],
+      limit: 10,
+      offset: 0,
+      has_more: false
+    }));
+  }
+
+  // Analysis b0000001: Completed full healthy analysis (88/100)
   if (url.pathname === '/api/v1/analyses/b0000001-0000-0000-0000-000000000001') {
     res.writeHead(200);
     return res.end(JSON.stringify({
@@ -393,15 +426,179 @@ const mockServer = http.createServer((req, res) => {
     }));
   }
 
+  // Analysis b0000002: Partial analysis state
+  if (url.pathname === '/api/v1/analyses/b0000002-0000-0000-0000-000000000002') {
+    res.writeHead(200);
+    return res.end(JSON.stringify({
+      id: 'b0000002-0000-0000-0000-000000000002',
+      repository_id: 'a0000001-0000-0000-0000-000000000001',
+      profile: 'mvp-v1',
+      status: 'partial',
+      trigger: 'manual',
+      queued_at: '2026-09-20T15:00:00Z',
+      started_at: '2026-09-20T15:00:02Z',
+      completed_at: '2026-09-20T15:00:30Z',
+      head_sha: 'abcdef1234567890abcdef1234567890abcdef12',
+      health_score: null,
+      scoring_policy_version: 'v1',
+      analyzer_contract_version: 'v1',
+      error_code: null,
+      category_scores: {
+        documentation: {
+          category: 'documentation',
+          score: 50,
+          availability: 'partial',
+          explanation: 'Обнаружен только краткий README.',
+          evidence_refs: []
+        },
+        security: {
+          category: 'security',
+          score: null,
+          availability: 'not_configured',
+          explanation: 'SourceCraft AppSec сканер не подключён для данного проекта.',
+          evidence_refs: []
+        }
+      },
+      data_coverage: {
+        documentation: 'partial',
+        security: 'not_configured'
+      },
+      recommendations: [],
+      checks: {},
+      score_coverage: {
+        nominal_weight_percent: 25,
+        scored_categories: 1,
+        unscored_categories: ['security'],
+        partial_categories: ['documentation']
+      }
+    }));
+  }
+
+  // Analysis b0000005: Failed state
+  if (url.pathname === '/api/v1/analyses/b0000005-0000-0000-0000-000000000005') {
+    res.writeHead(200);
+    return res.end(JSON.stringify({
+      id: 'b0000005-0000-0000-0000-000000000005',
+      repository_id: 'a0000001-0000-0000-0000-000000000001',
+      profile: 'mvp-v1',
+      status: 'failed',
+      trigger: 'manual',
+      queued_at: '2026-09-20T16:05:00Z',
+      started_at: '2026-09-20T16:05:02Z',
+      completed_at: '2026-09-20T16:05:15Z',
+      head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
+      health_score: null,
+      scoring_policy_version: 'v1',
+      analyzer_contract_version: 'v1',
+      error_code: 'SOURCE_CRAFT_TIMEOUT',
+      category_scores: {},
+      data_coverage: {},
+      recommendations: [],
+      checks: {},
+      score_coverage: {
+        nominal_weight_percent: 0,
+        scored_categories: 0,
+        unscored_categories: [],
+        partial_categories: []
+      }
+    }));
+  }
+
+  // Analysis b0000006: NO_DATA state with Security NO_DATA
+  if (url.pathname === '/api/v1/analyses/b0000006-0000-0000-0000-000000000006') {
+    res.writeHead(200);
+    return res.end(JSON.stringify({
+      id: 'b0000006-0000-0000-0000-000000000006',
+      repository_id: 'a0000002-0000-0000-0000-000000000002',
+      profile: 'unconfigured-v1',
+      status: 'completed',
+      trigger: 'manual',
+      queued_at: '2026-09-20T16:10:00Z',
+      started_at: '2026-09-20T16:10:02Z',
+      completed_at: '2026-09-20T16:10:15Z',
+      head_sha: 'abcdef1234567890abcdef1234567890abcdef12',
+      health_score: null, // NO_DATA != 0
+      scoring_policy_version: 'v1',
+      analyzer_contract_version: 'v1',
+      error_code: null,
+      category_scores: {
+        documentation: {
+          category: 'documentation',
+          score: null,
+          availability: 'no_data',
+          explanation: 'Файлы документации не найдены в репозитории.',
+          evidence_refs: []
+        },
+        cicd: {
+          category: 'cicd',
+          score: null,
+          availability: 'not_configured',
+          explanation: 'Конфигурации CI/CD пайплайнов не обнаружены.',
+          evidence_refs: []
+        },
+        security: {
+          category: 'security',
+          score: null,
+          availability: 'not_configured',
+          explanation: 'SourceCraft AppSec проверки не настроены в данном проекте.',
+          evidence_refs: []
+        },
+        activity: {
+          category: 'activity',
+          score: null,
+          availability: 'no_data',
+          explanation: 'Недостаточно данных об активности за период анализа.',
+          evidence_refs: []
+        },
+        issues: {
+          category: 'issues',
+          score: null,
+          availability: 'not_configured',
+          explanation: 'Трекер задач не подключён.',
+          evidence_refs: []
+        },
+        code_health: {
+          category: 'code_health',
+          score: null,
+          availability: 'no_data',
+          explanation: 'Метрики исходного кода не рассчитаны.',
+          evidence_refs: []
+        }
+      },
+      data_coverage: {
+        documentation: 'no_data',
+        cicd: 'not_configured',
+        security: 'not_configured',
+        activity: 'no_data',
+        issues: 'not_configured',
+        code_health: 'no_data'
+      },
+      recommendations: [],
+      checks: {},
+      score_coverage: {
+        nominal_weight_percent: 0,
+        scored_categories: 0,
+        unscored_categories: ['documentation', 'cicd', 'security', 'activity', 'issues', 'code_health'],
+        partial_categories: []
+      }
+    }));
+  }
+
   if (url.pathname.endsWith('/report.md')) {
     res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
     res.writeHead(200);
     return res.end('# Отчёт о здоровье репозитория demo-org/fast-service\n\nHealth Score: 88/100\n');
   }
 
+  // SourceCraft Connection status: check referer for disconnected state
   if (url.pathname === '/api/v1/sourcecraft/connection') {
+    const referer = req.headers.referer || '';
+    if (referer.includes('disconnected=1')) {
+      res.writeHead(200);
+      return res.end(JSON.stringify({ connected: false, expires_in: 0 }));
+    }
     res.writeHead(200);
-    return res.end(JSON.stringify({ connected: true, expires_at: '2026-09-22T00:00:00Z' }));
+    return res.end(JSON.stringify({ connected: true, expires_in: 1800 }));
   }
 
   if (url.pathname === '/api/v1/sourcecraft/repositories') {
@@ -432,39 +629,91 @@ const vite = spawn('npm.cmd', ['run', 'preview', '--', '--port', '5173'], {
 
 // Wait until Vite preview responds on 5173
 console.log('Waiting for Vite preview on http://127.0.0.1:5173 ...');
-for (let i = 0; i < 20; i++) {
+let viteReady = false;
+for (let i = 0; i < 25; i++) {
   try {
     const res = await fetch('http://127.0.0.1:5173/');
     if (res.ok) {
+      viteReady = true;
       console.log('Vite preview is ready!');
       break;
     }
-  } catch (e) {
+  } catch {
     // wait and retry
   }
-  await new Promise((r) => setTimeout(r, 500));
+  await new Promise((r) => setTimeout(r, 400));
+}
+
+if (!viteReady) {
+  console.error('FATAL: Vite preview failed to start within timeout');
+  vite.kill();
+  mockServer.close();
+  process.exit(1);
 }
 
 const edgePath = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const chromePath = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const browserExe = fs.existsSync(edgePath) ? edgePath : chromePath;
+
+if (!fs.existsSync(browserExe)) {
+  console.error('FATAL: Browser executable not found at Edge or Chrome path');
+  vite.kill();
+  mockServer.close();
+  process.exit(1);
+}
+
 console.log('Using browser:', browserExe);
 
+// Full Matrix: 5 viewports (1440, 1024, 768, 390, 375) across key pages + fixture states
 const tasks = [
+  // 1. Leaderboard across viewports & themes
   { name: '01-leaderboard-light-1440.png', url: 'http://127.0.0.1:5173/?theme=light', width: 1440, height: 900 },
   { name: '02-leaderboard-dark-1440.png', url: 'http://127.0.0.1:5173/?theme=dark', width: 1440, height: 900 },
-  { name: '03-repository-light-1440.png', url: 'http://127.0.0.1:5173/repositories/a0000001-0000-0000-0000-000000000001?theme=light', width: 1440, height: 900 },
-  { name: '04-repository-dark-1440.png', url: 'http://127.0.0.1:5173/repositories/a0000001-0000-0000-0000-000000000001?theme=dark', width: 1440, height: 900 },
-  { name: '05-analysis-light-1440.png', url: 'http://127.0.0.1:5173/analyses/b0000001-0000-0000-0000-000000000001?theme=light', width: 1440, height: 900 },
-  { name: '06-analysis-dark-1440.png', url: 'http://127.0.0.1:5173/analyses/b0000001-0000-0000-0000-000000000001?theme=dark', width: 1440, height: 900 },
-  { name: '07-sourcecraft-light-1440.png', url: 'http://127.0.0.1:5173/sourcecraft?theme=light', width: 1440, height: 900 },
-  { name: '08-sourcecraft-dark-1440.png', url: 'http://127.0.0.1:5173/sourcecraft?theme=dark', width: 1440, height: 900 },
-  { name: '09-auth-1440.png', url: 'http://127.0.0.1:5173/auth/callback?theme=light', width: 1440, height: 900 },
-  { name: '10-leaderboard-390.png', url: 'http://127.0.0.1:5173/?theme=light', width: 390, height: 844 },
+  { name: '03-leaderboard-1024.png', url: 'http://127.0.0.1:5173/?theme=light', width: 1024, height: 768 },
+  { name: '04-leaderboard-768.png', url: 'http://127.0.0.1:5173/?theme=light', width: 768, height: 1024 },
+  { name: '05-leaderboard-390.png', url: 'http://127.0.0.1:5173/?theme=light', width: 390, height: 844 },
+  { name: '06-leaderboard-375.png', url: 'http://127.0.0.1:5173/?theme=light', width: 375, height: 667 },
+
+  // 2. Repository Details across viewports & themes + NO_DATA state
+  { name: '07-repository-light-1440.png', url: 'http://127.0.0.1:5173/repositories/a0000001-0000-0000-0000-000000000001?theme=light', width: 1440, height: 900 },
+  { name: '08-repository-dark-1440.png', url: 'http://127.0.0.1:5173/repositories/a0000001-0000-0000-0000-000000000001?theme=dark', width: 1440, height: 900 },
+  { name: '09-repository-1024.png', url: 'http://127.0.0.1:5173/repositories/a0000001-0000-0000-0000-000000000001?theme=light', width: 1024, height: 768 },
+  { name: '10-repository-768.png', url: 'http://127.0.0.1:5173/repositories/a0000001-0000-0000-0000-000000000001?theme=light', width: 768, height: 1024 },
   { name: '11-repository-390.png', url: 'http://127.0.0.1:5173/repositories/a0000001-0000-0000-0000-000000000001?theme=light', width: 390, height: 844 },
-  { name: '12-analysis-390.png', url: 'http://127.0.0.1:5173/analyses/b0000001-0000-0000-0000-000000000001?theme=light', width: 390, height: 844 },
-  { name: '13-sourcecraft-390.png', url: 'http://127.0.0.1:5173/sourcecraft?theme=light', width: 390, height: 844 },
+  { name: '12-repository-375.png', url: 'http://127.0.0.1:5173/repositories/a0000001-0000-0000-0000-000000000001?theme=light', width: 375, height: 667 },
+  { name: '13-repository-nodata-1440.png', url: 'http://127.0.0.1:5173/repositories/a0000002-0000-0000-0000-000000000002?theme=light', width: 1440, height: 900 },
+
+  // 3. Analysis Details across viewports & states (completed, partial, failed, NO_DATA)
+  { name: '14-analysis-light-1440.png', url: 'http://127.0.0.1:5173/analyses/b0000001-0000-0000-0000-000000000001?theme=light', width: 1440, height: 900 },
+  { name: '15-analysis-dark-1440.png', url: 'http://127.0.0.1:5173/analyses/b0000001-0000-0000-0000-000000000001?theme=dark', width: 1440, height: 900 },
+  { name: '16-analysis-1024.png', url: 'http://127.0.0.1:5173/analyses/b0000001-0000-0000-0000-000000000001?theme=light', width: 1024, height: 768 },
+  { name: '17-analysis-768.png', url: 'http://127.0.0.1:5173/analyses/b0000001-0000-0000-0000-000000000001?theme=light', width: 768, height: 1024 },
+  { name: '18-analysis-390.png', url: 'http://127.0.0.1:5173/analyses/b0000001-0000-0000-0000-000000000001?theme=light', width: 390, height: 844 },
+  { name: '19-analysis-375.png', url: 'http://127.0.0.1:5173/analyses/b0000001-0000-0000-0000-000000000001?theme=light', width: 375, height: 667 },
+  { name: '20-analysis-partial-1440.png', url: 'http://127.0.0.1:5173/analyses/b0000002-0000-0000-0000-000000000002?theme=light', width: 1440, height: 900 },
+  { name: '21-analysis-failed-1440.png', url: 'http://127.0.0.1:5173/analyses/b0000005-0000-0000-0000-000000000005?theme=light', width: 1440, height: 900 },
+  { name: '22-analysis-security-nodata-1440.png', url: 'http://127.0.0.1:5173/analyses/b0000006-0000-0000-0000-000000000006?theme=light', width: 1440, height: 900 },
+
+  // 4. SourceCraft integration across viewports & states
+  { name: '23-sourcecraft-connected-light-1440.png', url: 'http://127.0.0.1:5173/sourcecraft?theme=light', width: 1440, height: 900 },
+  { name: '24-sourcecraft-connected-dark-1440.png', url: 'http://127.0.0.1:5173/sourcecraft?theme=dark', width: 1440, height: 900 },
+  { name: '25-sourcecraft-1024.png', url: 'http://127.0.0.1:5173/sourcecraft?theme=light', width: 1024, height: 768 },
+  { name: '26-sourcecraft-768.png', url: 'http://127.0.0.1:5173/sourcecraft?theme=light', width: 768, height: 1024 },
+  { name: '27-sourcecraft-390.png', url: 'http://127.0.0.1:5173/sourcecraft?theme=light', width: 390, height: 844 },
+  { name: '28-sourcecraft-375.png', url: 'http://127.0.0.1:5173/sourcecraft?theme=light', width: 375, height: 667 },
+  { name: '29-sourcecraft-disconnected-1440.png', url: 'http://127.0.0.1:5173/sourcecraft?disconnected=1&theme=light', width: 1440, height: 900 },
+
+  // 5. Auth Callback & 404
+  { name: '30-auth-callback-1440.png', url: 'http://127.0.0.1:5173/auth/callback?theme=light', width: 1440, height: 900 },
+  { name: '31-auth-callback-390.png', url: 'http://127.0.0.1:5173/auth/callback?theme=light', width: 390, height: 844 },
+  { name: '32-notfound-404-1440.png', url: 'http://127.0.0.1:5173/route-does-not-exist?theme=light', width: 1440, height: 900 },
+  { name: '33-notfound-404-390.png', url: 'http://127.0.0.1:5173/route-does-not-exist?theme=light', width: 390, height: 844 },
+
+  // 6. Mobile Navigation Open View
+  { name: '34-mobile-nav-open-390.png', url: 'http://127.0.0.1:5173/?mobileNav=1&theme=light', width: 390, height: 844 }
 ];
+
+let failureCount = 0;
 
 for (const task of tasks) {
   const filePath = path.join(outDir, task.name);
@@ -475,22 +724,40 @@ for (const task of tasks) {
       '--disable-gpu',
       '--hide-scrollbars',
       `--window-size=${task.width},${task.height}`,
-      '--virtual-time-budget=2500',
+      '--virtual-time-budget=3000',
       `--screenshot=${filePath}`,
       task.url
     ]);
-    proc.on('close', resolve);
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        console.error(`Process exited with non-zero code ${code} for ${task.name}`);
+        failureCount++;
+      }
+      resolve();
+    });
   });
 
   if (fs.existsSync(filePath)) {
     const stats = fs.statSync(filePath);
-    console.log(`✓ ${task.name} created (${stats.size} bytes)`);
+    if (stats.size === 0) {
+      console.error(`✗ FAILED: ${task.name} has 0 bytes file size`);
+      failureCount++;
+    } else {
+      console.log(`✓ ${task.name} created (${stats.size} bytes)`);
+    }
   } else {
     console.error(`✗ FAILED to create ${task.name}`);
+    failureCount++;
   }
 }
 
 vite.kill();
 mockServer.close();
-console.log('All acceptance screenshots completed successfully.');
+
+if (failureCount > 0) {
+  console.error(`\nFATAL: Browser acceptance failed with ${failureCount} error(s).`);
+  process.exit(1);
+}
+
+console.log(`\nAll ${tasks.length} browser acceptance screenshots completed and verified successfully.`);
 process.exit(0);

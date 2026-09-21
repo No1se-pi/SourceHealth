@@ -83,7 +83,7 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({
           fontSize: '0.88rem',
         }}
       >
-        <span style={{ fontWeight: 600, color: 'var(--sh-brand)' }}>Действие: </span>
+        <span style={{ fontWeight: 600, color: 'var(--sh-brand-text)' }}>Действие: </span>
         <span style={{ color: 'var(--sh-text-primary)' }}>{recommendation.suggested_action}</span>
       </div>
 

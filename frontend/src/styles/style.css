@@ -251,6 +251,34 @@ select:focus-visible, input:focus-visible {
   width: 100%;
 }
 
+/* Mobile Menu Controls */
+.mobile-menu-btn {
+  display: none;
+  background-color: var(--sh-bg-surface-elevated);
+  border: 1px solid var(--sh-border-default);
+  border-radius: var(--sh-radius-sm);
+  color: var(--sh-text-primary);
+  padding: 0.4rem 0.65rem;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  transition: background-color var(--sh-transition), border-color var(--sh-transition);
+}
+
+.mobile-menu-btn:hover {
+  border-color: var(--sh-border-hover);
+}
+
+.mobile-menu-btn:focus-visible {
+  outline: 2px solid var(--sh-brand);
+}
+
+.mobile-nav-panel {
+  display: none;
+}
+
 @media (max-width: 640px) {
   .app-header-content {
     padding: 0.65rem 1rem;
@@ -264,6 +292,51 @@ select:focus-visible, input:focus-visible {
   }
   .app-nav {
     display: none;
+  }
+  .header-actions-desktop {
+    display: none !important;
+  }
+  .mobile-menu-btn {
+    display: inline-flex;
+  }
+  .mobile-nav-panel {
+    display: flex;
+    flex-direction: column;
+    padding: var(--sh-space-4) 1rem;
+    border-top: 1px solid var(--sh-border-subtle);
+    background-color: var(--sh-bg-surface);
+    gap: var(--sh-space-3);
+  }
+  .mobile-nav-links {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sh-space-2);
+  }
+  .mobile-nav-link {
+    display: block;
+    color: var(--sh-text-secondary);
+    font-size: 0.95rem;
+    font-weight: 500;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--sh-radius-sm);
+    text-decoration: none;
+    transition: background-color var(--sh-transition), color var(--sh-transition);
+  }
+  .mobile-nav-link:hover, .mobile-nav-link.active {
+    color: var(--sh-text-primary);
+    background-color: var(--sh-bg-surface-elevated);
+    font-weight: 600;
+  }
+  .mobile-nav-divider {
+    height: 1px;
+    background-color: var(--sh-border-subtle);
+    width: 100%;
+    margin: 0.25rem 0;
+  }
+  .mobile-nav-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sh-space-3);
   }
   .page-container {
     padding: 0 1rem;
