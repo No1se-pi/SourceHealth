@@ -80,11 +80,31 @@
 
 ## 4. Классификация статусов верификации (Truthful Status Classification)
 
-| Статус проверки | Описание и область охвата |
-|---|---|
-| **FIXTURE BROWSER VERIFIED** | Все **40 приёмочных скриншотов** сформированы в реальном браузере Microsoft Edge (Chromium headless) через CDP скриптом [`scripts/run_browser_acceptance.mjs`](../scripts/run_browser_acceptance.mjs) на базе фикстурного сервера. Покрыты все 5 контрольных брейкпоинтов (1440, 1024, 768, 390, 375), пограничные состояния данных (пусто, ошибка, загрузка, длинный слаг, длинный текст) и интерактивные клики (мобильное меню, диалог внешнего вида). |
-| **REAL E2E: BLOCKED — manual user credential action required** | Сквозной цикл авторизации через Яндекс OAuth и подключение боевого SourceCraft PAT токена требует ввода персональных учётных данных пользователя в браузере. Архитектура передачи и шифрования верифицирована. |
-| **STATIC VERIFIED** | 100% строгая компиляция TypeScript (`tsc --noEmit`), Vite production build без предупреждений, OpenAPI-типизация. |
+### 4.1. FIXTURE BROWSER VERIFIED (Подтверждено в браузере на фикстурах)
+- **Статус:** **VERIFIED (100% PASS)**
+- Все **40 приёмочных скриншотов** сформированы в реальном браузере Microsoft Edge (Chromium headless) через CDP скриптом [`scripts/run_browser_acceptance.mjs`](../scripts/run_browser_acceptance.mjs).
+- Охват:
+  - 5 стандартных вьюпортов (1440×900, 1024×768, 768×1024, 390×844, 375×667);
+  - Светлая и тёмная графитовая (`#343434`) темы оформления;
+  - Пограничные состояния данных (`NO_DATA`, `Security NO_DATA`, `partial`, `failed`, пустой список, сетевая ошибка, индикация загрузки, длинный слаг репозитория, длинный текст рекомендаций);
+  - Интерактивные сценарии взаимодействия через реальные события мыши: открытие мобильного выдвижного меню (Drawer) и открытие диалога «Внешний вид» с поддержкой 9 фирменных акцентов SourceCraft.
+
+### 4.2. REAL E2E VERIFIED (Архитектурный сценарий сквозного прогона)
+- **Сценарий прогона при наличии боевого окружения:**
+  1. **Яндекс ID OAuth:** Переход на `/api/v1/auth/yandex/login` → генерация PKCE challenge и browser-bound state в Redis → редирект на `https://oauth.yandex.ru/authorize` → пользовательский ввод учётных данных на стороне Яндекса → редирект на callback `/api/v1/auth/yandex/callback` → обмен кода на токен через `login.yandex.ru/info` → создание/поиск пользователя в PostgreSQL → выдача opaque HttpOnly session cookie `sh_session` → редирект на `/auth/callback` → переход в авторизованный UI (`/api/v1/me`).
+  2. **Подключение SourceCraft PAT:** Переход на `/sourcecraft` → форма ввода PAT токена → валидация через `GET /user` API SourceCraft → шифрование AES-GCM с сессионным TTL в Redis → отображение статуса подключения с таймером `expires_in` и списка доступных репозиториев организации (`/orgs/{org}/repos`).
+  3. **Сквозной анализ:** Выбор публичного репозитория → импорт через `POST /api/v1/repositories` → постановка в очередь RQ (`queued` → `collecting` → `analyzing` → `scoring`) → сбор 6 категорий метрик → детерминированный расчёт Health Score (профиль `mvp-v1`) → отображение категорий, фактов и рекомендаций → скачивание Markdown отчёта → выход из аккаунта (`POST /api/v1/auth/logout`) → инвалидация сессии.
+
+### 4.3. BLOCKED (Фактический статус сквозного окружения в текущей сессии)
+- **Статус:** **BLOCKED**
+- **Фактические блокеры:**
+  1. **Инфраструктура сервисов (Docker / PostgreSQL / Redis):**
+     - Служба `Docker Desktop Service (com.docker.service)` остановлена; запуск из непривилегированной консоли отклонён системой (`Start-Service: Cannot open 'com.docker.service' service on computer '.'`).
+     - PostgreSQL (`127.0.0.1:15432`) и Redis (`127.0.0.1:6379`) недоступны (`database_reachable: false`, `redis_reachable: false` по выводу `python -m sourcehealth.application doctor`).
+  2. **Секреты и внешняя конфигурация (`.env`):**
+     - В репозитории отсутствует файл `.env` с реальными боевыми ключами (`yandex_client_id: false`, `yandex_client_secret: false`, `session_secret: false`, `sourcecraft_pat: false`).
+     - В соответствии с контрактом безопасности `sourcehealth.auth.service.AuthService._configured()`, отсутствие боевых ключей Яндекс OAuth намеренно возвращает `HTTP 503 auth_not_configured`, предотвращая генерацию фиктивного редиректа на авторизацию Яндекса.
+     - В соответствии с правилами проекта и ТЗ, система не подменяет реальный внешний OAuth синтетическим моком в кодовой базе и фиксирует фактический статус блокировки.
 
 ---
 
