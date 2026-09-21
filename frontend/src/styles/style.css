@@ -272,7 +272,7 @@ select:focus-visible, input:focus-visible {
 }
 
 .sc-nav-item.active {
-  background-color: var(--sh-bg-active);
+  background-color: var(--sh-accent-subtle);
   color: var(--sh-text-primary);
   font-weight: 600;
   border-left: 3px solid var(--sh-accent);
@@ -428,6 +428,14 @@ select:focus-visible, input:focus-visible {
   background-color: var(--sh-bg-surface-hover);
   border-color: var(--sh-border-hover);
   text-decoration: none;
+}
+
+.sc-yandex-id-mark {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: block;
 }
 
 /* ==========================================================================
@@ -719,7 +727,7 @@ select:focus-visible, input:focus-visible {
 
 .sc-pill-btn {
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 4px;
   padding: 0.35rem 0.85rem;
   font-size: 0.8125rem;
@@ -729,15 +737,17 @@ select:focus-visible, input:focus-visible {
   font-weight: 500;
 }
 
-.sc-pill-btn:hover:not(:disabled) {
+.sc-pill-btn:hover:not(:disabled):not(.active) {
   color: var(--sh-text-primary);
+  background-color: var(--sh-bg-surface-hover);
 }
 
 .sc-pill-btn.active {
-  background-color: var(--sh-bg-active);
+  background-color: var(--sh-accent-subtle);
   color: var(--sh-text-primary);
   font-weight: 600;
-  box-shadow: 0 0 0 1px var(--sh-border-strong);
+  border-color: var(--sh-accent-border);
+  box-shadow: 0 0 0 1px var(--sh-accent-border);
 }
 
 .sc-pill-btn:disabled {
