@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import React, { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import { Button } from './Button';
@@ -13,6 +13,7 @@ export function RepositoryImport() {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (!url.trim()) return;
     setPending(true);
     setError(undefined);
     try {
@@ -25,17 +26,60 @@ export function RepositoryImport() {
     }
   }
 
-  return <Card>
-    <form onSubmit={submit} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: 'var(--sh-space-3)' }}>
-      <label style={{ flex: '1 1 280px' }}>
-        Публичный репозиторий SourceCraft
-        <input type="url" required maxLength={512} value={url} disabled={pending}
-          onChange={event => setUrl(event.target.value)} placeholder="https://sourcecraft.dev/org/repo"
-          style={{ width: '100%', marginTop: 'var(--sh-space-2)' }} />
-      </label>
-      <Button type="submit" disabled={pending}>{pending ? 'Проверяем репозиторий…' : 'Добавить репозиторий'}</Button>
-    </form>
-    <p style={{ marginTop: 'var(--sh-space-2)' }}>Для добавления войдите через Яндекс ID. После проверки можно запустить анализ на странице репозитория.</p>
-    {error != null && <ErrorState error={error} title="Не удалось добавить репозиторий" />}
-  </Card>;
+  return (
+    <Card
+      title="Добавить репозиторий для анализа"
+      subtitle="Импорт открытого репозитория SourceCraft в систему мониторинга SourceHealth"
+    >
+      <form
+        onSubmit={submit}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--sh-space-3)',
+        }}
+      >
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--sh-space-3)', alignItems: 'center' }}>
+          <div style={{ flex: '1 1 320px' }}>
+            <input
+              type="url"
+              required
+              maxLength={512}
+              value={url}
+              disabled={pending}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://sourcecraft.dev/org/repo или https://sourcecraft.tech/org/repo"
+              aria-label="URL открытого репозитория SourceCraft"
+              style={{
+                width: '100%',
+                padding: '0.55rem 0.85rem',
+                fontSize: '0.9rem',
+              }}
+            />
+          </div>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={pending || !url.trim()}
+            loading={pending}
+          >
+            {pending ? 'Проверяем репозиторий…' : 'Импортировать'}
+          </Button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', color: 'var(--sh-text-muted)' }}>
+          <span>ℹ</span>
+          <span>
+            Для добавления требуется активная сессия Яндекс ID. Доступен анализ только публичных репозиториев.
+          </span>
+        </div>
+      </form>
+
+      {error != null && (
+        <div style={{ marginTop: 'var(--sh-space-4)' }}>
+          <ErrorState error={error} title="Не удалось добавить репозиторий" />
+        </div>
+      )}
+    </Card>
+  );
 }

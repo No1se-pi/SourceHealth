@@ -10,18 +10,18 @@ export function getButtonStyles(
 ): React.CSSProperties {
   const sizeStyles: Record<ButtonSize, React.CSSProperties> = {
     sm: {
-      padding: '0.35rem 0.65rem',
-      fontSize: '0.85rem',
+      padding: '0.3rem 0.65rem',
+      fontSize: '0.82rem',
       borderRadius: 'var(--sh-radius-sm)',
     },
     md: {
-      padding: '0.55rem 1rem',
-      fontSize: '0.93rem',
+      padding: '0.45rem 0.95rem',
+      fontSize: '0.88rem',
       borderRadius: 'var(--sh-radius-sm)',
     },
     lg: {
-      padding: '0.75rem 1.35rem',
-      fontSize: '1rem',
+      padding: '0.65rem 1.25rem',
+      fontSize: '0.95rem',
       borderRadius: 'var(--sh-radius-md)',
     },
   };
@@ -31,26 +31,31 @@ export function getButtonStyles(
       backgroundColor: 'var(--sh-brand)',
       color: '#ffffff',
       border: '1px solid var(--sh-brand)',
+      fontWeight: 600,
     },
     secondary: {
       backgroundColor: 'var(--sh-bg-surface-elevated)',
       color: 'var(--sh-text-primary)',
       border: '1px solid var(--sh-border-default)',
+      fontWeight: 500,
     },
     outline: {
       backgroundColor: 'transparent',
       color: 'var(--sh-text-primary)',
       border: '1px solid var(--sh-border-default)',
+      fontWeight: 500,
     },
     ghost: {
       backgroundColor: 'transparent',
       color: 'var(--sh-text-secondary)',
       border: '1px solid transparent',
+      fontWeight: 500,
     },
     danger: {
       backgroundColor: 'var(--sh-health-danger-bg)',
       color: 'var(--sh-health-danger)',
       border: '1px solid var(--sh-health-danger-border)',
+      fontWeight: 600,
     },
   };
 
@@ -59,10 +64,10 @@ export function getButtonStyles(
     alignItems: 'center',
     justifyContent: 'center',
     gap: '0.5rem',
-    fontWeight: 500,
     textDecoration: 'none',
     cursor: 'pointer',
-    transition: 'background var(--sh-transition), border-color var(--sh-transition), opacity var(--sh-transition)',
+    lineHeight: 1.3,
+    transition: 'background var(--sh-transition), border-color var(--sh-transition), opacity var(--sh-transition), transform var(--sh-transition)',
     ...sizeStyles[size],
     ...variantStyles[variant],
     ...extraStyle,

@@ -1,3 +1,33 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SourceHealth</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SourceHealth · Анализ здоровья репозиториев</title>
+    <meta name="description" content="Платформа объективной оценки здоровья, надежности и готовности репозиториев для экосистемы SourceCraft." />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <script>
+      (function () {
+        try {
+          var params = new URLSearchParams(window.location.search);
+          var queryTheme = params.get('theme');
+          if (queryTheme === 'dark' || queryTheme === 'light') {
+            document.documentElement.setAttribute('data-theme', queryTheme);
+            try { localStorage.setItem('sourcehealth_theme', queryTheme); } catch (e) {}
+            return;
+          }
+          var stored = localStorage.getItem('sourcehealth_theme');
+          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var theme = stored === 'dark' || stored === 'light' ? stored : (prefersDark ? 'dark' : 'light');
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

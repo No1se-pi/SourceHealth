@@ -223,8 +223,8 @@ export const RepositoryPage: React.FC = () => {
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                  gap: 'var(--sh-space-4)',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                  gap: 'var(--sh-space-3)',
                   backgroundColor: 'var(--sh-bg-base)',
                   padding: 'var(--sh-space-4)',
                   borderRadius: 'var(--sh-radius-sm)',

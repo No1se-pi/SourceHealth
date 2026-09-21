@@ -99,14 +99,17 @@ export const LeaderboardPage: React.FC = () => {
         <h1 style={{ marginBottom: 'var(--sh-space-2)' }}>
           Здоровье открытых репозиториев
         </h1>
-        <p style={{ maxWidth: '720px', margin: 0 }}>
-          Оценки основаны на объективных фактах и проверяемых метриках SourceCraft.
-          Принцип: отсутствие данных («Нет данных») не приравнивается к плохому репозиторию.
+        <p style={{ maxWidth: '780px', margin: 0 }}>
+          Оценки основаны на проверяемых объективных фактах и метриках экосистемы SourceCraft.
+          Принцип: отсутствие внешних данных («Нет данных») не приравнивается к плохому проекту.
         </p>
       </div>
 
       <RepositoryImport />
+
       <Card
+        title="Лидерборд проектов"
+        subtitle="Сравнение показателей качества, покрытия тестами, документации и безопасности"
         headerAction={
           <div
             style={{
@@ -120,7 +123,7 @@ export const LeaderboardPage: React.FC = () => {
               <label
                 htmlFor="language-filter"
                 style={{
-                  fontSize: '0.88rem',
+                  fontSize: '0.85rem',
                   color: 'var(--sh-text-secondary)',
                   fontWeight: 500,
                 }}
@@ -146,7 +149,7 @@ export const LeaderboardPage: React.FC = () => {
               <label
                 htmlFor="sort-select"
                 style={{
-                  fontSize: '0.88rem',
+                  fontSize: '0.85rem',
                   color: 'var(--sh-text-secondary)',
                   fontWeight: 500,
                 }}
@@ -178,7 +181,7 @@ export const LeaderboardPage: React.FC = () => {
                 gap: '1rem',
               }}
             >
-              <span style={{ fontSize: '0.85rem', color: 'var(--sh-text-muted)' }}>
+              <span style={{ fontSize: '0.82rem', color: 'var(--sh-text-muted)' }}>
                 Показано {page.items.length} репозиториев (смещение: {offset})
               </span>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -223,10 +226,10 @@ export const LeaderboardPage: React.FC = () => {
               <table className="leaderboard-table">
                 <thead>
                   <tr>
-                    <th scope="col" style={{ width: '4rem', textAlign: 'center' }}>
+                    <th scope="col" style={{ width: '3.5rem', textAlign: 'center' }}>
                       #
                     </th>
-                    <th scope="col">Репозиторий</th>
+                    <th scope="col">Репозиторий SourceCraft</th>
                     <th scope="col">Язык</th>
                     <th scope="col">Лайки</th>
                     <th scope="col">Активность</th>
@@ -246,30 +249,59 @@ export const LeaderboardPage: React.FC = () => {
                             fontFamily: 'var(--sh-font-mono)',
                             color: 'var(--sh-text-muted)',
                             fontWeight: 600,
-                            fontSize: '0.9rem',
+                            fontSize: '0.88rem',
                           }}
                         >
                           {position}
                         </td>
                         <td>
-                          <Link
-                            to={`/repositories/${repo.id}`}
-                            style={{
-                              fontWeight: 600,
-                              fontSize: '0.95rem',
-                              color: 'var(--sh-text-primary)',
-                            }}
-                          >
-                            {repo.organization_slug}/{repo.repository_slug}
-                          </Link>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                            <Link
+                              to={`/repositories/${repo.id}`}
+                              style={{
+                                fontWeight: 600,
+                                fontSize: '0.92rem',
+                                color: 'var(--sh-text-primary)',
+                              }}
+                            >
+                              {repo.organization_slug}/{repo.repository_slug}
+                            </Link>
+                            <span style={{ fontSize: '0.78rem', color: 'var(--sh-text-muted)', fontFamily: 'var(--sh-font-mono)' }}>
+                              {repo.canonical_url}
+                            </span>
+                          </div>
                         </td>
-                        <td style={{ color: 'var(--sh-text-secondary)', fontSize: '0.9rem' }}>
-                          {repo.language || '—'}
+                        <td style={{ color: 'var(--sh-text-secondary)', fontSize: '0.88rem' }}>
+                          {repo.language ? (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                padding: '0.15rem 0.5rem',
+                                backgroundColor: 'var(--sh-bg-surface-elevated)',
+                                border: '1px solid var(--sh-border-default)',
+                                borderRadius: 'var(--sh-radius-sm)',
+                                fontSize: '0.8rem',
+                                fontWeight: 500,
+                              }}
+                            >
+                              {repo.language}
+                            </span>
+                          ) : (
+                            '—'
+                          )}
                         </td>
-                        <td style={{ color: 'var(--sh-text-secondary)', fontSize: '0.9rem' }}>
-                          {repo.likes !== null && repo.likes !== undefined ? repo.likes : '—'}
+                        <td style={{ color: 'var(--sh-text-secondary)', fontSize: '0.88rem' }}>
+                          {repo.likes !== null && repo.likes !== undefined ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                              <span>★</span>
+                              <span>{repo.likes}</span>
+                            </span>
+                          ) : (
+                            '—'
+                          )}
                         </td>
-                        <td style={{ color: 'var(--sh-text-secondary)', fontSize: '0.9rem' }}>
+                        <td style={{ color: 'var(--sh-text-secondary)', fontSize: '0.85rem' }}>
                           {formatLastActivity(repo.last_activity_at)}
                         </td>
                         <td style={{ textAlign: 'right' }}>
@@ -290,10 +322,10 @@ export const LeaderboardPage: React.FC = () => {
                   <div
                     key={repo.id}
                     style={{
-                      padding: 'var(--sh-space-3) var(--sh-space-4)',
+                      padding: 'var(--sh-space-4)',
                       backgroundColor: 'var(--sh-bg-base)',
                       borderRadius: 'var(--sh-radius-sm)',
-                      border: '1px solid var(--sh-border-subtle)',
+                      border: '1px solid var(--sh-border-default)',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '0.5rem',
@@ -322,7 +354,7 @@ export const LeaderboardPage: React.FC = () => {
                           to={`/repositories/${repo.id}`}
                           style={{
                             fontWeight: 600,
-                            fontSize: '0.95rem',
+                            fontSize: '0.92rem',
                             wordBreak: 'break-word',
                           }}
                         >
@@ -336,15 +368,15 @@ export const LeaderboardPage: React.FC = () => {
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '1rem',
-                        fontSize: '0.82rem',
+                        gap: '0.85rem',
+                        fontSize: '0.8rem',
                         color: 'var(--sh-text-muted)',
                         flexWrap: 'wrap',
                       }}
                     >
                       <span>Язык: {repo.language || '—'}</span>
                       <span>
-                        Лайки: {repo.likes !== null && repo.likes !== undefined ? repo.likes : '—'}
+                        Лайки: {repo.likes !== null && repo.likes !== undefined ? `★ ${repo.likes}` : '—'}
                       </span>
                       <span>Активность: {formatLastActivity(repo.last_activity_at)}</span>
                     </div>

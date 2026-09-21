@@ -202,6 +202,81 @@ export const mockCompletedAnalysis = {
         },
       ],
     },
+    cicd: {
+      analyzer: 'cicd_analyzer',
+      status: 'ok',
+      availability: 'available',
+      source: 'sourcecraft_ci',
+      category: 'cicd',
+      analyzer_version: '1.0.0',
+      contract_version: '1.0.0',
+      metrics: { builds_total: 45, success_rate: 0.98 },
+      findings: [],
+      metadata: {},
+      error: null,
+      evidence: [
+        {
+          id: 'ev-ci-1',
+          source: 'sourcecraft_ci',
+          type: 'pipeline_run',
+          reference: 'pipeline/build-and-test',
+          summary: 'CI пайплайн успешно завершён на коммите ветки main (тесты: 120/120)',
+          url: 'https://sourcecraft.tech/demo-org/fast-service/pipelines/42',
+          location: '.sourcecraft/workflows/ci.yml:1',
+          timestamp: '2026-09-16T14:28:12Z',
+        },
+      ],
+    },
+    activity: {
+      analyzer: 'git_activity',
+      status: 'ok',
+      availability: 'available',
+      source: 'git_log',
+      category: 'activity',
+      analyzer_version: '1.0.0',
+      contract_version: '1.0.0',
+      metrics: { commits_30d: 38, active_contributors: 4 },
+      findings: [],
+      metadata: {},
+      error: null,
+      evidence: [
+        {
+          id: 'ev-act-1',
+          source: 'git_log',
+          type: 'commit_frequency',
+          reference: 'commits/recent',
+          summary: 'Высокая частота коммитов: 38 коммитов от 4 авторов за последние 30 дней',
+          url: 'https://sourcecraft.tech/demo-org/fast-service/commits',
+          location: null,
+          timestamp: '2026-09-16T14:28:18Z',
+        },
+      ],
+    },
+    issues: {
+      analyzer: 'issue_tracker',
+      status: 'ok',
+      availability: 'available',
+      source: 'sourcecraft_issues',
+      category: 'issues',
+      analyzer_version: '1.0.0',
+      contract_version: '1.0.0',
+      metrics: { open_issues: 3, closed_issues_30d: 14, median_close_hours: 18 },
+      findings: [],
+      metadata: {},
+      error: null,
+      evidence: [
+        {
+          id: 'ev-iss-1',
+          source: 'sourcecraft_issues',
+          type: 'issue_metrics',
+          reference: 'issues/stats',
+          summary: 'Медианное время ответа 18 часов, 14 закрытых тикетов за месяц',
+          url: 'https://sourcecraft.tech/demo-org/fast-service/issues',
+          location: null,
+          timestamp: '2026-09-16T14:28:19Z',
+        },
+      ],
+    },
     code_health: {
       analyzer: 'sast',
       status: 'ok',
@@ -227,6 +302,12 @@ export const mockCompletedAnalysis = {
         },
       ],
     },
+  },
+  score_coverage: {
+    nominal_weight_percent: 100,
+    scored_categories: 6,
+    unscored_categories: [],
+    partial_categories: [],
   },
 } satisfies Analysis;
 
@@ -358,6 +439,12 @@ export const mockNoDataAnalysis = {
   },
   recommendations: [],
   checks: {},
+  score_coverage: {
+    nominal_weight_percent: 0,
+    scored_categories: 0,
+    unscored_categories: ['documentation', 'cicd', 'security', 'activity', 'issues', 'code_health'],
+    partial_categories: [],
+  },
 } satisfies Analysis;
 
 export const mockPartialAnalysis = {
@@ -396,4 +483,10 @@ export const mockPartialAnalysis = {
   },
   recommendations: [],
   checks: {},
+  score_coverage: {
+    nominal_weight_percent: 25,
+    scored_categories: 1,
+    unscored_categories: ['security'],
+    partial_categories: ['documentation'],
+  },
 } satisfies Analysis;
