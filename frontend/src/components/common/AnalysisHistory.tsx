@@ -7,6 +7,12 @@ import { Card } from './Card';
 import { ErrorState } from './ErrorState';
 import { LoadingState } from './LoadingState';
 
+function formatDateTime(timestamp: string | null | undefined): string {
+  if (!timestamp) return '—';
+  const d = new Date(timestamp);
+  return isNaN(d.getTime()) ? String(timestamp) : d.toLocaleString('ru-RU');
+}
+
 export function AnalysisHistory({ repositoryId }: { repositoryId: string }) {
   const [page, setPage] = useState<AnalysisPage>();
   const [error, setError] = useState<unknown>();
@@ -67,7 +73,7 @@ export function AnalysisHistory({ repositoryId }: { repositoryId: string }) {
                     <tr key={run.id}>
                       <td style={{ fontWeight: 500 }}>
                         <Link to={`/analyses/${run.id}`} style={{ color: 'var(--sh-text-primary)' }}>
-                          {new Date(run.queued_at).toLocaleString('ru-RU')}
+                          {formatDateTime(run.queued_at)}
                         </Link>
                       </td>
                       <td>

@@ -94,14 +94,13 @@ export const LeaderboardPage: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-6)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-4)' }}>
       <div>
-        <h1 style={{ marginBottom: 'var(--sh-space-2)' }}>
-          Здоровье открытых репозиториев
+        <h1 style={{ margin: '0 0 var(--sh-space-1) 0' }}>
+          Лидерборд открытых репозиториев
         </h1>
-        <p style={{ maxWidth: '780px', margin: 0 }}>
-          Оценки основаны на проверяемых объективных фактах и метриках экосистемы SourceCraft.
-          Принцип: отсутствие внешних данных («Нет данных») не приравнивается к плохому проекту.
+        <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--sh-text-secondary)' }}>
+          Оценки качества, безопасности и надежности репозиториев платформы SourceCraft · Принцип: NO_DATA ≠ 0
         </p>
       </div>
 

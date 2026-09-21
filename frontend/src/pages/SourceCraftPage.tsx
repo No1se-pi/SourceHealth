@@ -158,13 +158,12 @@ export const SourceCraftPage: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-6)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-4)' }}>
       {/* Page Header */}
       <div>
-        <h1 style={{ marginBottom: 'var(--sh-space-2)' }}>Интеграция с SourceCraft</h1>
-        <p style={{ maxWidth: '760px', margin: 0 }}>
-          Подключение персонального токена доступа (PAT) для прямого взаимодействия с репозиториями
-          организаций в экосистеме SourceCraft.
+        <h1 style={{ margin: '0 0 var(--sh-space-1) 0' }}>Интеграция с SourceCraft</h1>
+        <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--sh-text-secondary)' }}>
+          Подключение персонального токена доступа (PAT) для прямого взаимодействия с репозиториями SourceCraft.
         </p>
       </div>
 

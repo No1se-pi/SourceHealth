@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SourceHealth · Анализ здоровья репозиториев</title>
     <meta name="description" content="Платформа объективной оценки здоровья, надежности и готовности репозиториев для экосистемы SourceCraft." />
+    <link rel="canonical" href="https://sourcehealth.tech/" />
     <meta property="og:title" content="SourceHealth · Анализ здоровья репозиториев" />
     <meta property="og:description" content="Платформа объективной оценки здоровья, надежности и готовности репозиториев для экосистемы SourceCraft." />
     <meta property="og:type" content="website" />
@@ -20,17 +21,33 @@
         try {
           var params = new URLSearchParams(window.location.search);
           var queryTheme = params.get('theme');
+          var queryAccent = params.get('accent');
+
+          // Resolve theme
+          var activeTheme = 'dark';
           if (queryTheme === 'dark' || queryTheme === 'light') {
-            document.documentElement.setAttribute('data-theme', queryTheme);
-            try { localStorage.setItem('sourcehealth_theme', queryTheme); } catch (e) {}
-            return;
+            activeTheme = queryTheme;
+          } else {
+            var storedTheme = localStorage.getItem('sourcehealth_theme') || 'system';
+            if (storedTheme === 'system') {
+              var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+              activeTheme = prefersDark ? 'dark' : 'light';
+            } else if (storedTheme === 'light' || storedTheme === 'dark') {
+              activeTheme = storedTheme;
+            }
           }
-          var stored = localStorage.getItem('sourcehealth_theme');
-          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-          var theme = stored === 'dark' || stored === 'light' ? stored : (prefersDark ? 'dark' : 'light');
-          document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.setAttribute('data-theme', activeTheme);
+
+          // Resolve accent color
+          var activeAccent = queryAccent || localStorage.getItem('sourcehealth_accent') || 'default';
+          document.documentElement.setAttribute('data-accent', activeAccent);
+
+          // Resolve temperature
+          var activeTemp = localStorage.getItem('sourcehealth_temp') || 'neutral';
+          document.documentElement.setAttribute('data-temperature', activeTemp);
         } catch (e) {
-          document.documentElement.setAttribute('data-theme', 'light');
+          document.documentElement.setAttribute('data-theme', 'dark');
+          document.documentElement.setAttribute('data-accent', 'default');
         }
       })();
     </script>
