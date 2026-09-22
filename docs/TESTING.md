@@ -133,6 +133,12 @@ commit SHA, число tracked files/commits/размер, memory/time, coverage
 Не повторять дорогие benchmarks без изменения/регрессии. Browser acceptance отдельно:
 loading/error/empty/no-data/partial, navigation, auth, report download. Build и HTTP
 200 не означают проверку пикселей или полного пользовательского пути.
+
+Отдельный opt-in `python -m scripts.large_repository_benchmark` создаёт временные
+fixtures на 120/10 000/10 001 файлов вне checkout, измеряет Git/snapshot/SAST/JSON
+и печатает безопасные агрегаты. `tests.test_large_fixture` проверяет генератор на
+120 файлах, не добавляя 10k workload в CI. Подготовка внешнего fixture и точные
+ограничения доказательства: [LARGE_REPO_ACCEPTANCE](LARGE_REPO_ACCEPTANCE.md).
 # Mandatory closure проверки
 
 `tests.test_repository_rating` и `tests.test_ci_live_contract` покрывают sparse reactions,

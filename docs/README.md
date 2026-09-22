@@ -46,6 +46,8 @@ SourceHealth — сервис здоровья репозиториев SourceCr
 - [LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md) — probe, полный live pipeline, коды выхода и чек-лист приёмки.
 - [DEMO](DEMO.md) — короткий сценарий показа и честные ограничения.
 - [MANDATORY_100_CLOSURE](MANDATORY_100_CLOSURE.md) — итоговый журнал обязательной приёмки.
+- [FINAL_RELEASE_ACCEPTANCE](FINAL_RELEASE_ACCEPTANCE.md) — текущие release gates и внешние блокеры.
+- [LARGE_REPO_ACCEPTANCE](LARGE_REPO_ACCEPTANCE.md) — воспроизводимый fixture, локальные бюджеты и live handoff.
 - [METRICS](METRICS.md) — сохранённый точный справочник Git-метрик.
 - [ADR](adr/README.md) — принятые архитектурные решения.
 
