@@ -7,6 +7,7 @@ from typing import Any, Protocol
 
 from sourcehealth.core.domain import DataAvailability, RepositoryRef
 
+from .appsec import SourceCraftAppSecClient
 from .client import SourceCraftClient, SourceCraftError
 
 
@@ -82,13 +83,42 @@ def repository_likes(rating: Any) -> int | None:
 
 
 class AppSecCollector:
-    """Boundary до подтверждения официального интерфейса выгрузки findings.
-
-    NO_DATA честно означает отсутствие подключённого источника. Эндпоинт secrets
-    хранит CI-секреты и НЕ является API secret-scanning: к нему не обращаемся.
-    """
-
     name = "appsec"
 
-    def collect(self, repository: RepositoryRef) -> CollectedFacts:
-        return CollectedFacts("sourcecraft_appsec", DataAvailability.NO_DATA, error="appsec_interface_unconfirmed")
+    def __init__(self, client: SourceCraftAppSecClient | None) -> None:
+        self.client = client
+
+    def collect(self, repository: RepositoryRef, repository_id: str | None = None) -> CollectedFacts:
+        if self.client is None:
+            return CollectedFacts("sourcecraft_appsec", DataAvailability.NO_DATA,
+                                  error="appsec_credential_unavailable")
+        if not isinstance(repository_id, str) or not repository_id:
+            return CollectedFacts("sourcecraft_appsec", DataAvailability.NO_DATA,
+                                  error="appsec_repository_id_unavailable")
+        try:
+            summary = self.client.get("/v1/scans/latest", params={"gitRepo": repository_id})
+            scan_uuid = summary.get("uuid")
+            if not isinstance(scan_uuid, str) or not re.fullmatch(r"[A-Za-z0-9-]{1,128}", scan_uuid):
+                raise SourceCraftError("invalid_response")
+            details = self.client.get(f"/v1/scans/{scan_uuid}", params={"gitRepo": repository_id})
+            if details.get("status") != "FINISHED":
+                return CollectedFacts("sourcecraft_appsec", DataAvailability.PARTIAL,
+                                      {"complete": False}, error="appsec_scan_not_finished")
+            counts = {}
+            for normalized, official in (("critical", "CRITICAL"), ("high", "HIGH"),
+                                         ("medium", "MEDIUM"), ("low", "LOW")):
+                rows = list(self.client.iter_defect_groups(repository_id, scan_uuid, official))
+                # Only validate allowlisted structural fields; raw descriptions/snippets are discarded.
+                if any(not isinstance(row.get("uuid"), str) for row in rows):
+                    raise SourceCraftError("invalid_response")
+                counts[normalized] = len(rows)
+            facts = {"complete": True, "scan_uuid": scan_uuid, "open_by_severity": counts,
+                     "total_open": sum(counts.values())}
+            return CollectedFacts("sourcecraft_appsec", DataAvailability.AVAILABLE, facts, schema_version="2")
+        except SourceCraftError as error:
+            if error.code in {"invalid_response", "invalid_pagination", "page_limit", "response_limit"}:
+                return CollectedFacts("sourcecraft_appsec", DataAvailability.PARTIAL,
+                                      {"complete": False}, error=f"appsec_{error.code}")
+            availability = (DataAvailability.NO_DATA if error.code in {"authentication_required", "access_denied", "not_found"}
+                            else DataAvailability.SOURCE_UNAVAILABLE)
+            return CollectedFacts("sourcecraft_appsec", availability, error=f"appsec_{error.code}")

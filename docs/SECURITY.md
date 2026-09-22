@@ -65,3 +65,11 @@ HTTPS, реальные credentials через secret storage, ограниче�
 rate limits analysis requests, browser auth acceptance, production backups/restore,
 AppSec/SourceCraft authorization, resource quotas и обновления dependency lock.
 Это конкретные задачи следующего этапа, не заявление о готовой production защите.
+
+## Run-scoped SourceCraft credential для AppSec
+
+При ручном запуске session-scoped PAT расшифровывается только внутри API-процесса и заново
+шифруется AES-GCM с Redis run-key как AAD. TTL ограничен остатком session credential,
+`SOURCECRAFT_CONNECTION_TTL` и временем анализа. В RQ передаётся только `analysis_id`.
+Worker удаляет lease в `finally`; PAT не попадает в PostgreSQL, AnalysisRun, result, exception или
+логи. AppSec никогда не использует глобальный server PAT; shared AppSec cache отсутствует.

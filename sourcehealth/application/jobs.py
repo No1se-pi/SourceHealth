@@ -12,6 +12,8 @@ from rq.exceptions import DuplicateJobError, NoSuchJobError
 from rq.job import Job
 from sqlalchemy import select, text
 
+from sourcehealth.auth.service import AuthService
+from sourcehealth.auth.sourcecraft import SourceCraftConnection
 from sourcehealth.core import AnalysisContext
 from sourcehealth.core.domain import ACTIVE_STATUSES, DataAvailability
 from sourcehealth.integrations.sourcecraft.analytics import (
@@ -21,6 +23,7 @@ from sourcehealth.integrations.sourcecraft.analytics import (
     PullRequestsCollector,
     ReleasesCollector,
 )
+from sourcehealth.integrations.sourcecraft.appsec import SourceCraftAppSecClient
 from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
 from sourcehealth.integrations.sourcecraft.collectors import AppSecCollector, CollectedFacts, RepositoryCollector
 from sourcehealth.recommendations.mvp import recommend
@@ -88,11 +91,12 @@ def lock_key(analysis_id: UUID) -> int:
     return int.from_bytes(analysis_id.bytes[:8], byteorder="big", signed=True)
 
 
-def collect_platform(repository, settings, redis):
+def collect_platform(repository, settings, redis, *, user_pat=None):
     """Один реальный vertical slice: API metadata + честная AppSec availability."""
     cache = JsonCache(redis)
     key = platform_cache_key(repository.id, "repository_metadata-v2")
-    cached = cache.get(key)
+    # A user-authorized run uses one caller identity and never consumes a shared platform cache.
+    cached = None if user_pat else cache.get(key)
     metadata = None
     if cached:
         try:
@@ -100,15 +104,23 @@ def collect_platform(repository, settings, redis):
         except (ValueError, TypeError, KeyError):
             pass
     if metadata is None:
-        with SourceCraftClient(pat=settings.sourcecraft_pat.get_secret_value() if settings.sourcecraft_pat else None,
+        with SourceCraftClient(pat=user_pat or (settings.sourcecraft_pat.get_secret_value() if settings.sourcecraft_pat else None),
                                timeout=settings.sourcecraft_timeout, max_pages=settings.sourcecraft_max_pages) as client:
             metadata = RepositoryCollector(client).collect(repository)
-        if metadata.availability == DataAvailability.AVAILABLE:
+        if metadata.availability == DataAvailability.AVAILABLE and not user_pat:
             cache.put(key, asdict(metadata), settings.platform_cache_ttl)
-    appsec = AppSecCollector().collect(repository)
+    if user_pat and metadata.availability == DataAvailability.AVAILABLE:
+        with SourceCraftAppSecClient(pat=user_pat, timeout=settings.sourcecraft_timeout,
+                                     max_pages=min(settings.sourcecraft_max_pages, 20)) as client:
+            appsec = AppSecCollector(client).collect(repository, metadata.facts.get("id"))
+    else:
+        appsec = AppSecCollector(None).collect(repository, metadata.facts.get("id"))
     return AnalysisContext(repository=repository,
                            metadata={"collection": {"repository_metadata": {"collected_at": metadata.collected_at,
-                                                                              "schema_version": metadata.schema_version}}},
+                                                                              "schema_version": metadata.schema_version},
+                                                    "appsec": {"collected_at": appsec.collected_at,
+                                                               "schema_version": appsec.schema_version,
+                                                               "error": appsec.error}}},
                            sourcecraft_facts={"repository_metadata": metadata.facts, "appsec": appsec.facts},
                            collection_statuses={"repository_metadata": metadata.availability,
                                                 "appsec": appsec.availability})
@@ -119,6 +131,7 @@ def execute_analysis(analysis_id: str) -> None:
     engine, sessions = create_database(settings.database_url.get_secret_value())
     redis = create_redis(settings.redis_url.get_secret_value())
     service = AnalysisService(sessions, settings)
+    credentials = SourceCraftConnection(AuthService(settings, redis, sessions))
     run_id = UUID(analysis_id)
     # Session advisory lock survives short database transactions but not process death.
     # Redis queue/lock loss therefore cannot start a second heavy execution.
@@ -136,7 +149,8 @@ def execute_analysis(analysis_id: str) -> None:
                     repository = repository_ref(db.get(Repository, run.repository_id))
                     profile = run.profile
                 service.transition(run_id, "collecting")
-                context = collect_platform(repository, settings, redis)
+                user_pat = credentials.analysis_credential(run_id)
+                context = collect_platform(repository, settings, redis, user_pat=user_pat)
                 if context.collection_statuses.get("repository_metadata") == DataAvailability.AVAILABLE:
                     with sessions.begin() as db:
                         row = db.get(Repository, run.repository_id)
@@ -144,7 +158,7 @@ def execute_analysis(analysis_id: str) -> None:
                         row.likes = metadata.get("likes")
                         row.language = metadata.get("language")
                 if profile == "mvp-v1":
-                    context = collect_mvp(context, settings)
+                    context = collect_mvp(context, settings, pat=user_pat)
                 service.transition(run_id, "analyzing")
                 report = analyze_context(context, include_code=profile in {"code-v1", "mvp-v1"}, with_mvp=profile == "mvp-v1",
                                          runtime=configured_runtime(settings, with_mvp=True) if profile == "mvp-v1" else
@@ -165,6 +179,7 @@ def execute_analysis(analysis_id: str) -> None:
                     service.transition(run_id, "failed", error_code="analysis_failed")
                 logger.error("analysis_failed", extra={"analysis_id": analysis_id, "component": "worker"})
             finally:
+                credentials.delete_analysis_credential(run_id)
                 guard.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": lock_key(run_id)})
                 guard.commit()
     finally:
@@ -172,12 +187,12 @@ def execute_analysis(analysis_id: str) -> None:
         engine.dispose()
 
 
-def collect_mvp(context, settings, *, client=None):
+def collect_mvp(context, settings, *, client=None, pat=None):
     """API facts обновляются независимо от SHA; общий time budget ограничивает fan-out."""
     from contextlib import nullcontext
 
     manager = nullcontext(client) if client is not None else SourceCraftClient(
-        pat=settings.sourcecraft_pat.get_secret_value() if settings.sourcecraft_pat else None,
+        pat=pat or (settings.sourcecraft_pat.get_secret_value() if settings.sourcecraft_pat else None),
         timeout=min(settings.sourcecraft_timeout, 10), max_pages=min(settings.sourcecraft_max_pages, 5), deadline_seconds=120)
     facts, statuses = dict(context.sourcecraft_facts), dict(context.collection_statuses)
     collection = dict(context.metadata.get("collection", {}))

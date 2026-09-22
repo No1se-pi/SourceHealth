@@ -2,6 +2,7 @@
 
 import base64
 import secrets
+from uuid import UUID
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -66,16 +67,45 @@ class SourceCraftConnection:
         _, key = self._keys(token)
         self.redis.delete(key)
 
-    def repositories(self, token, organization):
-        _, key = self._keys(token)
+    def _decrypt(self, key):
         encrypted = self.redis.get(key)
         if not encrypted:
-            raise ServiceError("sourcecraft_connection_required", 409)
+            return None
         try:
-            pat = self._cipher().decrypt(encrypted[:12], encrypted[12:], key.encode()).decode()
+            return self._cipher().decrypt(encrypted[:12], encrypted[12:], key.encode()).decode()
         except (InvalidTag, ValueError, UnicodeError):
             self.redis.delete(key)
-            raise ServiceError("sourcecraft_connection_expired", 409) from None
+            return None
+
+    @staticmethod
+    def _analysis_key(analysis_id):
+        # Analysis UUID is already unguessable and is the RQ identity; unlike a browser token it need not be HMACed.
+        return f"auth:analysis-sourcecraft:{UUID(str(analysis_id))}"
+
+    def lease_for_analysis(self, token, analysis_id):
+        _, session_key = self._keys(token)
+        pat = self._decrypt(session_key)
+        ttl = self.redis.ttl(session_key)
+        if not pat or ttl <= 0:
+            return False
+        run_key = self._analysis_key(analysis_id)
+        nonce = secrets.token_bytes(12)
+        encrypted = nonce + self._cipher().encrypt(nonce, pat.encode(), run_key.encode())
+        self.redis.set(run_key, encrypted, ex=min(ttl, self.settings.sourcecraft_connection_ttl,
+                                                  self.settings.analysis_timeout + 300))
+        return True
+
+    def analysis_credential(self, analysis_id):
+        return self._decrypt(self._analysis_key(analysis_id))
+
+    def delete_analysis_credential(self, analysis_id):
+        self.redis.delete(self._analysis_key(analysis_id))
+
+    def repositories(self, token, organization):
+        _, key = self._keys(token)
+        pat = self._decrypt(key)
+        if not pat:
+            raise ServiceError("sourcecraft_connection_required", 409)
         try:
             identifier(organization)
         except SourceCraftError:

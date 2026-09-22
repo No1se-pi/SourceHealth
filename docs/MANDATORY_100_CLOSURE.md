@@ -176,3 +176,11 @@ Security остаётся NO_DATA. От организаторов нужны en
 
 SourceCraft CI config остаётся в feature branch и не использует PAT: Python 3.11 unit/Ruff/
 OpenAPI и Node 24 generated TypeScript/build. Feature tree не отправлялся в SourceCraft main.
+
+### Official AppSec closure 23.09.2026
+
+Отдельный AppSec Swagger `/openapi` и Bearer PAT подтверждены live. Реализованы отдельный
+клиент, bounded pagination defect groups, безопасная нормализация severity, run-scoped encrypted
+Redis credential и удаление lease после worker. Live probe team-41 вернул finished scan и только
+санитизированный агрегат; scoring policy `mvp-score-v1.2` не менялась. Scheduled runs без
+пользовательского PAT по-прежнему получают Security `NO_DATA`; private analysis не включён.

@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from sourcehealth.application.jobs import dispatch_pending
 from sourcehealth.application.services import ServiceError
+from sourcehealth.auth.sourcecraft import SourceCraftConnection
 from sourcehealth.storage.models import AnalysisRun, Repository
 
 from ..dependencies import check_origin, public_repository, public_run, require_user
@@ -82,6 +83,8 @@ def start(repository_id: UUID, body: AnalysisRequest, request: Request):
         # Force policy requires repository permissions, not merely a valid Я ID.
         raise ServiceError("force_refresh_not_authorized", 403)
     run = request.app.state.service.request_analysis(repository_id)
+    SourceCraftConnection(request.app.state.auth).lease_for_analysis(
+        request.cookies.get("sh_session"), run.id)
     try:
         dispatch_pending(request.app.state.sessions, request.app.state.redis, request.app.state.settings.analysis_timeout)
     except RedisError:
