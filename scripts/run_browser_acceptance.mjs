@@ -10,7 +10,714 @@ if (!fs.existsSync(outDir)) {
 
 const MOCK_PORT = 8005;
 
-// 1. Start mock server on port 8005
+// ============================================================================
+// DTO Builders adhering strictly to OpenAPI schema
+// ============================================================================
+function makeRepositorySummary(overrides = {}) {
+  return {
+    id: 'a0000001-0000-0000-0000-000000000001',
+    organization_slug: 'demo-org',
+    repository_slug: 'fast-service',
+    canonical_url: 'https://sourcecraft.dev/demo-org/fast-service',
+    visibility: 'public',
+    health_score: 88,
+    language: 'TypeScript',
+    likes: 42,
+    last_activity_at: '2026-09-20T14:30:00Z',
+    latest_analysis_id: 'b0000001-0000-0000-0000-000000000001',
+    ...overrides
+  };
+}
+
+function makeRepositoryDetails(overrides = {}) {
+  return {
+    id: 'a0000001-0000-0000-0000-000000000001',
+    organization_slug: 'demo-org',
+    repository_slug: 'fast-service',
+    canonical_url: 'https://sourcecraft.dev/demo-org/fast-service',
+    visibility: 'public',
+    health_score: 88,
+    language: 'TypeScript',
+    likes: 42,
+    last_activity_at: '2026-09-20T14:30:00Z',
+    latest_analysis_id: 'b0000001-0000-0000-0000-000000000001',
+    sourcecraft_id: 'sc-987654',
+    default_branch: 'main',
+    head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
+    ...overrides
+  };
+}
+
+function makeAnalysisSummary(overrides = {}) {
+  return {
+    id: 'b0000001-0000-0000-0000-000000000001',
+    repository_id: 'a0000001-0000-0000-0000-000000000001',
+    profile: 'mvp-v1',
+    status: 'completed',
+    trigger: 'manual',
+    queued_at: '2026-09-20T14:35:00Z',
+    started_at: '2026-09-20T14:35:02Z',
+    completed_at: '2026-09-20T14:36:12Z',
+    head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
+    health_score: 88,
+    scoring_policy_version: 'mvp-score-v1.2',
+    analyzer_contract_version: 'v1',
+    error_code: null,
+    ...overrides
+  };
+}
+
+function makeCategoryScore(category, overrides = {}) {
+  return {
+    category,
+    score: 80,
+    availability: 'available',
+    explanation: 'Анализ категории завершён успешно.',
+    evidence_refs: [],
+    ...overrides
+  };
+}
+
+function makeEvidence(overrides = {}) {
+  return {
+    id: 'ev-default-1',
+    source: 'analyzer_source',
+    type: 'inspection_fact',
+    reference: 'ref-1',
+    summary: 'Описание подтверждающего факта',
+    url: null,
+    location: null,
+    timestamp: null,
+    ...overrides
+  };
+}
+
+function makeRecommendation(overrides = {}) {
+  return {
+    id: 'rec-default-1',
+    category: 'code_health',
+    title: 'Рекомендация по улучшению качества кода',
+    description: 'Описание проблемы и контекста.',
+    priority: 2,
+    evidence_refs: [],
+    suggested_action: 'Рекомендуемое действие разработчику.',
+    expected_impact: null,
+    ...overrides
+  };
+}
+
+function makeAnalyzerResult(analyzer, overrides = {}) {
+  return {
+    analyzer,
+    status: 'ok',
+    availability: 'available',
+    source: analyzer,
+    category: null,
+    analyzer_version: '1.0.0',
+    contract_version: 'v1',
+    metrics: {},
+    findings: [],
+    metadata: {},
+    error: null,
+    evidence: [],
+    ...overrides
+  };
+}
+
+function makeScoreCoverage(overrides = {}) {
+  return {
+    nominal_weight_percent: 100,
+    scored_categories: 6,
+    unscored_categories: [],
+    partial_categories: [],
+    ...overrides
+  };
+}
+
+function makeAnalysisDetails(overrides = {}) {
+  return {
+    id: 'b0000001-0000-0000-0000-000000000001',
+    repository_id: 'a0000001-0000-0000-0000-000000000001',
+    profile: 'mvp-v1',
+    status: 'completed',
+    trigger: 'manual',
+    queued_at: '2026-09-20T14:35:00Z',
+    started_at: '2026-09-20T14:35:02Z',
+    completed_at: '2026-09-20T14:36:12Z',
+    head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
+    health_score: 88,
+    scoring_policy_version: 'mvp-score-v1.2',
+    analyzer_contract_version: 'v1',
+    error_code: null,
+    category_scores: {},
+    data_coverage: {},
+    recommendations: [],
+    checks: {},
+    score_coverage: null,
+    ...overrides
+  };
+}
+
+// ============================================================================
+// Fixture Contract Drift Guard & Assertions
+// ============================================================================
+function assert(condition, message) {
+  if (!condition) {
+    throw new Error(`[CONTRACT DRIFT ERROR] ${message}`);
+  }
+}
+
+function assertNoKeys(obj, forbiddenKeys, context) {
+  for (const key of forbiddenKeys) {
+    assert(!(key in obj), `${context} must not contain forbidden/legacy key '${key}'`);
+  }
+}
+
+function assertRequiredKeys(obj, requiredKeys, context) {
+  for (const key of requiredKeys) {
+    assert(key in obj, `${context} is missing required OpenAPI key '${key}'`);
+  }
+}
+
+function validateEvidence(ev, context) {
+  assertRequiredKeys(ev, ['id', 'source', 'type', 'reference', 'summary'], context);
+  assertNoKeys(ev, ['category', 'description'], context);
+  if (ev.url) {
+    assert(!ev.url.includes('sourcecraft.tech'), `${context} URL must not use sourcecraft.tech (use sourcecraft.dev)`);
+  }
+}
+
+function validateCategoryScore(cs, key, context) {
+  assertRequiredKeys(cs, ['category', 'availability', 'explanation', 'evidence_refs'], `${context}.category_scores[${key}]`);
+  assertNoKeys(cs, ['weight'], `${context}.category_scores[${key}]`);
+  assert(Array.isArray(cs.evidence_refs), `${context}.category_scores[${key}].evidence_refs must be an array`);
+}
+
+function validateRecommendation(rec, context) {
+  assertRequiredKeys(rec, ['id', 'category', 'title', 'description', 'priority', 'evidence_refs', 'suggested_action', 'expected_impact'], context);
+  assertNoKeys(rec, ['effort', 'action'], context);
+  assert(typeof rec.priority === 'number', `${context}.priority must be a number (not string)`);
+  assert(Array.isArray(rec.evidence_refs), `${context}.evidence_refs must be an array`);
+}
+
+function validateAnalyzerResult(ar, key, context) {
+  assertRequiredKeys(ar, ['analyzer', 'status', 'availability', 'source', 'category', 'analyzer_version', 'contract_version', 'metrics', 'findings', 'metadata', 'error', 'evidence'], `${context}.checks[${key}]`);
+  assert(['ok', 'partial', 'error'].includes(ar.status), `${context}.checks[${key}].status must be ok|partial|error`);
+  assert(Array.isArray(ar.evidence), `${context}.checks[${key}].evidence must be an array`);
+  ar.evidence.forEach((ev, idx) => validateEvidence(ev, `${context}.checks[${key}].evidence[${idx}]`));
+}
+
+function validateScoreCoverage(sc, context) {
+  assertRequiredKeys(sc, ['nominal_weight_percent', 'scored_categories', 'unscored_categories', 'partial_categories'], context);
+  assert(typeof sc.nominal_weight_percent === 'number', `${context}.nominal_weight_percent must be a number`);
+  assert(typeof sc.scored_categories === 'number', `${context}.scored_categories must be a number`);
+  assert(Array.isArray(sc.unscored_categories), `${context}.unscored_categories must be an array`);
+  assert(Array.isArray(sc.partial_categories), `${context}.partial_categories must be an array`);
+}
+
+function validateRepositorySummary(repo, context) {
+  assertRequiredKeys(repo, ['id', 'organization_slug', 'repository_slug', 'canonical_url', 'visibility', 'health_score', 'language', 'likes', 'last_activity_at', 'latest_analysis_id'], context);
+  assertNoKeys(repo, ['created_at', 'updated_at', 'score', 'default_branch', 'head_sha'], context);
+  assert(!repo.canonical_url.includes('sourcecraft.tech'), `${context}.canonical_url must not use sourcecraft.tech (use sourcecraft.dev)`);
+}
+
+function validateRepositoryDetails(repo, context) {
+  assertRequiredKeys(repo, ['id', 'organization_slug', 'repository_slug', 'canonical_url', 'visibility', 'health_score', 'language', 'likes', 'last_activity_at', 'latest_analysis_id', 'sourcecraft_id', 'default_branch', 'head_sha'], context);
+  assertNoKeys(repo, ['created_at', 'updated_at', 'score'], context);
+  assert(!repo.canonical_url.includes('sourcecraft.tech'), `${context}.canonical_url must not use sourcecraft.tech (use sourcecraft.dev)`);
+}
+
+function validateAnalysisSummary(as, context) {
+  assertRequiredKeys(as, ['id', 'repository_id', 'profile', 'status', 'trigger', 'queued_at', 'started_at', 'completed_at', 'head_sha', 'health_score', 'scoring_policy_version', 'analyzer_contract_version', 'error_code'], context);
+  assertNoKeys(as, ['score', 'created_at', 'evidence', 'category_scores', 'checks', 'recommendations'], context);
+}
+
+function validateAnalysisDetails(ad, context) {
+  assertRequiredKeys(ad, ['id', 'repository_id', 'profile', 'status', 'trigger', 'queued_at', 'started_at', 'completed_at', 'head_sha', 'health_score', 'scoring_policy_version', 'analyzer_contract_version', 'error_code', 'category_scores', 'data_coverage', 'recommendations', 'checks'], context);
+  assertNoKeys(ad, ['score', 'created_at', 'evidence'], context);
+  assert(!Array.isArray(ad.checks), `${context}.checks must be Record<string, AnalyzerResultDTO>, not an Array`);
+  assert(typeof ad.checks === 'object' && ad.checks !== null, `${context}.checks must be an object`);
+  assert(typeof ad.category_scores === 'object' && ad.category_scores !== null, `${context}.category_scores must be an object`);
+  assert(Array.isArray(ad.recommendations), `${context}.recommendations must be an array`);
+
+  for (const [key, cs] of Object.entries(ad.category_scores)) {
+    validateCategoryScore(cs, key, context);
+  }
+  for (const [key, ar] of Object.entries(ad.checks)) {
+    validateAnalyzerResult(ar, key, context);
+  }
+  ad.recommendations.forEach((rec, idx) => validateRecommendation(rec, `${context}.recommendations[${idx}]`));
+  if (ad.score_coverage != null) {
+    validateScoreCoverage(ad.score_coverage, `${context}.score_coverage`);
+  }
+}
+
+// ============================================================================
+// Canonical Mock Fixtures
+// ============================================================================
+const fixtureLeaderboardItems = [
+  makeRepositorySummary({
+    id: 'a0000001-0000-0000-0000-000000000001',
+    organization_slug: 'demo-org',
+    repository_slug: 'fast-service',
+    canonical_url: 'https://sourcecraft.dev/demo-org/fast-service',
+    visibility: 'public',
+    health_score: 88,
+    language: 'TypeScript',
+    likes: 42,
+    last_activity_at: '2026-09-20T14:30:00Z',
+    latest_analysis_id: 'b0000001-0000-0000-0000-000000000001'
+  }),
+  makeRepositorySummary({
+    id: 'a0000007-0000-0000-0000-000000000007',
+    organization_slug: 'very-long-enterprise-organization-holding-corp',
+    repository_slug: 'mission-critical-microservice-super-extended-repository-slug-v2',
+    canonical_url: 'https://sourcecraft.dev/very-long-enterprise-organization-holding-corp/mission-critical-microservice-super-extended-repository-slug-v2',
+    visibility: 'public',
+    health_score: 85,
+    language: 'TypeScript',
+    likes: 512,
+    last_activity_at: '2026-09-21T10:00:00Z',
+    latest_analysis_id: 'b0000007-0000-0000-0000-000000000007'
+  }),
+  makeRepositorySummary({
+    id: 'a0000002-0000-0000-0000-000000000002',
+    organization_slug: 'newbie-corp',
+    repository_slug: 'empty-starter',
+    canonical_url: 'https://sourcecraft.dev/newbie-corp/empty-starter',
+    visibility: 'public',
+    health_score: null, // NO_DATA fixture in leaderboard
+    language: 'Python',
+    likes: null,
+    last_activity_at: null,
+    latest_analysis_id: 'b0000006-0000-0000-0000-000000000006'
+  }),
+  makeRepositorySummary({
+    id: 'a0000003-0000-0000-0000-000000000003',
+    organization_slug: 'yandex-cloud',
+    repository_slug: 'serverless-gate',
+    canonical_url: 'https://sourcecraft.dev/yandex-cloud/serverless-gate',
+    visibility: 'public',
+    health_score: 94,
+    language: 'Go',
+    likes: 87,
+    last_activity_at: '2026-09-19T18:00:00Z',
+    latest_analysis_id: 'b0000001-0000-0000-0000-000000000001'
+  }),
+  makeRepositorySummary({
+    id: 'a0000004-0000-0000-0000-000000000004',
+    organization_slug: 'infra-tools',
+    repository_slug: 'k8s-operator',
+    canonical_url: 'https://sourcecraft.dev/infra-tools/k8s-operator',
+    visibility: 'public',
+    health_score: 62,
+    language: 'Rust',
+    likes: 19,
+    last_activity_at: '2026-09-15T11:20:00Z',
+    latest_analysis_id: 'b0000001-0000-0000-0000-000000000001'
+  }),
+  makeRepositorySummary({
+    id: 'a0000005-0000-0000-0000-000000000005',
+    organization_slug: 'lct-hackaton-2026',
+    repository_slug: 'case-18-repo-health-score-team-41',
+    canonical_url: 'https://sourcecraft.dev/lct-hackaton-2026/case-18-repo-health-score-team-41',
+    visibility: 'public',
+    health_score: 78,
+    language: 'Python',
+    likes: 128,
+    last_activity_at: '2026-09-21T09:15:00Z',
+    latest_analysis_id: 'b0000001-0000-0000-0000-000000000001'
+  })
+];
+
+const fixtureRepoHealthy = makeRepositoryDetails({
+  id: 'a0000001-0000-0000-0000-000000000001',
+  organization_slug: 'demo-org',
+  repository_slug: 'fast-service',
+  canonical_url: 'https://sourcecraft.dev/demo-org/fast-service',
+  visibility: 'public',
+  default_branch: 'main',
+  head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
+  sourcecraft_id: 'sc-987654',
+  health_score: 88,
+  language: 'TypeScript',
+  likes: 42,
+  last_activity_at: '2026-09-20T14:30:00Z',
+  latest_analysis_id: 'b0000001-0000-0000-0000-000000000001'
+});
+
+const fixtureRepoNoData = makeRepositoryDetails({
+  id: 'a0000002-0000-0000-0000-000000000002',
+  organization_slug: 'newbie-corp',
+  repository_slug: 'empty-starter',
+  canonical_url: 'https://sourcecraft.dev/newbie-corp/empty-starter',
+  visibility: 'public',
+  default_branch: 'main',
+  head_sha: null,
+  sourcecraft_id: null,
+  health_score: null,
+  language: 'Python',
+  likes: null,
+  last_activity_at: null,
+  latest_analysis_id: null
+});
+
+const fixtureRepoLongSlug = makeRepositoryDetails({
+  id: 'a0000007-0000-0000-0000-000000000007',
+  organization_slug: 'very-long-enterprise-organization-holding-corp',
+  repository_slug: 'mission-critical-microservice-super-extended-repository-slug-v2',
+  canonical_url: 'https://sourcecraft.dev/very-long-enterprise-organization-holding-corp/mission-critical-microservice-super-extended-repository-slug-v2',
+  visibility: 'public',
+  default_branch: 'main',
+  head_sha: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678',
+  sourcecraft_id: 'sc-long-777',
+  health_score: 85,
+  language: 'TypeScript',
+  likes: 512,
+  last_activity_at: '2026-09-21T10:00:00Z',
+  latest_analysis_id: 'b0000007-0000-0000-0000-000000000007'
+});
+
+const fixtureAnalysisHistory = [
+  makeAnalysisSummary({
+    id: 'b0000001-0000-0000-0000-000000000001',
+    repository_id: 'a0000001-0000-0000-0000-000000000001',
+    status: 'completed',
+    health_score: 88,
+    queued_at: '2026-09-20T14:35:00Z',
+    started_at: '2026-09-20T14:35:02Z',
+    completed_at: '2026-09-20T14:36:12Z',
+    head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
+    profile: 'mvp-v1',
+    trigger: 'manual',
+    scoring_policy_version: 'mvp-score-v1.2',
+    analyzer_contract_version: 'v1',
+    error_code: null
+  })
+];
+
+const fixtureAnalysisCompleted = makeAnalysisDetails({
+  id: 'b0000001-0000-0000-0000-000000000001',
+  repository_id: 'a0000001-0000-0000-0000-000000000001',
+  status: 'completed',
+  health_score: 88,
+  category_scores: {
+    documentation: makeCategoryScore('documentation', {
+      score: 92,
+      availability: 'available',
+      explanation: 'README.md найден (324 строки, документация API полная).',
+      evidence_refs: ['ev-doc-1']
+    }),
+    cicd: makeCategoryScore('cicd', {
+      score: 85,
+      availability: 'available',
+      explanation: 'CI пайплайн настроен и проходит успешно в 98% сборок.',
+      evidence_refs: ['ev-ci-1']
+    }),
+    security: makeCategoryScore('security', {
+      score: 80,
+      availability: 'available',
+      explanation: 'Уязвимостей высокой и критической степени не обнаружено.',
+      evidence_refs: ['ev-sec-1']
+    }),
+    activity: makeCategoryScore('activity', {
+      score: 95,
+      availability: 'available',
+      explanation: '34 коммита за последние 30 дней от 4 активных авторов.',
+      evidence_refs: ['ev-act-1']
+    }),
+    issues: makeCategoryScore('issues', {
+      score: 78,
+      availability: 'available',
+      explanation: 'Среднее время закрытия задач составляет 2.4 дня.',
+      evidence_refs: ['ev-iss-1']
+    }),
+    code_health: makeCategoryScore('code_health', {
+      score: 90,
+      availability: 'available',
+      explanation: 'SAST анализ: дефектов и запахов кода не обнаружено.',
+      evidence_refs: ['ev-ch-1']
+    })
+  },
+  data_coverage: {
+    documentation: 'available',
+    cicd: 'available',
+    security: 'available',
+    activity: 'available',
+    issues: 'available',
+    code_health: 'available'
+  },
+  recommendations: [
+    makeRecommendation({
+      id: 'rec-1',
+      category: 'code_health',
+      title: 'Добавьте тесты для критических модулей',
+      description: 'Покрытие тестами в модуле auth составляет 64%. Рекомендуется поднять до 80%.',
+      priority: 2,
+      evidence_refs: ['ev-ch-1'],
+      suggested_action: 'Написать модульные тесты для auth/provider.go',
+      expected_impact: '+4 Health Score'
+    })
+  ],
+  checks: {
+    readme_parser: makeAnalyzerResult('readme_parser', {
+      source: 'readme_parser',
+      category: 'documentation',
+      evidence: [
+        makeEvidence({
+          id: 'ev-doc-1',
+          source: 'readme_parser',
+          type: 'file_presence',
+          reference: 'README.md',
+          summary: 'README.md найден (324 строки, документация API полная)',
+          url: 'https://sourcecraft.dev/demo-org/fast-service/src/branch/main/README.md',
+          location: 'README.md:1',
+          timestamp: '2026-09-20T14:35:10Z'
+        })
+      ]
+    }),
+    sourcecraft_ci: makeAnalyzerResult('sourcecraft_ci', {
+      source: 'sourcecraft_ci',
+      category: 'cicd',
+      evidence: [
+        makeEvidence({
+          id: 'ev-ci-1',
+          source: 'sourcecraft_ci',
+          type: 'pipeline_run',
+          reference: 'pipeline/main',
+          summary: 'CI пайплайн настроен и проходит успешно в 98% сборок',
+          url: 'https://sourcecraft.dev/demo-org/fast-service/pipelines/1',
+          location: null,
+          timestamp: '2026-09-20T14:35:12Z'
+        })
+      ]
+    }),
+    sourcecraft_appsec: makeAnalyzerResult('sourcecraft_appsec', {
+      source: 'sourcecraft_appsec',
+      category: 'security',
+      evidence: [
+        makeEvidence({
+          id: 'ev-sec-1',
+          source: 'sourcecraft_appsec',
+          type: 'vulnerability_scan',
+          reference: 'appsec/latest',
+          summary: 'Уязвимостей высокой и критической степени не обнаружено',
+          url: 'https://sourcecraft.dev/demo-org/fast-service/security',
+          location: null,
+          timestamp: '2026-09-20T14:35:15Z'
+        })
+      ]
+    }),
+    git_activity: makeAnalyzerResult('git_activity', {
+      source: 'git_log',
+      category: 'activity',
+      evidence: [
+        makeEvidence({
+          id: 'ev-act-1',
+          source: 'git_log',
+          type: 'commit_history',
+          reference: 'commits',
+          summary: '34 коммита за последние 30 дней от 4 активных авторов',
+          url: 'https://sourcecraft.dev/demo-org/fast-service/commits',
+          location: null,
+          timestamp: '2026-09-20T14:35:18Z'
+        })
+      ]
+    }),
+    sourcecraft_issues: makeAnalyzerResult('sourcecraft_issues', {
+      source: 'sourcecraft_issues',
+      category: 'issues',
+      evidence: [
+        makeEvidence({
+          id: 'ev-iss-1',
+          source: 'sourcecraft_issues',
+          type: 'issue_metrics',
+          reference: 'issues',
+          summary: 'Среднее время закрытия задач составляет 2.4 дня',
+          url: 'https://sourcecraft.dev/demo-org/fast-service/issues',
+          location: null,
+          timestamp: '2026-09-20T14:35:20Z'
+        })
+      ]
+    }),
+    sourcehealth_local: makeAnalyzerResult('sourcehealth_local', {
+      source: 'sourcehealth_local',
+      category: 'code_health',
+      evidence: [
+        makeEvidence({
+          id: 'ev-ch-1',
+          source: 'sourcehealth_local',
+          type: 'code_smell',
+          reference: 'src/core',
+          summary: 'SAST анализ: дефектов и запахов кода не обнаружено',
+          url: null,
+          location: null,
+          timestamp: '2026-09-20T14:35:22Z'
+        })
+      ]
+    })
+  },
+  score_coverage: makeScoreCoverage({
+    nominal_weight_percent: 100,
+    scored_categories: 6,
+    unscored_categories: [],
+    partial_categories: []
+  })
+});
+
+const fixtureAnalysisPartial = makeAnalysisDetails({
+  id: 'b0000002-0000-0000-0000-000000000002',
+  repository_id: 'a0000001-0000-0000-0000-000000000001',
+  status: 'partial',
+  health_score: 72,
+  category_scores: {
+    documentation: makeCategoryScore('documentation', { score: 90, availability: 'available', explanation: 'README.md найден в корне проекта.', evidence_refs: [] }),
+    cicd: makeCategoryScore('cicd', { score: null, availability: 'no_data', explanation: 'Данные CI/CD недоступны в SourceCraft.', evidence_refs: [] }),
+    security: makeCategoryScore('security', { score: 85, availability: 'available', explanation: 'Базовое сканирование уязвимостей завершено.', evidence_refs: [] }),
+    activity: makeCategoryScore('activity', { score: 65, availability: 'available', explanation: 'Умеренная активность за последние 30 дней.', evidence_refs: [] }),
+    issues: makeCategoryScore('issues', { score: null, availability: 'no_data', explanation: 'Трекер задач не активирован.', evidence_refs: [] }),
+    code_health: makeCategoryScore('code_health', { score: 75, availability: 'available', explanation: 'Локальный анализ кода выполнен частично.', evidence_refs: [] })
+  },
+  data_coverage: {
+    documentation: 'available',
+    cicd: 'no_data',
+    security: 'available',
+    activity: 'available',
+    issues: 'no_data',
+    code_health: 'available'
+  },
+  score_coverage: makeScoreCoverage({
+    nominal_weight_percent: 70,
+    scored_categories: 4,
+    unscored_categories: ['cicd', 'issues'],
+    partial_categories: []
+  }),
+  recommendations: [],
+  checks: {}
+});
+
+const fixtureAnalysisFailed = makeAnalysisDetails({
+  id: 'b0000005-0000-0000-0000-000000000005',
+  repository_id: 'a0000001-0000-0000-0000-000000000001',
+  status: 'failed',
+  health_score: null,
+  error_code: 'source_unavailable',
+  category_scores: {},
+  data_coverage: {},
+  recommendations: [],
+  checks: {},
+  score_coverage: null
+});
+
+const fixtureAnalysisSecurityNoData = makeAnalysisDetails({
+  id: 'b0000006-0000-0000-0000-000000000006',
+  repository_id: 'a0000002-0000-0000-0000-000000000002',
+  status: 'completed',
+  health_score: 82,
+  category_scores: {
+    documentation: makeCategoryScore('documentation', { score: 85, availability: 'available', explanation: 'README и руководства доступны.', evidence_refs: [] }),
+    cicd: makeCategoryScore('cicd', { score: 80, availability: 'available', explanation: 'Пайплайны отрабатывают штатно.', evidence_refs: [] }),
+    security: makeCategoryScore('security', { score: null, availability: 'no_data', explanation: 'SourceCraft AppSec data unavailable.', evidence_refs: [] }),
+    activity: makeCategoryScore('activity', { score: 80, availability: 'available', explanation: 'Регулярные коммиты в main ветку.', evidence_refs: [] }),
+    issues: makeCategoryScore('issues', { score: 75, availability: 'available', explanation: 'Задачи закрываются в штатном темпе.', evidence_refs: [] }),
+    code_health: makeCategoryScore('code_health', { score: 88, availability: 'available', explanation: 'SAST дефектов не выявил.', evidence_refs: [] })
+  },
+  data_coverage: {
+    documentation: 'available',
+    cicd: 'available',
+    security: 'no_data',
+    activity: 'available',
+    issues: 'available',
+    code_health: 'available'
+  },
+  score_coverage: makeScoreCoverage({
+    nominal_weight_percent: 75,
+    scored_categories: 5,
+    unscored_categories: ['security'],
+    partial_categories: []
+  }),
+  recommendations: [],
+  checks: {}
+});
+
+const fixtureAnalysisLongRecommendation = makeAnalysisDetails({
+  id: 'b0000007-0000-0000-0000-000000000007',
+  repository_id: 'a0000007-0000-0000-0000-000000000007',
+  status: 'completed',
+  health_score: 85,
+  category_scores: {
+    documentation: makeCategoryScore('documentation', { score: 88, availability: 'available', explanation: 'Полная техническая спецификация API с примерами вызовов.', evidence_refs: ['ev-1'] }),
+    cicd: makeCategoryScore('cicd', { score: 82, availability: 'available', explanation: 'CI/CD пайплайны развёрнуты.', evidence_refs: [] }),
+    security: makeCategoryScore('security', { score: 75, availability: 'available', explanation: 'Базовая защита включена.', evidence_refs: [] }),
+    activity: makeCategoryScore('activity', { score: 90, availability: 'available', explanation: 'Высокая активность контрибьюторов.', evidence_refs: [] }),
+    issues: makeCategoryScore('issues', { score: 85, availability: 'available', explanation: 'Активное ведение задач.', evidence_refs: [] }),
+    code_health: makeCategoryScore('code_health', { score: 92, availability: 'available', explanation: 'Высокое качество исходного кода.', evidence_refs: [] })
+  },
+  data_coverage: {
+    documentation: 'available',
+    cicd: 'available',
+    security: 'available',
+    activity: 'available',
+    issues: 'available',
+    code_health: 'available'
+  },
+  score_coverage: makeScoreCoverage({
+    nominal_weight_percent: 100,
+    scored_categories: 6,
+    unscored_categories: [],
+    partial_categories: []
+  }),
+  recommendations: [
+    makeRecommendation({
+      id: 'rec-long-1',
+      category: 'security',
+      title: 'Комплексная реструктуризация инфраструктурных пайплайнов и политик безопасности контейнерных сред',
+      description: 'Данный репозиторий содержит критические точки входа для внешних распределённых микросервисов. Настоятельно рекомендуется полностью переработать конфигурацию CI/CD пайплайнов, внедрить строгие политики сканирования базовых образов OCI на этапе предварительного коммита, настроить автоматическую проверку зависимостей и контроль версий через Dependabot/Snyk, а также активировать сигнатурную верификацию артефактов в защищённом реестре SourceCraft Registry.',
+      priority: 1,
+      evidence_refs: ['ev-1'],
+      suggested_action: 'Развернуть расширенный набор анализаторов безопасности SourceCraft AppSec и локальных линтеров',
+      expected_impact: '+10 к уровню защищенности сервиса'
+    })
+  ],
+  checks: {
+    readme_parser: makeAnalyzerResult('readme_parser', {
+      source: 'readme_parser',
+      category: 'documentation',
+      evidence: [
+        makeEvidence({
+          id: 'ev-1',
+          source: 'readme_parser',
+          type: 'file_presence',
+          reference: 'README.md',
+          summary: 'Полная техническая спецификация API с примерами вызовов',
+          url: 'https://sourcecraft.dev/very-long-enterprise-organization-holding-corp/mission-critical-microservice-super-extended-repository-slug-v2/src/branch/main/README.md',
+          location: 'README.md:1',
+          timestamp: '2026-09-21T09:00:10Z'
+        })
+      ]
+    })
+  }
+});
+
+// ============================================================================
+// Run Pre-Flight Drift Guard Validations
+// ============================================================================
+console.log('Validating acceptance mock fixtures against OpenAPI schema...');
+fixtureLeaderboardItems.forEach((repo, idx) => validateRepositorySummary(repo, `fixtureLeaderboardItems[${idx}]`));
+validateRepositoryDetails(fixtureRepoHealthy, 'fixtureRepoHealthy');
+validateRepositoryDetails(fixtureRepoNoData, 'fixtureRepoNoData');
+validateRepositoryDetails(fixtureRepoLongSlug, 'fixtureRepoLongSlug');
+fixtureAnalysisHistory.forEach((as, idx) => validateAnalysisSummary(as, `fixtureAnalysisHistory[${idx}]`));
+validateAnalysisDetails(fixtureAnalysisCompleted, 'fixtureAnalysisCompleted');
+validateAnalysisDetails(fixtureAnalysisPartial, 'fixtureAnalysisPartial');
+validateAnalysisDetails(fixtureAnalysisFailed, 'fixtureAnalysisFailed');
+validateAnalysisDetails(fixtureAnalysisSecurityNoData, 'fixtureAnalysisSecurityNoData');
+validateAnalysisDetails(fixtureAnalysisLongRecommendation, 'fixtureAnalysisLongRecommendation');
+console.log('✓ All acceptance mock fixtures strictly adhere to OpenAPI contract (no legacy fields detected).');
+
+// ============================================================================
+// Start Mock HTTP API Server
+// ============================================================================
 const mockServer = http.createServer((req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${MOCK_PORT}`);
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -21,7 +728,7 @@ const mockServer = http.createServer((req, res) => {
     return res.end(JSON.stringify({ id: 'sc-user-demo-42' }));
   }
 
-  // 1.1 Leaderboard
+  // 1. Leaderboard
   if (url.pathname === '/api/v1/repositories') {
     if (url.searchParams.get('language') === 'EmptyLang') {
       res.writeHead(200);
@@ -34,318 +741,78 @@ const mockServer = http.createServer((req, res) => {
 
     res.writeHead(200);
     return res.end(JSON.stringify({
-      items: [
-        {
-          id: 'a0000001-0000-0000-0000-000000000001',
-          organization_slug: 'demo-org',
-          repository_slug: 'fast-service',
-          canonical_url: 'https://sourcecraft.tech/demo-org/fast-service',
-          visibility: 'public',
-          health_score: 88,
-          language: 'TypeScript',
-          likes: 42,
-          last_activity_at: '2026-09-20T14:30:00Z',
-          latest_analysis_id: 'b0000001-0000-0000-0000-000000000001'
-        },
-        {
-          id: 'a0000007-0000-0000-0000-000000000007',
-          organization_slug: 'very-long-enterprise-organization-holding-corp',
-          repository_slug: 'mission-critical-microservice-super-extended-repository-slug-v2',
-          canonical_url: 'https://sourcecraft.dev/very-long-enterprise-organization-holding-corp/mission-critical-microservice-super-extended-repository-slug-v2',
-          visibility: 'public',
-          health_score: 85,
-          language: 'TypeScript',
-          likes: 512,
-          last_activity_at: '2026-09-21T10:00:00Z',
-          latest_analysis_id: 'b0000001-0000-0000-0000-000000000001'
-        },
-        {
-          id: 'a0000002-0000-0000-0000-000000000002',
-          organization_slug: 'newbie-corp',
-          repository_slug: 'empty-starter',
-          canonical_url: 'https://sourcecraft.tech/newbie-corp/empty-starter',
-          visibility: 'public',
-          health_score: null, // NO_DATA fixture in leaderboard
-          language: 'Python',
-          likes: null,
-          last_activity_at: null,
-          latest_analysis_id: 'b0000006-0000-0000-0000-000000000006'
-        },
-        {
-          id: 'a0000003-0000-0000-0000-000000000003',
-          organization_slug: 'yandex-cloud',
-          repository_slug: 'serverless-gate',
-          canonical_url: 'https://sourcecraft.tech/yandex-cloud/serverless-gate',
-          visibility: 'public',
-          health_score: 94,
-          language: 'Go',
-          likes: 87,
-          last_activity_at: '2026-09-19T18:00:00Z',
-          latest_analysis_id: 'b0000001-0000-0000-0000-000000000001'
-        },
-        {
-          id: 'a0000004-0000-0000-0000-000000000004',
-          organization_slug: 'infra-tools',
-          repository_slug: 'k8s-operator',
-          canonical_url: 'https://sourcecraft.tech/infra-tools/k8s-operator',
-          visibility: 'public',
-          health_score: 62,
-          language: 'Rust',
-          likes: 19,
-          last_activity_at: '2026-09-15T11:20:00Z',
-          latest_analysis_id: 'b0000001-0000-0000-0000-000000000001'
-        },
-        {
-          id: 'a0000005-0000-0000-0000-000000000005',
-          organization_slug: 'lct-hackaton-2026',
-          repository_slug: 'case-18-repo-health-score-team-41',
-          canonical_url: 'https://sourcecraft.dev/lct-hackaton-2026/case-18-repo-health-score-team-41',
-          visibility: 'public',
-          health_score: 78,
-          language: 'Python',
-          likes: 128,
-          last_activity_at: '2026-09-21T09:15:00Z',
-          latest_analysis_id: 'b0000001-0000-0000-0000-000000000001'
-        }
-      ],
+      items: fixtureLeaderboardItems,
       limit: 20,
       offset: 0,
       has_more: false
     }));
   }
 
-  // 1.2 Repository details: healthy
+  // 2. Repository details: healthy
   if (url.pathname === '/api/v1/repositories/a0000001-0000-0000-0000-000000000001') {
     res.writeHead(200);
-    return res.end(JSON.stringify({
-      id: 'a0000001-0000-0000-0000-000000000001',
-      organization_slug: 'demo-org',
-      repository_slug: 'fast-service',
-      canonical_url: 'https://sourcecraft.tech/demo-org/fast-service',
-      visibility: 'public',
-      default_branch: 'main',
-      health_score: 88,
-      language: 'TypeScript',
-      likes: 42,
-      last_activity_at: '2026-09-20T14:30:00Z',
-      latest_analysis_id: 'b0000001-0000-0000-0000-000000000001',
-      created_at: '2026-01-10T08:00:00Z',
-      updated_at: '2026-09-20T14:30:00Z'
-    }));
+    return res.end(JSON.stringify(fixtureRepoHealthy));
   }
 
-  // 1.3 Repository details: NO_DATA
+  // 3. Repository details: NO_DATA
   if (url.pathname === '/api/v1/repositories/a0000002-0000-0000-0000-000000000002') {
     res.writeHead(200);
-    return res.end(JSON.stringify({
-      id: 'a0000002-0000-0000-0000-000000000002',
-      organization_slug: 'newbie-corp',
-      repository_slug: 'empty-starter',
-      canonical_url: 'https://sourcecraft.tech/newbie-corp/empty-starter',
-      visibility: 'public',
-      default_branch: 'main',
-      health_score: null,
-      language: 'Python',
-      likes: 0,
-      last_activity_at: null,
-      latest_analysis_id: null,
-      created_at: '2026-09-01T12:00:00Z',
-      updated_at: '2026-09-01T12:00:00Z'
-    }));
+    return res.end(JSON.stringify(fixtureRepoNoData));
   }
 
-  // 1.4 Repository details: long slug
+  // 4. Repository details: long slug
   if (url.pathname === '/api/v1/repositories/a0000007-0000-0000-0000-000000000007') {
     res.writeHead(200);
-    return res.end(JSON.stringify({
-      id: 'a0000007-0000-0000-0000-000000000007',
-      organization_slug: 'very-long-enterprise-organization-holding-corp',
-      repository_slug: 'mission-critical-microservice-super-extended-repository-slug-v2',
-      canonical_url: 'https://sourcecraft.dev/very-long-enterprise-organization-holding-corp/mission-critical-microservice-super-extended-repository-slug-v2',
-      visibility: 'public',
-      default_branch: 'main',
-      health_score: 85,
-      language: 'TypeScript',
-      likes: 512,
-      last_activity_at: '2026-09-21T10:00:00Z',
-      latest_analysis_id: 'b0000001-0000-0000-0000-000000000001',
-      created_at: '2026-02-01T08:00:00Z',
-      updated_at: '2026-09-21T10:00:00Z'
-    }));
+    return res.end(JSON.stringify(fixtureRepoLongSlug));
   }
 
-  // 1.5 Repository details: loading fixture (never resolves within client timeout)
+  // 5. Repository details: loading fixture (never resolves within client timeout)
   if (url.pathname === '/api/v1/repositories/a0000008-0000-0000-0000-000000000008') {
-    // Keep connection open without writing response
     return;
   }
 
-  // 1.6 Repository analyses list
+  // 6. Repository analyses history
   if (url.pathname.endsWith('/analyses') && req.method === 'GET') {
     res.writeHead(200);
     return res.end(JSON.stringify({
-      items: [
-        {
-          id: 'b0000001-0000-0000-0000-000000000001',
-          repository_id: 'a0000001-0000-0000-0000-000000000001',
-          status: 'completed',
-          score: 88,
-          created_at: '2026-09-20T14:35:00Z',
-          completed_at: '2026-09-20T14:36:12Z'
-        }
-      ],
+      items: fixtureAnalysisHistory,
       limit: 10,
       offset: 0,
       has_more: false
     }));
   }
 
-  // 1.7 Analysis: completed healthy
+  // 7. Analysis: completed healthy
   if (url.pathname === '/api/v1/analyses/b0000001-0000-0000-0000-000000000001') {
     res.writeHead(200);
-    return res.end(JSON.stringify({
-      id: 'b0000001-0000-0000-0000-000000000001',
-      repository_id: 'a0000001-0000-0000-0000-000000000001',
-      status: 'completed',
-      score: 88,
-      category_scores: {
-        documentation: { score: 92, weight: 15, availability: 'available', evidence_refs: ['ev-doc-1'] },
-        cicd: { score: 85, weight: 15, availability: 'available', evidence_refs: ['ev-ci-1'] },
-        security: { score: 80, weight: 25, availability: 'available', evidence_refs: ['ev-sec-1'] },
-        activity: { score: 95, weight: 15, availability: 'available', evidence_refs: ['ev-act-1'] },
-        issues: { score: 78, weight: 15, availability: 'available', evidence_refs: ['ev-iss-1'] },
-        code_health: { score: 90, weight: 15, availability: 'available', evidence_refs: ['ev-ch-1'] }
-      },
-      evidence: [
-        { id: 'ev-doc-1', category: 'documentation', source: 'readme_parser', description: 'README.md найден (324 строки, документация API полная)' },
-        { id: 'ev-ci-1', category: 'cicd', source: 'sourcecraft_ci', description: 'CI пайплайн настроен и проходит успешно в 98% сборок' },
-        { id: 'ev-sec-1', category: 'security', source: 'sourcecraft_appsec', description: 'Уязвимостей высокой и критической степени не обнаружено' },
-        { id: 'ev-act-1', category: 'activity', source: 'git_log', description: '34 коммита за последние 30 дней от 4 активных авторов' },
-        { id: 'ev-iss-1', category: 'issues', source: 'sourcecraft_issues', description: 'Среднее время закрытия задач составляет 2.4 дня' },
-        { id: 'ev-ch-1', category: 'code_health', source: 'sourcehealth_local', description: 'SAST анализ: дефектов и запахов кода не обнаружено' }
-      ],
-      recommendations: [
-        {
-          id: 'rec-1',
-          title: 'Добавьте тесты для критических модулей',
-          description: 'Покрытие тестами в модуле auth составляет 64%. Рекомендуется поднять до 80%.',
-          priority: 'P2',
-          effort: 'medium',
-          action: 'Написать модульные тесты для auth/provider.go',
-          evidence_refs: ['ev-ch-1']
-        }
-      ],
-      checks: [
-        { analyzer: 'readme_parser', category: 'documentation', status: 'pass', source: 'readme_parser' },
-        { analyzer: 'sourcecraft_appsec', category: 'security', status: 'pass', source: 'sourcecraft_appsec' }
-      ],
-      created_at: '2026-09-20T14:35:00Z',
-      completed_at: '2026-09-20T14:36:12Z'
-    }));
+    return res.end(JSON.stringify(fixtureAnalysisCompleted));
   }
 
-  // 1.8 Analysis: partial
+  // 8. Analysis: partial
   if (url.pathname === '/api/v1/analyses/b0000002-0000-0000-0000-000000000002') {
     res.writeHead(200);
-    return res.end(JSON.stringify({
-      id: 'b0000002-0000-0000-0000-000000000002',
-      repository_id: 'a0000001-0000-0000-0000-000000000001',
-      status: 'partial',
-      score: 72,
-      category_scores: {
-        documentation: { score: 90, weight: 15, availability: 'available', evidence_refs: [] },
-        cicd: { score: 0, weight: 15, availability: 'no_data', evidence_refs: [] },
-        security: { score: 85, weight: 25, availability: 'available', evidence_refs: [] },
-        activity: { score: 65, weight: 15, availability: 'available', evidence_refs: [] },
-        issues: { score: 0, weight: 15, availability: 'no_data', evidence_refs: [] },
-        code_health: { score: 75, weight: 15, availability: 'available', evidence_refs: [] }
-      },
-      evidence: [],
-      recommendations: [],
-      checks: [],
-      created_at: '2026-09-20T12:00:00Z',
-      completed_at: '2026-09-20T12:01:00Z'
-    }));
+    return res.end(JSON.stringify(fixtureAnalysisPartial));
   }
 
-  // 1.9 Analysis: failed
+  // 9. Analysis: failed
   if (url.pathname === '/api/v1/analyses/b0000005-0000-0000-0000-000000000005') {
     res.writeHead(200);
-    return res.end(JSON.stringify({
-      id: 'b0000005-0000-0000-0000-000000000005',
-      repository_id: 'a0000001-0000-0000-0000-000000000001',
-      status: 'failed',
-      score: null,
-      category_scores: {},
-      evidence: [],
-      recommendations: [],
-      checks: [],
-      created_at: '2026-09-20T10:00:00Z',
-      completed_at: '2026-09-20T10:00:15Z'
-    }));
+    return res.end(JSON.stringify(fixtureAnalysisFailed));
   }
 
-  // 1.10 Analysis: Security NO_DATA
+  // 10. Analysis: Security NO_DATA
   if (url.pathname === '/api/v1/analyses/b0000006-0000-0000-0000-000000000006') {
     res.writeHead(200);
-    return res.end(JSON.stringify({
-      id: 'b0000006-0000-0000-0000-000000000006',
-      repository_id: 'a0000002-0000-0000-0000-000000000002',
-      status: 'completed',
-      score: 82,
-      category_scores: {
-        documentation: { score: 85, weight: 15, availability: 'available', evidence_refs: [] },
-        cicd: { score: 80, weight: 15, availability: 'available', evidence_refs: [] },
-        security: { score: 0, weight: 25, availability: 'no_data', evidence_refs: [] },
-        activity: { score: 80, weight: 15, availability: 'available', evidence_refs: [] },
-        issues: { score: 75, weight: 15, availability: 'available', evidence_refs: [] },
-        code_health: { score: 88, weight: 15, availability: 'available', evidence_refs: [] }
-      },
-      evidence: [],
-      recommendations: [],
-      checks: [],
-      created_at: '2026-09-19T08:00:00Z',
-      completed_at: '2026-09-19T08:01:00Z'
-    }));
+    return res.end(JSON.stringify(fixtureAnalysisSecurityNoData));
   }
 
-  // 1.11 Analysis: Long recommendation
+  // 11. Analysis: Long recommendation
   if (url.pathname === '/api/v1/analyses/b0000007-0000-0000-0000-000000000007') {
     res.writeHead(200);
-    return res.end(JSON.stringify({
-      id: 'b0000007-0000-0000-0000-000000000007',
-      repository_id: 'a0000007-0000-0000-0000-000000000007',
-      status: 'completed',
-      score: 85,
-      category_scores: {
-        documentation: { score: 88, weight: 15, availability: 'available', evidence_refs: ['ev-1'] },
-        cicd: { score: 82, weight: 15, availability: 'available', evidence_refs: ['ev-2'] },
-        security: { score: 75, weight: 25, availability: 'available', evidence_refs: ['ev-3'] },
-        activity: { score: 90, weight: 15, availability: 'available', evidence_refs: ['ev-4'] },
-        issues: { score: 85, weight: 15, availability: 'available', evidence_refs: ['ev-5'] },
-        code_health: { score: 92, weight: 15, availability: 'available', evidence_refs: ['ev-6'] }
-      },
-      evidence: [
-        { id: 'ev-1', category: 'documentation', source: 'readme_parser', description: 'Полная техническая спецификация API с примерами вызовов' }
-      ],
-      recommendations: [
-        {
-          id: 'rec-long-1',
-          title: 'Комплексная реструктуризация инфраструктурных пайплайнов и политик безопасности контейнерных сред',
-          description: 'Данный репозиторий содержит критические точки входа для внешних распределённых микросервисов. Настоятельно рекомендуется полностью переработать конфигурацию CI/CD пайплайнов, внедрить строгие политики сканирования базовых образов OCI на этапе предварительного коммита, настроить автоматическую проверку зависимостей и контроль версий через Dependabot/Snyk, а также активировать сигнатурную верификацию артефактов в защищённом реестре SourceCraft Registry.',
-          priority: 'P1',
-          effort: 'high',
-          action: 'Развернуть расширенный набор анализаторов безопасности SourceCraft AppSec и локальных линтеров',
-          evidence_refs: ['ev-1']
-        }
-      ],
-      checks: [],
-      created_at: '2026-09-21T09:00:00Z',
-      completed_at: '2026-09-21T09:01:30Z'
-    }));
+    return res.end(JSON.stringify(fixtureAnalysisLongRecommendation));
   }
 
-  // 1.12 SourceCraft connection
+  // 12. SourceCraft connection
   if (url.pathname === '/api/v1/sourcecraft/connection') {
     if (url.searchParams.get('disconnected') === '1') {
       res.writeHead(200);
@@ -355,6 +822,7 @@ const mockServer = http.createServer((req, res) => {
     return res.end(JSON.stringify({ connected: true, expires_in: 1800 }));
   }
 
+  // 13. SourceCraft repositories
   if (url.pathname === '/api/v1/sourcecraft/repositories') {
     res.writeHead(200);
     return res.end(JSON.stringify({
@@ -374,8 +842,11 @@ mockServer.listen(MOCK_PORT, '127.0.0.1', () => {
   console.log(`Mock API server listening on http://127.0.0.1:${MOCK_PORT}`);
 });
 
-// 2. Start Vite preview on port 5173
-const vite = spawn('npm.cmd', ['run', 'preview', '--', '--port', '5173'], {
+// ============================================================================
+// Start Vite Preview Server
+// ============================================================================
+const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const vite = spawn(npmCmd, ['run', 'preview', '--', '--port', '5173'], {
   cwd: path.resolve('frontend'),
   shell: true,
   stdio: 'pipe',
@@ -405,18 +876,50 @@ if (!viteReady) {
   process.exit(1);
 }
 
-const edgePath = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
-const chromePath = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const browserExe = fs.existsSync(edgePath) ? edgePath : chromePath;
+// ============================================================================
+// Launch Browser with CDP
+// ============================================================================
+function findBrowserExecutable() {
+  if (process.platform === 'win32') {
+    const candidates = [
+      'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+      'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
+      'C:/Program Files/Google/Chrome/Application/chrome.exe',
+      'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+      process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Google/Chrome/Application/chrome.exe') : null,
+      process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Microsoft/Edge/Application/msedge.exe') : null,
+    ].filter(Boolean);
+    return candidates.find((p) => fs.existsSync(p)) || null;
+  } else if (process.platform === 'darwin') {
+    const candidates = [
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+      '/Applications/Chromium.app/Contents/MacOS/Chromium'
+    ];
+    return candidates.find((p) => fs.existsSync(p)) || null;
+  } else {
+    // Linux
+    const candidates = [
+      '/usr/bin/google-chrome',
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/chromium',
+      '/usr/bin/chromium-browser',
+      '/usr/bin/microsoft-edge',
+      '/usr/bin/microsoft-edge-stable'
+    ];
+    return candidates.find((p) => fs.existsSync(p)) || null;
+  }
+}
 
-if (!fs.existsSync(browserExe)) {
-  console.error('FATAL: Browser executable not found');
+const browserExe = findBrowserExecutable();
+if (!browserExe) {
+  console.error('FATAL: Browser executable not found on host machine');
   vite.kill();
   mockServer.close();
   process.exit(1);
 }
 
-console.log('Starting Edge with CDP remote debugging on port 9222...');
+console.log(`Starting headless browser (${browserExe}) with CDP remote debugging on port 9222...`);
 const browserProc = spawn(browserExe, [
   '--headless=new',
   '--remote-debugging-port=9222',
@@ -485,7 +988,9 @@ function sendCdp(method, params = {}) {
 await sendCdp('Page.enable');
 await sendCdp('Runtime.enable');
 
+// ============================================================================
 // Full Acceptance Matrix: 40 screenshots
+// ============================================================================
 const tasks = [
   // 1. Leaderboard across viewports & themes
   { name: '01-leaderboard-light-1440.png', url: 'http://127.0.0.1:5173/?theme=light', width: 1440, height: 900 },

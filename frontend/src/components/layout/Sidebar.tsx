@@ -106,20 +106,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onClose, onOpenApp
           </NavLink>
         </div>
 
-        {/* Repositories Quick Group */}
-        <div className="sc-nav-group">
-          <div className="sc-nav-group-title">Репозитории</div>
-          <Link
-            to="/repositories/case-18-repo-health-score-team-41"
-            className="sc-nav-item sc-nav-sub-item"
-            title="case-18-repo-health-score-team-41"
-          >
-            <svg className="sc-nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
-              <path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 1 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5v-9zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8V1.5z" />
-            </svg>
-            <span className="sc-nav-label sc-truncate">case-18-team-41</span>
-          </Link>
-        </div>
 
         {/* SourceCraft Platform Ecosystem */}
         <div className="sc-nav-group">

@@ -6,7 +6,7 @@
 
 ### Ключевые архитектурные и визуальные принципы:
 1. **Нативная оболочка SourceCraft (Application Shell):**
-   - **Левая вертикальная панель навигации (`Sidebar.tsx`):** Фиксированная боковая колонка (`width: 240px`) с группировкой разделов («Лидерборд», «Мой SourceCraft», «Репозитории», «Экосистема»), быстрыми действиями, профилем пользователя и вызовом диалога «Внешний вид».
+   - **Левая вертикальная панель навигации (`Sidebar.tsx`):** Фиксированная боковая колонка (`width: 240px`) с группировкой разделов («Лидерборд», «Мой SourceCraft», «Экосистема»), быстрыми действиями, профилем пользователя и вызовом диалога «Внешний вид». Исключены некорректные ссылки на репозитории по слагу: роутинг `/repositories/:id` строго типизирован и принимает валидный UUID SourceHealth.
    - **Контекстный верхний бар (`TopBar.tsx`):** Компактный 48px бар со сбалансированными хлебными крошками (Home > Раздел), мобильным гамбургером и быстрыми ссылками на SourceCraft.
    - **Полноэкранное рабочее пространство (Fluid Workspace):** Убран искусственный центрирующий контейнер `max-width: 1200px`. Интерфейс утилизирует всю ширину экрана с адаптивными отступами, обеспечивая высокую информационную плотность для таблиц метрик, списков коммитов и проверок.
    - **Замена тяжелых карточек на панели разработчика (`.sc-panel`):** Плоские панели с 1px границами и нейтральными фонами вместо вычурных теней и многослойных вложенных карточек.
@@ -82,7 +82,18 @@
 
 ### 4.1. FIXTURE BROWSER VERIFIED (Подтверждено в браузере на фикстурах)
 - **Статус:** **VERIFIED (100% PASS)**
-- Все **40 приёмочных скриншотов** сформированы в реальном браузере Microsoft Edge (Chromium headless) через CDP скриптом [`scripts/run_browser_acceptance.mjs`](../scripts/run_browser_acceptance.mjs).
+- Все **40 приёмочных скриншотов** сформированы в реальном браузере Microsoft Edge / Chromium headless через CDP скриптом [`scripts/run_browser_acceptance.mjs`](../scripts/run_browser_acceptance.mjs).
+- **Кроссплатформенность:** Скрипт поддерживает Windows, Linux и macOS с автоматическим выбором `npm`/`npm.cmd` и обнаружением установленных браузеров Edge / Google Chrome / Chromium.
+- **Строгое соответствие контракту OpenAPI:** Все мок-фикстуры приведены в 100% соответствие с `docs/openapi.json` и `frontend/src/api/generated.ts`:
+  - `AnalysisDetails` и `AnalysisSummary` используют актуальные поля `health_score`, `queued_at`, `started_at`, `completed_at`, `scoring_policy_version: "mvp-score-v1.2"`, `analyzer_contract_version: "v1"`, `error_code`.
+  - Устранены устаревшие поля `score` и `created_at`.
+  - Категории `CategoryScoreDTO` содержат `category`, `score`, `availability`, `explanation`, `evidence_refs` (устаревшее поле `weight` удалено).
+  - Рекомендации `RecommendationDTO` используют числовой приоритет `priority: number` (1, 2, 3), `suggested_action`, `expected_impact` (устаревшие поля `effort` и `action` удалены).
+  - Подтверждающие факты `EvidenceDTO` содержат `id`, `source`, `type`, `reference`, `summary`, `url`, `location`, `timestamp` (устаревшие поля `category` и `description` удалены).
+  - Результаты проверок `checks` передаются как словарь `Record<string, AnalyzerResultDTO>`, где каждый анализатор содержит статус `ok | partial | error` и свой массив фактов `evidence`.
+  - Покрытие `score_coverage` передаётся в формате `ScoreCoverageDTO`.
+  - Все URL репозиториев платформы SourceCraft используют origin `https://sourcecraft.dev/...` (не `.tech`).
+- **Защита от дрейфа (Fixture Drift Guard):** Перед стартом mock-сервера выполняется строгая пре-флайт валидация структуры всех фикстур с аварийным завершением (`throw Error`), если отсутствуют обязательные поля схемы или обнаружены устаревшие/неканонические поля.
 - Охват:
   - 5 стандартных вьюпортов (1440×900, 1024×768, 768×1024, 390×844, 375×667);
   - Светлая и тёмная графитовая (`#343434`) темы оформления;
@@ -159,12 +170,12 @@
 
 ## 6. Воспроизведение процедуры приёмки
 
-Для полной перепроверки интерфейса и перегенерации скриншотов достаточно выполнить:
+Скрипт приёмки кроссплатформенный (Windows, macOS, Linux) и использует установленный в системе Chromium/Edge/Chrome:
 
-```powershell
+```bash
 # 1. Сборка фронтенда
 npm run build --prefix frontend
 
-# 2. Запуск браузерной приёмки (Microsoft Edge headless + CDP)
+# 2. Запуск браузерной приёмки (Headless Chromium/Edge + CDP)
 node scripts/run_browser_acceptance.mjs
 ```
