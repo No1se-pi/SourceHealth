@@ -1,3 +1,59 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SourceHealth</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SourceHealth · Анализ здоровья репозиториев</title>
+    <meta name="description" content="Платформа объективной оценки здоровья, надежности и готовности репозиториев для экосистемы SourceCraft." />
+    <link rel="canonical" href="https://sourcehealth.tech/" />
+    <meta property="og:title" content="SourceHealth · Анализ здоровья репозиториев" />
+    <meta property="og:description" content="Платформа объективной оценки здоровья, надежности и готовности репозиториев для экосистемы SourceCraft." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://sourcehealth.tech" />
+    <meta property="og:image" content="https://sourcehealth.tech/brand/sourcehealth-social.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="SourceHealth · Анализ здоровья репозиториев" />
+    <meta name="twitter:description" content="Платформа объективной оценки здоровья, надежности и готовности репозиториев для экосистемы SourceCraft." />
+    <meta name="twitter:image" content="https://sourcehealth.tech/brand/sourcehealth-social.png" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <script>
+      (function () {
+        try {
+          var params = new URLSearchParams(window.location.search);
+          var queryTheme = params.get('theme');
+          var queryAccent = params.get('accent');
+
+          // Resolve theme
+          var activeTheme = 'dark';
+          if (queryTheme === 'dark' || queryTheme === 'light') {
+            activeTheme = queryTheme;
+          } else {
+            var storedTheme = localStorage.getItem('sourcehealth_theme') || 'system';
+            if (storedTheme === 'system') {
+              var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+              activeTheme = prefersDark ? 'dark' : 'light';
+            } else if (storedTheme === 'light' || storedTheme === 'dark') {
+              activeTheme = storedTheme;
+            }
+          }
+          document.documentElement.setAttribute('data-theme', activeTheme);
+
+          // Resolve accent color
+          var activeAccent = queryAccent || localStorage.getItem('sourcehealth_accent') || 'default';
+          document.documentElement.setAttribute('data-accent', activeAccent);
+
+          // Resolve temperature
+          var activeTemp = localStorage.getItem('sourcehealth_temp') || 'neutral';
+          document.documentElement.setAttribute('data-temperature', activeTemp);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          document.documentElement.setAttribute('data-accent', 'default');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

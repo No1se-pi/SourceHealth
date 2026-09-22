@@ -17,6 +17,12 @@ import {
   getSafeExternalUrl,
 } from '../utils/analysis';
 
+function formatDateTime(timestamp: string | null | undefined): string {
+  if (!timestamp) return '—';
+  const d = new Date(timestamp);
+  return isNaN(d.getTime()) ? String(timestamp) : d.toLocaleString('ru-RU');
+}
+
 export const AnalysisPage: React.FC = () => {
   const { id = '' } = useParams<{ id: string }>();
   const [run, setRun] = useState<Analysis>();
@@ -179,9 +185,9 @@ export const AnalysisPage: React.FC = () => {
             >
               <div style={{ fontSize: '0.85rem', color: 'var(--sh-text-muted)' }}>
                 {run.completed_at ? (
-                  <span>Завершено: {new Date(run.completed_at).toLocaleString('ru-RU')}</span>
+                  <span>Завершено: {formatDateTime(run.completed_at)}</span>
                 ) : (
-                  <span>В очереди с {new Date(run.queued_at).toLocaleString('ru-RU')}</span>
+                  <span>В очереди с {formatDateTime(run.queued_at)}</span>
                 )}
               </div>
               {['completed', 'partial'].includes(run.status) && (
@@ -231,8 +237,8 @@ export const AnalysisPage: React.FC = () => {
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                  gap: 'var(--sh-space-4)',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                  gap: 'var(--sh-space-3)',
                 }}
               >
                 {CATEGORY_ORDER.map((catKey) => {

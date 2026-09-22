@@ -1,67 +1,76 @@
 /**
- * SourceHealth Design Tokens — Dark-First Modern Developer SaaS
- * GitHub / Linear / Vercel / SourceCraft aesthetic
+ * SourceHealth Design Tokens — Authenticated SourceCraft-Native
+ * Ground Truth: Real authenticated SourceCraft screenshots
+ * Base Dark Palette: Neutral graphite (#343434, #3e3e3e, #494949, #525252)
+ * Brand Red: #f93333 (Strictly brand mark, deliberate health semantics, logo)
  */
 
-:root {
-  /* Color Palette — Base Surfaces (Dark Graphite / Black) */
-  --sh-bg-base: #0a0d14;
-  --sh-bg-surface: #111520;
-  --sh-bg-surface-elevated: #171c2b;
-  --sh-bg-surface-hover: #1c2234;
-  --sh-bg-input: #0e121b;
+:root,
+[data-theme="light"] {
+  /* Color Palette — Base Surfaces (SourceCraft Light) */
+  --sh-bg-base: #f6f8fa;
+  --sh-bg-surface: #ffffff;
+  --sh-bg-surface-elevated: #f1f3f5;
+  --sh-bg-surface-hover: #eaeff5;
+  --sh-bg-active: #e5e7eb;
+  --sh-bg-input: #ffffff;
 
   /* Borders */
-  --sh-border-subtle: #1e2436;
-  --sh-border-default: #283046;
-  --sh-border-hover: #3b4664;
-  --sh-border-strong: #4e5a7d;
+  --sh-border-subtle: #e1e4e8;
+  --sh-border-default: #d0d7de;
+  --sh-border-hover: #8c959f;
+  --sh-border-strong: #57606a;
 
   /* Typography Colors */
-  --sh-text-primary: #f1f5f9;
-  --sh-text-secondary: #94a3b8;
+  --sh-text-primary: #1f2328;
+  --sh-text-secondary: #475569;
   --sh-text-muted: #64748b;
-  --sh-text-inverse: #0a0d14;
+  --sh-text-inverse: #ffffff;
 
-  /* Brand / Action Colors (Purple Accent) */
-  --sh-brand: #8b5cf6;
-  --sh-brand-hover: #7c3aed;
-  --sh-brand-active: #6d28d9;
-  --sh-brand-subtle: rgba(139, 92, 246, 0.12);
-  --sh-brand-border: rgba(139, 92, 246, 0.35);
+  /* Brand Colors (SourceHealth Red #f93333) */
+  --sh-brand: #f93333;
+  --sh-brand-text: #dc2626; /* WCAG 2.1 AA (4.63:1 on #fff) */
+  --sh-brand-hover: #e02424;
+  --sh-brand-active: #c51919;
+  --sh-brand-subtle: rgba(249, 51, 51, 0.08);
+  --sh-brand-border: rgba(249, 51, 51, 0.28);
 
-  /* Health Semantics */
-  /* Good / Healthy (Green) */
-  --sh-health-good: #22c55e;
-  --sh-health-good-bg: rgba(34, 197, 94, 0.12);
-  --sh-health-good-border: rgba(34, 197, 94, 0.3);
+  /* SourceCraft Native Action Button Controls */
+  --sh-btn-primary-bg: #1f2328;
+  --sh-btn-primary-text: #ffffff;
+  --sh-btn-primary-border: #1f2328;
+  --sh-btn-primary-hover: #323842;
 
-  /* Warning / Attention Needed (Yellow/Amber) */
-  --sh-health-warning: #f59e0b;
-  --sh-health-warning-bg: rgba(245, 158, 11, 0.12);
-  --sh-health-warning-border: rgba(245, 158, 11, 0.3);
+  /* Health Semantics (Fixed, Independent of UI Accent) */
+  --sh-health-good: #1a7f37;
+  --sh-health-good-bg: rgba(26, 127, 55, 0.09);
+  --sh-health-good-border: rgba(26, 127, 55, 0.25);
 
-  /* Problem / Danger (Red) */
-  --sh-health-danger: #ef4444;
-  --sh-health-danger-bg: rgba(239, 68, 68, 0.12);
-  --sh-health-danger-border: rgba(239, 68, 68, 0.3);
+  --sh-health-warning: #9a6700;
+  --sh-health-warning-bg: rgba(154, 103, 0, 0.09);
+  --sh-health-warning-border: rgba(154, 103, 0, 0.25);
 
-  /* Unavailable / NO_DATA (Neutral Gray) */
-  --sh-health-unavailable: #64748b;
-  --sh-health-unavailable-bg: rgba(100, 116, 139, 0.14);
-  --sh-health-unavailable-border: rgba(100, 116, 139, 0.28);
+  --sh-health-danger: #cf222e;
+  --sh-health-danger-bg: rgba(207, 34, 46, 0.09);
+  --sh-health-danger-border: rgba(207, 34, 46, 0.25);
 
-  /* Focus Ring */
-  --sh-focus-ring: 0 0 0 2px #0a0d14, 0 0 0 4px #8b5cf6;
+  --sh-health-unavailable: #57606a;
+  --sh-health-unavailable-bg: rgba(87, 96, 106, 0.09);
+  --sh-health-unavailable-border: rgba(87, 96, 106, 0.25);
+
+  /* Elevation Shadows */
+  --sh-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --sh-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+  --sh-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 
   /* Typography */
-  --sh-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --sh-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --sh-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --sh-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
 
   /* Radii */
   --sh-radius-sm: 6px;
-  --sh-radius-md: 10px;
-  --sh-radius-lg: 14px;
+  --sh-radius-md: 8px;
+  --sh-radius-lg: 12px;
   --sh-radius-full: 9999px;
 
   /* Spacing */
@@ -77,4 +86,152 @@
 
   /* Transitions */
   --sh-transition: 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Dark Theme Tokens (SourceCraft Authenticated Graphite) */
+[data-theme="dark"] {
+  /* Color Palette — Base Surfaces (Warm/Neutral Graphite) */
+  --sh-bg-base: #343434;
+  --sh-bg-surface: #3e3e3e;
+  --sh-bg-surface-elevated: #494949;
+  --sh-bg-surface-hover: #444444;
+  --sh-bg-active: #525252;
+  --sh-bg-input: #424242;
+
+  /* Borders */
+  --sh-border-subtle: #424242;
+  --sh-border-default: #494949;
+  --sh-border-hover: #676767;
+  --sh-border-strong: #737373;
+
+  /* Typography Colors (WCAG AAA/AA Compliant on #343434) */
+  --sh-text-primary: #ffffff;       /* 12.45:1 */
+  --sh-text-secondary: #e1e1e1;     /* 9.52:1 */
+  --sh-text-muted: #b3b3b3;         /* 5.94:1 */
+  --sh-text-inverse: #1f2328;
+
+  /* Brand Colors */
+  --sh-brand: #f93333;
+  --sh-brand-text: #f87171;         /* 4.50:1 on #343434 */
+  --sh-brand-hover: #ff4d4d;
+  --sh-brand-active: #ff6666;
+  --sh-brand-subtle: rgba(249, 51, 51, 0.16);
+  --sh-brand-border: rgba(249, 51, 51, 0.35);
+
+  /* SourceCraft Native Action Button Controls */
+  --sh-btn-primary-bg: #ffffff;
+  --sh-btn-primary-text: #1f2328;
+  --sh-btn-primary-border: #ffffff;
+  --sh-btn-primary-hover: #e5e7eb;
+
+  /* Health Semantics (High Contrast on Graphite) */
+  --sh-health-good: #34d399;        /* 6.48:1 */
+  --sh-health-good-bg: rgba(52, 211, 153, 0.14);
+  --sh-health-good-border: rgba(52, 211, 153, 0.35);
+
+  --sh-health-warning: #fbbf24;     /* 7.46:1 */
+  --sh-health-warning-bg: rgba(251, 191, 36, 0.14);
+  --sh-health-warning-border: rgba(251, 191, 36, 0.35);
+
+  --sh-health-danger: #f87171;      /* 4.50:1 */
+  --sh-health-danger-bg: rgba(248, 113, 113, 0.14);
+  --sh-health-danger-border: rgba(248, 113, 113, 0.35);
+
+  --sh-health-unavailable: #b3b3b3;
+  --sh-health-unavailable-bg: rgba(179, 179, 179, 0.12);
+  --sh-health-unavailable-border: rgba(179, 179, 179, 0.28);
+
+  /* Elevation Shadows */
+  --sh-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --sh-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.25);
+  --sh-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+}
+
+/* Temperature Modifiers */
+[data-temperature="warm"][data-theme="dark"] {
+  --sh-bg-base: #383533;
+  --sh-bg-surface: #423e3c;
+}
+[data-temperature="cool"][data-theme="dark"] {
+  --sh-bg-base: #2f3438;
+  --sh-bg-surface: #383e43;
+}
+
+/* ==========================================================================
+   SourceCraft Accent Colors (From Appearance Settings Reference Screenshot)
+   ========================================================================== */
+
+:root,
+[data-accent="default"] {
+  --sh-accent: var(--sh-text-primary);
+  --sh-accent-hover: var(--sh-border-strong);
+  --sh-accent-subtle: rgba(255, 255, 255, 0.1);
+  --sh-accent-border: var(--sh-border-default);
+}
+
+[data-theme="light"][data-accent="default"] {
+  --sh-accent: #1f2328;
+  --sh-accent-subtle: rgba(0, 0, 0, 0.06);
+  --sh-accent-border: #d0d7de;
+}
+
+[data-accent="red"] {
+  --sh-accent: #ff3333;
+  --sh-accent-hover: #e02424;
+  --sh-accent-subtle: rgba(255, 51, 51, 0.16);
+  --sh-accent-border: rgba(255, 51, 51, 0.4);
+}
+
+[data-accent="orange"] {
+  --sh-accent: #f6821e;
+  --sh-accent-hover: #dd6e10;
+  --sh-accent-subtle: rgba(246, 130, 30, 0.16);
+  --sh-accent-border: rgba(246, 130, 30, 0.4);
+}
+
+[data-accent="yellow"] {
+  --sh-accent: #ffc728;
+  --sh-accent-hover: #e5b018;
+  --sh-accent-subtle: rgba(255, 199, 40, 0.16);
+  --sh-accent-border: rgba(255, 199, 40, 0.4);
+}
+
+[data-accent="green"] {
+  --sh-accent: #60ba47;
+  --sh-accent-hover: #4ea237;
+  --sh-accent-subtle: rgba(96, 186, 71, 0.16);
+  --sh-accent-border: rgba(96, 186, 71, 0.4);
+}
+
+[data-accent="cyan"] {
+  --sh-accent: #04c0ff;
+  --sh-accent-hover: #03a3d8;
+  --sh-accent-subtle: rgba(4, 192, 255, 0.16);
+  --sh-accent-border: rgba(4, 192, 255, 0.4);
+}
+
+[data-accent="blue"] {
+  --sh-accent: #047aff;
+  --sh-accent-hover: #0364d3;
+  --sh-accent-subtle: rgba(4, 122, 255, 0.16);
+  --sh-accent-border: rgba(4, 122, 255, 0.4);
+}
+
+[data-accent="pink"] {
+  --sh-accent: #f74f9e;
+  --sh-accent-hover: #dd3784;
+  --sh-accent-subtle: rgba(247, 79, 158, 0.16);
+  --sh-accent-border: rgba(247, 79, 158, 0.4);
+}
+
+[data-accent="purple"] {
+  --sh-accent: #953d96;
+  --sh-accent-hover: #7b2a7c;
+  --sh-accent-subtle: rgba(149, 61, 150, 0.16);
+  --sh-accent-border: rgba(149, 61, 150, 0.4);
+}
+
+/* Dynamic Focus Ring bound to active accent */
+:root {
+  --sh-focus-ring: 0 0 0 2px var(--sh-bg-base), 0 0 0 4px var(--sh-accent);
 }

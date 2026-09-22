@@ -39,6 +39,12 @@ function formatLastActivity(timestamp: string | null | undefined): string {
   });
 }
 
+function formatDateTime(timestamp: string | null | undefined): string {
+  if (!timestamp) return '—';
+  const d = new Date(timestamp);
+  return isNaN(d.getTime()) ? String(timestamp) : d.toLocaleString('ru-RU');
+}
+
 export const RepositoryPage: React.FC = () => {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -223,8 +229,8 @@ export const RepositoryPage: React.FC = () => {
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                  gap: 'var(--sh-space-4)',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                  gap: 'var(--sh-space-3)',
                   backgroundColor: 'var(--sh-bg-base)',
                   padding: 'var(--sh-space-4)',
                   borderRadius: 'var(--sh-radius-sm)',
@@ -362,8 +368,8 @@ export const RepositoryPage: React.FC = () => {
                 <span style={{ fontSize: '0.85rem', color: 'var(--sh-text-muted)' }}>
                   Запуск {latestAnalysis.id.substring(0, 8)}… ·{' '}
                   {latestAnalysis.completed_at
-                    ? `завершён ${new Date(latestAnalysis.completed_at).toLocaleString('ru-RU')}`
-                    : `в процессе с ${new Date(latestAnalysis.queued_at).toLocaleString('ru-RU')}`}
+                    ? `завершён ${formatDateTime(latestAnalysis.completed_at)}`
+                    : `в процессе с ${formatDateTime(latestAnalysis.queued_at)}`}
                 </span>
               }
               headerAction={
