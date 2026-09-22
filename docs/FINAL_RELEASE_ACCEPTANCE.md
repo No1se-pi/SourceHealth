@@ -5,7 +5,8 @@
 Работа **не завершена**, release/PR gate пока не пройден. Статусы ниже относятся
 только к этому запуску; прежние live-проверки не заменяют новую приёмку.
 
-- Base и текущий HEAD: `11151e4fb2c3341b97a05b00c0afed87dad5ddf4`.
+- Base: `11151e4fb2c3341b97a05b00c0afed87dad5ddf4`.
+- Generator/benchmark checkpoint: `10fa20c4efaf778627aeaab1ab31e8d3c860b49c`.
 - `git fetch origin Dev-No1se` подтвердил тот же SHA удалённой ветки.
 - Ветка: `feature/final-mvp-100-closure`; исходное рабочее дерево чистое.
 - Окружение: Archcraft, Python 3.14.7. Изолированный venv в `/tmp`, зависимости
@@ -22,13 +23,13 @@
 | Integration PostgreSQL/Redis/RQ | PASS | 18 tests, 4.116 s, OK; sourcehealth_test, Redis DB 15, Alembic upgrade/check |
 | Compose smoke | PASS | scripts/compose_smoke.py: migration, health, HTTP 200, registered worker, down -v |
 | MVP snapshot smoke | PASS | scanner image build + scripts/mvp_snapshot_smoke.py: offline Docker, Git/docs/debt/SAST, cleanup |
-| Live public / large repo | BLOCKED | GET /repos без PAT: authentication_required; [локальная подготовка](LARGE_REPO_ACCEPTANCE.md) не является live PASS |
+| Live public / large repo | BLOCKED large | PAT работает; discovery 20, metadata 3, clones 2; оба ниже large threshold. Ожидается разрешение на отдельный fixture: [evidence](LARGE_REPO_ACCEPTANCE.md) |
 | Anti-size-skew / performance | NOT ACCEPTED | Целевые unit прошли, large измерений пока нет |
 | AppSec investigation | NOT RUN | Новый official review ещё не выполнен |
 | Yandex / SourceCraft browser | NOT RUN | Реального browser flow в этой сессии не было |
 | Deployment / fallback | NOT PREPARED | Phases F–G ещё не начаты |
 | Markdown / leak checks | NOT ACCEPTED | Отдельная release/live приёмка ещё не выполнена |
-| Docker cleanup | PARTIAL ACCEPTANCE | Compose и snapshot smoke прошли cleanup; live large/timeout ещё не выполнены |
+| Docker cleanup | PARTIAL ACCEPTANCE | Compose/snapshot smoke и 2 public measurement clones убраны; live large/timeout ещё не выполнены |
 
 ### Точные отклонения baseline
 
@@ -60,6 +61,9 @@ Phase B: добавлены deterministic generator и optional local benchmark,
 Подробные измерения и выявленный вопрос Python SAST score —
 [LARGE_REPO_ACCEPTANCE](LARGE_REPO_ACCEPTANCE.md).
 
-Следующий ручной шаг: настроить SourceCraft PAT в игнорируемом локальном `.env`.
-Запрос владельцу отправлен; секрет в чат не запрашивается. Затем bounded discovery,
-live large acceptance и оставшиеся C–H по порядку. PR не открыт, push/merge не выполнялись.
+PAT настроен владельцем; один повторный bounded discovery подтвердил доступ.
+Оба измеренных кандидата не достигли large threshold; cleanup подтверждён.
+Следующий ручной шаг: разрешение на создание/push отдельного public fixture и
+организация либо URL пустого repo. Запрос владельцу отправлен согласно пунктам
+6.2/45 задания. Затем live large acceptance и оставшиеся C–H по порядку.
+PR не открыт, push/merge не выполнялись.

@@ -3,11 +3,49 @@
 Дата: 22.09.2026. Base SourceHealth:
 `11151e4fb2c3341b97a05b00c0afed87dad5ddf4` + generator/benchmark scripts этого изменения.
 
-**Live status: BLOCKED — SourceCraft PAT не настроен в текущем окружении.**
+**Live large status: BLOCKED — требуется разрешение на публикацию отдельного fixture.**
+PAT настроен владельцем и работает; ниже сохранён первоначальный отказ без PAT
+и результат повторной ограниченной проверки с ним.
 Один запрос официального `GET https://api.sourcecraft.tech/repos` с `page_size=20`,
 `sort_by=created_at`, timeout=10, общим budget=30 секунд без PAT вернул
 `authentication_required`. Страницы дальше не обходились, кандидаты не клонировались.
 Это ограничение доступа текущего запуска, а не доказательство отсутствия large repos.
+
+## Повтор discovery с PAT, 22.09.2026
+
+На SourceHealth commit `10fa20c4efaf778627aeaab1ab31e8d3c860b49c` тот же GET
+с PAT вернул 20 public repositories, `has_more=true`. Следующую страницу не
+запрашивали. Metadata GET подтвердил public visibility для `olka-lukianova/floating-ui`,
+`fy-demonar/test1`, `appolimp/master`. Последний не выбран для clone: metadata не
+показала признаков большого codebase. Два code repositories измерены через
+реальный SourceCraft clone; credentials в clone container не передавались.
+
+| Public repository | HEAD | Tracked files | Commits | Working copy bytes | Clone, s |
+|---|---|---:|---:|---:|---:|
+| [olka-lukianova/floating-ui](https://sourcecraft.dev/olka-lukianova/floating-ui) | `0bf93f137434017191ce9431293c12ed6a51c41a` | 1621 | 2298 | 15 952 508 | 14.777 |
+| [fy-demonar/test1](https://sourcecraft.dev/fy-demonar/test1) | `ad2cc0aed660d534e735cf2518a4b97c7e33a29b` | 1459 | 1893 | 26 685 567 | 7.591 |
+
+Оба ниже всех трёх thresholds. Это доказательство для двух измеренных кандидатов,
+а не утверждение об отсутствии подходящих repositories на платформе.
+
+Методика: штатный `sourcehealth-sast` image; отдельные UUID volumes, clone полной
+default branch с `--single-branch --no-tags --no-hardlinks`, отключёнными hooks,
+credential helper, redirects и submodules. Ограничения: 512 MiB, 1 CPU, 128 PIDs,
+read-only root, cap-drop ALL, no-new-privileges, 64 MiB tmpfs; timeout clone=600 s.
+Вторая стадия — Python/Git из trusted image, network=none, read-only volume,
+timeout=120 s. Измерены `git rev-parse HEAD`, `git ls-files -z`,
+`git rev-list --count HEAD`; размер — сумма lstat.st_size tracked regular files,
+без `.git` и symlink targets. Target code и hooks не выполнялись.
+
+Cleanup обоих volumes завершился без ошибок. Дополнительные команды
+`docker ps -a --filter name=sourcehealth-candidate` и
+`docker volume ls --filter name=sourcehealth-candidate` вернули пустые списки.
+Это cleanup успешных measurement clones, **не** timeout/full-pipeline proof.
+Raw source не перенесён в SourceHealth, PAT/HTTP bodies не сохранены.
+
+После bounded проверки запрошено отдельное разрешение владельца на создание и
+push `sourcehealth-large-fixture`, а также организация либо URL пустого public repo.
+До ответа внешние repository mutations не выполняются (пункты 6.2/45 задания).
 
 ## Генератор
 
@@ -76,9 +114,9 @@ SAST-компонент только при `code_files_lexed>0`. Поэтому
 
 ## Продолжение live-приёмки
 
-1. Владелец задаёт PAT в локальном игнорируемом `.env`, не в чате/PR.
-2. Повторить bounded discovery (до 20 metadata records, до 3 обоснованных clones).
-3. Если нет кандидата — запросить разрешение на отдельный public fixture repo.
+1. PAT настроен в локальном игнорируемом `.env`; значение не печаталось.
+2. Bounded discovery завершён: 20 records, 3 metadata checks, 2 clones, порог не достигнут.
+3. Получить разрешение на отдельный public fixture repo и организацию/URL.
 4. На реальном SourceCraft URL подтвердить HEAD, tracked files, commits и размер.
 5. `probe-sourcecraft`, затем `accept-public URL --timeout 1800` на `mvp-v1` с
    trusted worker-code и `sourcehealth-sast`. Не снимать runtime bounds;
