@@ -105,7 +105,8 @@ Duration/recent failures/latest status информативны, не меняю
 ## Security boundary
 
 В production остаётся `score=null, availability=no_data,
-error=appsec_interface_unconfirmed`. Local SAST никогда не входит в Security.
+error=appsec_credential_unavailable`. Manual run с user PAT получает official AppSec aggregate.
+Local SAST никогда не входит в Security.
 
 Зарезервирован **внутренний нормализованный**, а не внешний wire DTO:
 source=sourcecraft_appsec, complete=true, open_by_severity с неотрицательными

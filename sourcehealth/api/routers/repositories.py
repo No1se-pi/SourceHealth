@@ -1,6 +1,6 @@
 """Repositories HTTP endpoints."""
 
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Query, Request
 from redis.exceptions import RedisError
@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from sourcehealth.application.jobs import dispatch_pending
 from sourcehealth.application.services import ServiceError
+from sourcehealth.auth.sourcecraft import SourceCraftConnection
 from sourcehealth.storage.models import AnalysisRun, Repository
 
 from ..dependencies import check_origin, public_repository, public_run, require_user
@@ -81,7 +82,22 @@ def start(repository_id: UUID, body: AnalysisRequest, request: Request):
     if body.force_refresh:
         # Force policy requires repository permissions, not merely a valid Я ID.
         raise ServiceError("force_refresh_not_authorized", 403)
-    run = request.app.state.service.request_analysis(repository_id)
+    connection = SourceCraftConnection(request.app.state.auth)
+    session_token = request.cookies.get("sh_session")
+    connected = connection.status(session_token)["connected"]
+    candidate_id = uuid4() if connected else None
+    if candidate_id is not None and not connection.lease_for_analysis(session_token, candidate_id):
+        raise ServiceError("sourcecraft_connection_expired", 409)
+    try:
+        run = request.app.state.service.request_analysis(
+            repository_id, require_official_security=connected, preallocated_id=candidate_id)
+    except Exception:
+        if candidate_id is not None:
+            connection.delete_analysis_credential(candidate_id)
+        raise
+    # Existing active/cache runs retain their original authorization context.
+    if candidate_id is not None and run.id != candidate_id:
+        connection.delete_analysis_credential(candidate_id)
     try:
         dispatch_pending(request.app.state.sessions, request.app.state.redis, request.app.state.settings.analysis_timeout)
     except RedisError:

@@ -25,7 +25,15 @@ class SourceCraftSecurityAnalyzer:
     name = "sourcecraft_appsec"
 
     def analyze(self, context: AnalysisContext) -> AnalyzerResult:
-        # No formula until actual SAST/SCA/secret evidence is integrated.
         availability = context.collection_statuses.get("appsec", DataAvailability.NO_DATA)
-        return AnalyzerResult(self.name, status="partial", category="security", source="sourcecraft_appsec",
-                              availability=availability, error="appsec_interface_unconfirmed")
+        facts = context.sourcecraft_facts.get("appsec", {})
+        collection = context.metadata.get("collection", {}).get("appsec", {})
+        evidence = []
+        if availability == DataAvailability.AVAILABLE and facts.get("complete") is True:
+            evidence = [Evidence(id="appsec:scan", source="sourcecraft_appsec", type="official_security_scan",
+                                 reference=facts.get("scan_uuid", ""),
+                                 summary="Агрегат открытых дефектов из официального SourceCraft AppSec; без snippets.",
+                                 timestamp=collection.get("collected_at", context.started_at.isoformat()))]
+        return AnalyzerResult(self.name, status="ok" if evidence else "partial", category="security",
+                              source="sourcecraft_appsec", metrics=facts, availability=availability,
+                              evidence=evidence, error=None if evidence else collection.get("error"), metadata=collection)

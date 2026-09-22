@@ -1,5 +1,7 @@
 # SourceCraft Security API: полученный draft и границы подтверждения
 
+> Архив 21.09.2026. Актуальный live-контракт и приёмка: [APPSEC_ACCEPTANCE](APPSEC_ACCEPTANCE.md).
+
 Источник: предоставленный командой PDF `SCS_API_1.0.0_draft.pdf`, 3 страницы,
 «Работа с SourceCraft Security API», обновлён 16.09.2026 10:55, экспорт 10:56.
 SHA-256 файла: `b8417e490ee36f2483fb2f52455b275adcf67df5ee0a5df92e2886d286e00f17`.
