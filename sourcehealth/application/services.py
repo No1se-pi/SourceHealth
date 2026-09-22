@@ -1,7 +1,7 @@
 """Транзакционные операции запуска и чтения. Никаких расчётов внутри HTTP router."""
 
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -72,7 +72,8 @@ class AnalysisService:
         return repository_id
 
     def request_analysis(self, repository_id: UUID, *, trigger: str = "manual", force: bool = False,
-                         require_official_security: bool = False) -> AnalysisRun:
+                         require_official_security: bool = False,
+                         preallocated_id: UUID | None = None) -> AnalysisRun:
         if trigger not in {"manual", "scheduled", "refresh", "system"}:
             raise ValueError("invalid trigger")
         now = datetime.now(UTC)
@@ -97,7 +98,8 @@ class AnalysisService:
                 ).order_by(AnalysisRun.completed_at.desc()).limit(1))
                 if cached and (not require_official_security or self._has_official_security(cached)):
                     return cached
-            run = AnalysisRun(repository_id=repo.id, trigger=trigger, profile=self.settings.analysis_profile,
+            run = AnalysisRun(id=preallocated_id or uuid4(), repository_id=repo.id,
+                              trigger=trigger, profile=self.settings.analysis_profile,
                               fingerprint=key, head_sha=repo.head_sha, queued_at=now)
             db.add(run)
             db.flush()

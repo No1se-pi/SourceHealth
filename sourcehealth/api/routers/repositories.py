@@ -1,6 +1,6 @@
 """Repositories HTTP endpoints."""
 
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Query, Request
 from redis.exceptions import RedisError
@@ -85,11 +85,19 @@ def start(repository_id: UUID, body: AnalysisRequest, request: Request):
     connection = SourceCraftConnection(request.app.state.auth)
     session_token = request.cookies.get("sh_session")
     connected = connection.status(session_token)["connected"]
-    run = request.app.state.service.request_analysis(
-        repository_id, require_official_security=connected)
-    # Completed/partial cache hits never get credentials: no worker exists to consume or delete them.
-    if connected and run.status == "queued":
-        connection.lease_for_analysis(session_token, run.id)
+    candidate_id = uuid4() if connected else None
+    if candidate_id is not None and not connection.lease_for_analysis(session_token, candidate_id):
+        raise ServiceError("sourcecraft_connection_expired", 409)
+    try:
+        run = request.app.state.service.request_analysis(
+            repository_id, require_official_security=connected, preallocated_id=candidate_id)
+    except Exception:
+        if candidate_id is not None:
+            connection.delete_analysis_credential(candidate_id)
+        raise
+    # Existing active/cache runs retain their original authorization context.
+    if candidate_id is not None and run.id != candidate_id:
+        connection.delete_analysis_credential(candidate_id)
     try:
         dispatch_pending(request.app.state.sessions, request.app.state.redis, request.app.state.settings.analysis_timeout)
     except RedisError:

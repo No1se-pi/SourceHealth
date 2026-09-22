@@ -15,7 +15,8 @@ class SourceCraftAppSecClient:
     def __init__(self, *, pat: str, timeout: float = 15, max_pages: int = 20,
                  max_response_bytes: int = 4_194_304, deadline_seconds: float = 60,
                  transport: httpx.BaseTransport | None = None,
-                 sleep: Callable[[float], None] = time.sleep) -> None:
+                 sleep: Callable[[float], None] = time.sleep,
+                 clock: Callable[[], float] = time.monotonic) -> None:
         if not pat or timeout <= 0 or max_pages < 1 or max_response_bytes < 1 or deadline_seconds <= 0:
             raise ValueError("valid credential and positive client limits required")
         self._http = httpx.Client(
@@ -24,7 +25,8 @@ class SourceCraftAppSecClient:
                      "User-Agent": "SourceHealth/0.4"},
             timeout=timeout, follow_redirects=False, transport=transport)
         self._timeout = timeout
-        self._deadline = time.monotonic() + deadline_seconds
+        self._clock = clock
+        self._deadline = clock() + deadline_seconds
         self._max_pages = max_pages
         self._max_response_bytes = max_response_bytes
         self._sleep = sleep
@@ -40,7 +42,7 @@ class SourceCraftAppSecClient:
             raise ValueError("relative API path required")
         request_id = str(uuid4())
         for attempt in range(3):
-            remaining = self._deadline - time.monotonic()
+            remaining = self._deadline - self._clock()
             if remaining <= 0:
                 raise SourceCraftError("collection_budget_exceeded")
             try:
@@ -57,6 +59,8 @@ class SourceCraftAppSecClient:
                     else:
                         content = bytearray()
                         for chunk in response.iter_bytes(chunk_size=65536):
+                            if self._clock() >= self._deadline:
+                                raise SourceCraftError("collection_budget_exceeded")
                             content.extend(chunk)
                             if len(content) > self._max_response_bytes:
                                 raise SourceCraftError("response_limit")

@@ -88,6 +88,13 @@ class AppSecTests(unittest.TestCase):
                 client.get("/v1/scans/latest")
         self.assertNotIn(marker, str(caught.exception))
 
+    def test_client_enforces_total_deadline_while_streaming(self):
+        ticks = iter((0.0, 0.0, 2.0))
+        with self.client(lambda _: httpx.Response(200, json={}), deadline_seconds=1,
+                         clock=lambda: next(ticks)) as client:
+            with self.assertRaisesRegex(SourceCraftError, "^collection_budget_exceeded$"):
+                client.get("/v1/scans/latest")
+
     def test_client_rejects_bad_paths_malformed_json_and_repeated_tokens(self):
         with self.client(lambda _: httpx.Response(200, content=b"not-json")) as client:
             with self.assertRaisesRegex(SourceCraftError, "^invalid_response$"):
@@ -115,6 +122,23 @@ class AppSecTests(unittest.TestCase):
         with self.client(handler) as client:
             result = AppSecCollector(client).collect(self.ref, "repo")
         self.assertEqual(result.availability, DataAvailability.PARTIAL)
+        self.assertEqual(result.facts, {"complete": False})
+
+    def test_duplicate_defect_group_is_partial_not_double_counted(self):
+        def handler(request):
+            if request.url.path.endswith("latest"):
+                return httpx.Response(200, json={"uuid": "scan"})
+            if request.url.path.endswith("/scan"):
+                return httpx.Response(200, json={"status": "FINISHED"})
+            return httpx.Response(200, json={
+                "data": [{"uuid": "duplicate"}, {"uuid": "duplicate"}],
+                "nextPageToken": "", "totalSize": 2,
+            })
+
+        with self.client(handler) as client:
+            result = AppSecCollector(client).collect(self.ref, "repo")
+        self.assertEqual(result.availability, DataAvailability.PARTIAL)
+        self.assertEqual(result.error, "appsec_invalid_pagination")
         self.assertEqual(result.facts, {"complete": False})
 
     def test_missing_credential_or_repository_id_is_no_data(self):

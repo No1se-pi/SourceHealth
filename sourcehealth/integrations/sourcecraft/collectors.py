@@ -107,11 +107,17 @@ class AppSecCollector:
             counts = {}
             for normalized, official in (("critical", "CRITICAL"), ("high", "HIGH"),
                                          ("medium", "MEDIUM"), ("low", "LOW")):
-                rows = list(self.client.iter_defect_groups(repository_id, scan_uuid, official))
-                # Only validate allowlisted structural fields; raw descriptions/snippets are discarded.
-                if any(not isinstance(row.get("uuid"), str) for row in rows):
-                    raise SourceCraftError("invalid_response")
-                counts[normalized] = len(rows)
+                count, seen = 0, set()
+                for row in self.client.iter_defect_groups(repository_id, scan_uuid, official):
+                    # Validate only identity, then release the raw row without retaining sensitive fields.
+                    group_uuid = row.get("uuid")
+                    if not isinstance(group_uuid, str):
+                        raise SourceCraftError("invalid_response")
+                    if group_uuid in seen:
+                        raise SourceCraftError("invalid_pagination")
+                    seen.add(group_uuid)
+                    count += 1
+                counts[normalized] = count
             facts = {"complete": True, "scan_uuid": scan_uuid, "open_by_severity": counts,
                      "total_open": sum(counts.values())}
             return CollectedFacts("sourcecraft_appsec", DataAvailability.AVAILABLE, facts, schema_version="2")

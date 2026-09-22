@@ -185,15 +185,30 @@ class PersistenceTests(unittest.TestCase):
             transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"id": "user-1"})), **kw))
         connection.connect(token, credential)
         app = create_app(settings, sessions=self.sessions, redis=self.redis)
+        dispatched = []
+
+        def assert_credential_precedes_dispatch(sessions, redis, timeout):
+            if dispatched:
+                return 0
+            with sessions() as db:
+                queued = db.scalar(select(AnalysisRun).where(
+                    AnalysisRun.repository_id == self.repository_id, AnalysisRun.status == "queued"))
+            self.assertIsNotNone(queued)
+            self.assertEqual(connection.analysis_credential(queued.id), credential)
+            dispatched.append(queued.id)
+            return 0
+
         try:
             with (TestClient(app, base_url="https://testserver") as client,
-                  patch("sourcehealth.api.routers.repositories.dispatch_pending", return_value=0)):
+                  patch("sourcehealth.api.routers.repositories.dispatch_pending",
+                        side_effect=assert_credential_precedes_dispatch)):
                 client.cookies.set("sh_session", token)
                 response = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={},
                                        headers={"Origin": "https://testserver"})
                 self.assertEqual(response.status_code, 202, response.text)
                 fresh_id = UUID(response.json()["id"])
                 self.assertNotEqual(fresh_id, cached.id)
+                self.assertEqual(dispatched, [fresh_id])
                 self.assertIsNotNone(self.redis.get(connection._analysis_key(fresh_id)))
 
                 connection.delete_analysis_credential(fresh_id)
@@ -208,6 +223,112 @@ class PersistenceTests(unittest.TestCase):
                     headers={"Origin": "https://testserver"})
                 self.assertEqual(cached_response.json()["id"], str(fresh_id))
                 self.assertIsNone(self.redis.get(connection._analysis_key(fresh_id)))
+        finally:
+            auth.logout(token)
+
+    def test_scheduled_active_run_cannot_be_upgraded_with_browser_credential(self):
+        import base64
+        import json
+
+        from sourcehealth.auth.sourcecraft import SourceCraftConnection
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        settings = self.settings.model_copy(update={"sourcecraft_credential_key": SecretStr(
+            base64.urlsafe_b64encode(os.urandom(32)).decode())})
+        scheduled = AnalysisService(self.sessions, settings).request_analysis(
+            self.repository_id, trigger="scheduled")
+        auth = AuthService(settings, self.redis, self.sessions)
+        token = uuid4().hex
+        self.redis.set(auth._key("session", token), json.dumps({"id": str(uuid4())}), ex=120)
+        credential = "unit-" + uuid4().hex
+        connection = SourceCraftConnection(auth, client_factory=lambda **kw: SourceCraftClient(
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"id": "user-1"})), **kw))
+        connection.connect(token, credential)
+        existing_keys = set(self.redis.scan_iter("auth:analysis-sourcecraft:*"))
+        try:
+            with (TestClient(create_app(settings, sessions=self.sessions, redis=self.redis),
+                             base_url="https://testserver") as client,
+                  patch("sourcehealth.api.routers.repositories.dispatch_pending", return_value=0)):
+                client.cookies.set("sh_session", token)
+                response = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={},
+                                       headers={"Origin": "https://testserver"})
+            self.assertEqual(response.status_code, 202, response.text)
+            self.assertEqual(response.json()["id"], str(scheduled.id))
+            self.assertIsNone(connection.analysis_credential(scheduled.id))
+            self.assertEqual(set(self.redis.scan_iter("auth:analysis-sourcecraft:*")), existing_keys)
+        finally:
+            auth.logout(token)
+
+    def test_second_user_cannot_overwrite_first_users_analysis_credential(self):
+        import base64
+        import json
+
+        from sourcehealth.auth.sourcecraft import SourceCraftConnection
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        settings = self.settings.model_copy(update={"sourcecraft_credential_key": SecretStr(
+            base64.urlsafe_b64encode(os.urandom(32)).decode())})
+        auth = AuthService(settings, self.redis, self.sessions)
+        first_token, second_token = uuid4().hex, uuid4().hex
+        for token in (first_token, second_token):
+            self.redis.set(auth._key("session", token), json.dumps({"id": str(uuid4())}), ex=120)
+        credentials = ("unit-a-" + uuid4().hex, "unit-b-" + uuid4().hex)
+        connection = SourceCraftConnection(auth, client_factory=lambda **kw: SourceCraftClient(
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"id": "user"})), **kw))
+        connection.connect(first_token, credentials[0])
+        connection.connect(second_token, credentials[1])
+        existing_keys = set(self.redis.scan_iter("auth:analysis-sourcecraft:*"))
+        try:
+            with (TestClient(create_app(settings, sessions=self.sessions, redis=self.redis),
+                             base_url="https://testserver") as client,
+                  patch("sourcehealth.api.routers.repositories.dispatch_pending", return_value=0)):
+                client.cookies.set("sh_session", first_token)
+                first = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={},
+                                    headers={"Origin": "https://testserver"})
+                client.cookies.set("sh_session", second_token)
+                second = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={},
+                                     headers={"Origin": "https://testserver"})
+            self.assertEqual(first.status_code, 202, first.text)
+            self.assertEqual(second.status_code, 202, second.text)
+            self.assertEqual(second.json()["id"], first.json()["id"])
+            run_id = UUID(first.json()["id"])
+            self.assertEqual(connection.analysis_credential(run_id), credentials[0])
+            current_keys = set(self.redis.scan_iter("auth:analysis-sourcecraft:*"))
+            self.assertEqual(current_keys - existing_keys, {connection._analysis_key(run_id).encode()})
+            connection.delete_analysis_credential(run_id)
+        finally:
+            auth.logout(first_token)
+            auth.logout(second_token)
+
+    def test_credential_lease_failure_does_not_create_or_dispatch_run(self):
+        import base64
+        import json
+
+        from sourcehealth.auth.sourcecraft import SourceCraftConnection
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        settings = self.settings.model_copy(update={"sourcecraft_credential_key": SecretStr(
+            base64.urlsafe_b64encode(os.urandom(32)).decode())})
+        auth = AuthService(settings, self.redis, self.sessions)
+        token = uuid4().hex
+        self.redis.set(auth._key("session", token), json.dumps({"id": str(uuid4())}), ex=120)
+        connection = SourceCraftConnection(auth, client_factory=lambda **kw: SourceCraftClient(
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"id": "user-1"})), **kw))
+        connection.connect(token, "unit-" + uuid4().hex)
+        try:
+            with (TestClient(create_app(settings, sessions=self.sessions, redis=self.redis),
+                             base_url="https://testserver") as client,
+                  patch("sourcehealth.api.routers.repositories.SourceCraftConnection.lease_for_analysis",
+                        return_value=False),
+                  patch("sourcehealth.api.routers.repositories.dispatch_pending") as dispatch):
+                client.cookies.set("sh_session", token)
+                response = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={},
+                                       headers={"Origin": "https://testserver"})
+            self.assertEqual(response.status_code, 409, response.text)
+            dispatch.assert_not_called()
+            with self.sessions() as db:
+                self.assertIsNone(db.scalar(select(AnalysisRun).where(
+                    AnalysisRun.repository_id == self.repository_id)))
         finally:
             auth.logout(token)
 
