@@ -82,9 +82,14 @@ def start(repository_id: UUID, body: AnalysisRequest, request: Request):
     if body.force_refresh:
         # Force policy requires repository permissions, not merely a valid Я ID.
         raise ServiceError("force_refresh_not_authorized", 403)
-    run = request.app.state.service.request_analysis(repository_id)
-    SourceCraftConnection(request.app.state.auth).lease_for_analysis(
-        request.cookies.get("sh_session"), run.id)
+    connection = SourceCraftConnection(request.app.state.auth)
+    session_token = request.cookies.get("sh_session")
+    connected = connection.status(session_token)["connected"]
+    run = request.app.state.service.request_analysis(
+        repository_id, require_official_security=connected)
+    # Completed/partial cache hits never get credentials: no worker exists to consume or delete them.
+    if connected and run.status == "queued":
+        connection.lease_for_analysis(session_token, run.id)
     try:
         dispatch_pending(request.app.state.sessions, request.app.state.redis, request.app.state.settings.analysis_timeout)
     except RedisError:

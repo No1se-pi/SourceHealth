@@ -13,6 +13,8 @@
 Worker применяет один PAT к обычному SourceCraft API и отдельному AppSec client, затем удаляет
 lease в `finally`. AppSec не имеет shared cache. Хранятся только scan UUID и счётчики открытых
 groups по severity. Raw payload, SARIF, source snippets, descriptions и secret values запрещены.
+Если cached analysis ещё не содержит complete official Security, connected PAT создаёт
+новый queued run. Готовый cached run никогда не получает credential lease.
 
 ## Live evidence
 

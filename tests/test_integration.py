@@ -160,6 +160,57 @@ class PersistenceTests(unittest.TestCase):
         finally:
             auth.logout(token)
 
+    def test_connected_pat_bypasses_no_data_cache_without_orphaning_cached_run(self):
+        import base64
+        import json
+
+        from sourcehealth.auth.sourcecraft import SourceCraftConnection
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        settings = self.settings.model_copy(update={"sourcecraft_credential_key": SecretStr(
+            base64.urlsafe_b64encode(os.urandom(32)).decode())})
+        service = AnalysisService(self.sessions, settings)
+        cached = service.request_analysis(self.repository_id)
+        with self.sessions.begin() as db:
+            row = db.get(AnalysisRun, cached.id)
+            row.status, row.completed_at = "partial", datetime.now(UTC)
+            row.results = {"checks": {"sourcecraft_appsec": {
+                "source": "sourcecraft_appsec", "availability": "no_data", "metrics": {}}}}
+
+        auth = AuthService(settings, self.redis, self.sessions)
+        token = uuid4().hex
+        self.redis.set(auth._key("session", token), json.dumps({"id": str(uuid4())}), ex=120)
+        credential = "unit-" + uuid4().hex
+        connection = SourceCraftConnection(auth, client_factory=lambda **kw: SourceCraftClient(
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"id": "user-1"})), **kw))
+        connection.connect(token, credential)
+        app = create_app(settings, sessions=self.sessions, redis=self.redis)
+        try:
+            with (TestClient(app, base_url="https://testserver") as client,
+                  patch("sourcehealth.api.routers.repositories.dispatch_pending", return_value=0)):
+                client.cookies.set("sh_session", token)
+                response = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={},
+                                       headers={"Origin": "https://testserver"})
+                self.assertEqual(response.status_code, 202, response.text)
+                fresh_id = UUID(response.json()["id"])
+                self.assertNotEqual(fresh_id, cached.id)
+                self.assertIsNotNone(self.redis.get(connection._analysis_key(fresh_id)))
+
+                connection.delete_analysis_credential(fresh_id)
+                with self.sessions.begin() as db:
+                    row = db.get(AnalysisRun, fresh_id)
+                    row.status, row.completed_at = "partial", datetime.now(UTC)
+                    row.results = {"checks": {"sourcecraft_appsec": {
+                        "source": "sourcecraft_appsec", "availability": "available",
+                        "metrics": {"complete": True, "open_by_severity": {}}}}}
+                cached_response = client.post(
+                    f"/api/v1/repositories/{self.repository_id}/analyses", json={},
+                    headers={"Origin": "https://testserver"})
+                self.assertEqual(cached_response.json()["id"], str(fresh_id))
+                self.assertIsNone(self.redis.get(connection._analysis_key(fresh_id)))
+        finally:
+            auth.logout(token)
+
     def test_rating_import_updates_and_clears_unknown(self):
         from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
 
@@ -362,6 +413,76 @@ class PersistenceTests(unittest.TestCase):
             self.assertEqual(row.results["category_scores"], row.category_scores)
             self.assertEqual(row.results["recommendations"], row.recommendations)
             self.assertEqual(len(row.data_coverage), 6)
+
+    def test_connected_pat_runs_appsec_pipeline_and_deletes_lease(self):
+        import base64
+        import json
+        from unittest.mock import Mock
+
+        from sourcehealth.auth.sourcecraft import SourceCraftConnection
+        from sourcehealth.integrations.sourcecraft.appsec import SourceCraftAppSecClient
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+        from tests.mvp_fixtures import runtime_payload, sourcecraft_transport
+
+        class TestWorker(SimpleWorker):
+            death_penalty_class = TimerDeathPenalty
+
+        settings = self.settings.model_copy(update={
+            "analysis_profile": "mvp-v1",
+            "sourcecraft_credential_key": SecretStr(base64.urlsafe_b64encode(os.urandom(32)).decode()),
+        })
+        normal_transport = sourcecraft_transport(self.ref.repository_slug)
+        auth = AuthService(settings, self.redis, self.sessions)
+        token = uuid4().hex
+        self.redis.set(auth._key("session", token), json.dumps({"id": str(uuid4())}), ex=120)
+        credential = "unit-" + uuid4().hex
+        connection = SourceCraftConnection(auth, client_factory=lambda **kw: SourceCraftClient(
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"id": "user-1"})), **kw))
+        connection.connect(token, credential)
+
+        def normal_client(**kwargs):
+            return SourceCraftClient(transport=normal_transport, **kwargs)
+
+        sensitive_marker = "SUPER_SECRET_" + "VALUE_SHOULD_NEVER_PERSIST"
+
+        def appsec_handler(request):
+            if request.url.path == "/v1/scans/latest":
+                return httpx.Response(200, json={"uuid": "scan-fixture"})
+            if request.url.path == "/v1/scans/scan-fixture":
+                return httpx.Response(200, json={"status": "FINISHED"})
+            rows = ([{"uuid": "group-fixture", "codeBlock": sensitive_marker}]
+                    if request.url.params.get("severity") == "MEDIUM" else [])
+            return httpx.Response(200, json={"data": rows, "nextPageToken": "", "totalSize": len(rows)})
+
+        def appsec_client(**kwargs):
+            return SourceCraftAppSecClient(transport=httpx.MockTransport(appsec_handler), sleep=lambda _: None, **kwargs)
+
+        runtime = Mock()
+        runtime.analyze.return_value = runtime_payload()
+        app = create_app(settings, sessions=self.sessions, redis=self.redis)
+        try:
+            with (TestClient(app, base_url="https://testserver") as client,
+                  patch("sourcehealth.application.jobs.SourceCraftClient", side_effect=normal_client),
+                  patch("sourcehealth.application.jobs.SourceCraftAppSecClient", side_effect=appsec_client),
+                  patch("sourcehealth.application.jobs.Settings", return_value=settings),
+                  patch("sourcehealth.application.jobs.configured_runtime", return_value=runtime)):
+                client.cookies.set("sh_session", token)
+                response = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={},
+                                       headers={"Origin": "https://testserver"})
+                self.assertEqual(response.status_code, 202, response.text)
+                run_id = UUID(response.json()["id"])
+                self.assertIsNotNone(self.redis.get(connection._analysis_key(run_id)))
+                TestWorker([Queue("analysis-code", connection=self.redis)], connection=self.redis).work(
+                    burst=True, logging_level="WARNING")
+                result = client.get(f"/api/v1/analyses/{run_id}")
+                self.assertEqual(result.status_code, 200, result.text)
+                payload = result.json()
+                self.assertEqual(payload["category_scores"]["security"]["score"], 95)
+                self.assertEqual(payload["checks"]["sourcecraft_appsec"]["metrics"]["total_open"], 1)
+                self.assertNotIn(sensitive_marker, result.text)
+                self.assertIsNone(self.redis.get(connection._analysis_key(run_id)))
+        finally:
+            auth.logout(token)
 
     def test_public_analysis_history_is_stable_paginated_and_private_safe(self):
         queued_at = datetime(2026, 9, 20, 12, tzinfo=UTC)

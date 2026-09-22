@@ -59,6 +59,8 @@ class SourceCraftConnection:
         return {"connected": True, "expires_in": ttl}
 
     def status(self, token):
+        if not token:
+            return {"connected": False, "expires_in": 0}
         _, key = self._keys(token)
         ttl = self.redis.ttl(key)
         return {"connected": ttl > 0, "expires_in": max(0, ttl)}

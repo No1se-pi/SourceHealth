@@ -71,7 +71,8 @@ class AnalysisService:
             row.likes = collected.facts.get("likes")
         return repository_id
 
-    def request_analysis(self, repository_id: UUID, *, trigger: str = "manual", force: bool = False) -> AnalysisRun:
+    def request_analysis(self, repository_id: UUID, *, trigger: str = "manual", force: bool = False,
+                         require_official_security: bool = False) -> AnalysisRun:
         if trigger not in {"manual", "scheduled", "refresh", "system"}:
             raise ValueError("invalid trigger")
         now = datetime.now(UTC)
@@ -94,7 +95,7 @@ class AnalysisService:
                     AnalysisRun.fingerprint == key, AnalysisRun.status.in_(("completed", "partial")),
                     AnalysisRun.completed_at >= now - timedelta(seconds=self.settings.result_cache_ttl),
                 ).order_by(AnalysisRun.completed_at.desc()).limit(1))
-                if cached:
+                if cached and (not require_official_security or self._has_official_security(cached)):
                     return cached
             run = AnalysisRun(repository_id=repo.id, trigger=trigger, profile=self.settings.analysis_profile,
                               fingerprint=key, head_sha=repo.head_sha, queued_at=now)
@@ -102,6 +103,16 @@ class AnalysisService:
             db.flush()
             # queued itself is a durable outbox: dispatcher can always retry after Redis loss.
             return run
+
+    @staticmethod
+    def _has_official_security(run: AnalysisRun) -> bool:
+        """A cached run is reusable for a connected PAT only after official AppSec completed."""
+        results = run.results if isinstance(run.results, dict) else {}
+        check = results.get("checks", {}).get("sourcecraft_appsec", {})
+        metrics = check.get("metrics", {}) if isinstance(check, dict) else {}
+        return (check.get("source") == "sourcecraft_appsec"
+                and check.get("availability") == "available"
+                and metrics.get("complete") is True)
 
     def transition(self, analysis_id: UUID, target: str, *, error_code: str | None = None) -> None:
         now = datetime.now(UTC)
