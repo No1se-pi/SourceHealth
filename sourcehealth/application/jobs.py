@@ -150,7 +150,8 @@ def execute_analysis(analysis_id: str) -> None:
                     profile = run.profile
                 service.transition(run_id, "collecting")
                 user_pat = credentials.analysis_credential(run_id)
-                context = collect_platform(repository, settings, redis, user_pat=user_pat)
+                context = (collect_platform(repository, settings, redis, user_pat=user_pat) if user_pat
+                           else collect_platform(repository, settings, redis))
                 if context.collection_statuses.get("repository_metadata") == DataAvailability.AVAILABLE:
                     with sessions.begin() as db:
                         row = db.get(Repository, run.repository_id)

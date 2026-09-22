@@ -95,6 +95,7 @@ class PersistenceTests(unittest.TestCase):
         service = SourceCraftConnection(auth, client_factory=lambda **kw: SourceCraftClient(
             transport=httpx.MockTransport(respond), **kw))
         try:
+            self.assertFalse(service.lease_for_analysis(None, uuid4()))
             result = service.connect(token, credential)
             self.assertTrue(result["connected"])
             self.assertLessEqual(result["expires_in"], 120)

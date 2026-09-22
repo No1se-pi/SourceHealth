@@ -83,6 +83,8 @@ class SourceCraftConnection:
         return f"auth:analysis-sourcecraft:{UUID(str(analysis_id))}"
 
     def lease_for_analysis(self, token, analysis_id):
+        if not token:
+            return False
         _, session_key = self._keys(token)
         pat = self._decrypt(session_key)
         ttl = self.redis.ttl(session_key)
