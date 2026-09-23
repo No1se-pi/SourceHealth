@@ -10,6 +10,8 @@ import { LoadingState } from '../components/common/LoadingState';
 import { ErrorState } from '../components/common/ErrorState';
 import { RecommendationCard } from '../components/common/RecommendationCard';
 import { EvidenceList } from '../components/common/EvidenceList';
+import { SourceSoul } from '../components/common/SourceSoul';
+import { CategoryDetails } from '../components/common/CategoryDetails';
 import {
   CATEGORY_ORDER,
   CATEGORY_LABELS,
@@ -169,6 +171,7 @@ export const AnalysisPage: React.FC = () => {
                 </Badge>
               )}
               <ScoreDisplay score={run.health_score} size="lg" />
+              {run.health_score === null && <SourceSoul preview={run.score_preview} />}
               <ScoreCoverage analysis={run} />
             </div>
           }
@@ -266,6 +269,11 @@ export const AnalysisPage: React.FC = () => {
                       <div>
                         <ScoreDisplay score={scoreData?.score ?? null} size="md" />
                       </div>
+                      {scoreData?.score == null && availability === 'available' && (
+                        <span style={{ fontSize: '0.8rem', color: 'var(--sh-text-muted)' }}>
+                          Недостаточно наблюдений для численной оценки
+                        </span>
+                      )}
                       {scoreData?.explanation && (
                         <p
                           style={{
@@ -278,6 +286,7 @@ export const AnalysisPage: React.FC = () => {
                           {scoreData.explanation}
                         </p>
                       )}
+                      <CategoryDetails category={catKey} checks={run.checks} score={scoreData?.score} />
                       {scoreData?.evidence_refs && scoreData.evidence_refs.length > 0 && (
                         <EvidenceList
                           evidenceRefs={scoreData.evidence_refs}

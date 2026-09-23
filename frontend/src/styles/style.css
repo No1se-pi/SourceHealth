@@ -1005,6 +1005,26 @@ select:focus-visible, input:focus-visible {
   display: none;
 }
 
+.source-soul {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--sh-brand);
+  margin-top: 0.4rem;
+}
+
+.source-soul > span { display: flex; flex-direction: column; align-items: flex-start; }
+.source-soul small { color: var(--sh-text-muted); font-size: 0.72rem; font-weight: 400; }
+.source-soul-compact { margin-top: 0; white-space: nowrap; }
+.source-soul-compact svg { width: 22px; height: 22px; }
+.score-explanation { margin-top: 0.25rem; font-size: 0.78rem; color: var(--sh-text-secondary); }
+.score-explanation summary { cursor: pointer; color: var(--sh-brand); }
+.score-explanation code { display: block; margin-top: 0.4rem; white-space: normal; overflow-wrap: anywhere; }
+.severity-grid { display: grid; grid-template-columns: 1fr auto; gap: 0.2rem 1rem; margin-top: 0.4rem; text-transform: capitalize; }
+.safe-findings { margin: 0.5rem 0 0; padding-left: 1.1rem; overflow-wrap: anywhere; }
+.safe-findings span { display: block; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
 /* ==========================================================================
    Responsive Breakpoints & Mobile Drawer
    ========================================================================== */

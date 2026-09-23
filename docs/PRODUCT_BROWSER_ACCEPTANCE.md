@@ -179,3 +179,9 @@ npm run build --prefix frontend
 # 2. Запуск браузерной приёмки (Headless Chromium/Edge + CDP)
 node scripts/run_browser_acceptance.mjs
 ```
+## Explainability и Source Soul
+
+PR #13 добавляет шесть сфокусированных fixture-сценариев: desktop/mobile leaderboard,
+AppSec с настоящим score `0`, repository с числовым Source Soul, подключённый SourceCraft
+и PAT form. Harness проверяет новые DTO и сохраняет screenshots `41`–`46` в
+`docs/screenshots/`. Это browser acceptance на allowlisted fixtures, не live SourceCraft.

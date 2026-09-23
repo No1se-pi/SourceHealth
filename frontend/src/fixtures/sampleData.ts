@@ -23,6 +23,7 @@ export const mockHealthyRepo = {
   likes: 42,
   last_activity_at: '2026-09-16T14:30:00Z',
   latest_analysis_id: 'b0000001-0000-0000-0000-000000000001',
+  score_preview: { score: 87.45, nominal_weight_percent: 100, scored_categories: 6, numeric: true },
 } satisfies Repository;
 
 export const mockNoDataRepo = {
@@ -36,6 +37,7 @@ export const mockNoDataRepo = {
   likes: null,
   last_activity_at: null,
   latest_analysis_id: null,
+  score_preview: null,
 } satisfies Repository;
 
 export const mockRepoDetails = {
@@ -52,6 +54,7 @@ export const mockRepoDetails = {
   sourcecraft_id: 'sc-987654',
   default_branch: 'main',
   head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
+  score_preview: { score: 87.45, nominal_weight_percent: 100, scored_categories: 6, numeric: true },
 } satisfies RepositoryDetails;
 
 export const mockEmptyRepositoryPage = {
@@ -72,7 +75,7 @@ export const mockCompletedAnalysis = {
   completed_at: '2026-09-16T14:28:45Z',
   head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
   health_score: 88,
-  scoring_policy_version: 'v1',
+  scoring_policy_version: 'mvp-score-v1.2',
   analyzer_contract_version: 'v1',
   error_code: null,
   category_scores: {
@@ -309,7 +312,17 @@ export const mockCompletedAnalysis = {
     unscored_categories: [],
     partial_categories: [],
   },
+  score_preview: { score: 87.45, nominal_weight_percent: 100, scored_categories: 6, numeric: true },
 } satisfies Analysis;
+
+export const mockSoulRepo = {
+  ...mockNoDataRepo,
+  id: 'a0000003-0000-0000-0000-000000000003',
+  repository_slug: 'soul-preview',
+  canonical_url: 'https://sourcecraft.dev/newbie-corp/soul-preview',
+  latest_analysis_id: 'b0000002-0000-0000-0000-000000000002',
+  score_preview: { score: 43.81, nominal_weight_percent: 30, scored_categories: 2, numeric: true },
+} satisfies Repository;
 
 export const mockQueuedAnalysis = {
   id: 'b0000003-0000-0000-0000-000000000003',
@@ -329,6 +342,7 @@ export const mockQueuedAnalysis = {
   data_coverage: {},
   recommendations: [],
   checks: {},
+  score_preview: null,
 } satisfies Analysis;
 
 export const mockRunningAnalysis = {
@@ -349,6 +363,7 @@ export const mockRunningAnalysis = {
   data_coverage: {},
   recommendations: [],
   checks: {},
+  score_preview: null,
 } satisfies Analysis;
 
 export const mockFailedAnalysis = {
@@ -445,6 +460,7 @@ export const mockNoDataAnalysis = {
     unscored_categories: ['documentation', 'cicd', 'security', 'activity', 'issues', 'code_health'],
     partial_categories: [],
   },
+  score_preview: null,
 } satisfies Analysis;
 
 export const mockPartialAnalysis = {
@@ -489,4 +505,5 @@ export const mockPartialAnalysis = {
     unscored_categories: ['security'],
     partial_categories: ['documentation'],
   },
+  score_preview: { score: null, nominal_weight_percent: 15, scored_categories: 1, numeric: false },
 } satisfies Analysis;

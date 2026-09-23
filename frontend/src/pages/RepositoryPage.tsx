@@ -8,6 +8,8 @@ import { ScoreDisplay } from '../components/common/ScoreDisplay';
 import { ScoreCoverage } from '../components/common/ScoreCoverage';
 import { AnalysisHistory } from '../components/common/AnalysisHistory';
 import { AvailabilityBadge } from '../components/common/AvailabilityBadge';
+import { SourceSoul } from '../components/common/SourceSoul';
+import { CategoryDetails } from '../components/common/CategoryDetails';
 import { LoadingState } from '../components/common/LoadingState';
 import { EmptyState } from '../components/common/EmptyState';
 import { ErrorState } from '../components/common/ErrorState';
@@ -220,6 +222,7 @@ export const RepositoryPage: React.FC = () => {
                   Repo Health Score
                 </div>
                 <ScoreDisplay score={repo.health_score} size="lg" />
+                {repo.health_score === null && <SourceSoul preview={repo.score_preview} />}
                 <ScoreCoverage analysis={latestAnalysis?.id === repo.latest_analysis_id ? latestAnalysis : undefined} />
               </div>
             }
@@ -436,6 +439,7 @@ export const RepositoryPage: React.FC = () => {
                               {scoreData.explanation}
                             </p>
                           )}
+                          <CategoryDetails category={catKey} checks={latestAnalysis.checks} score={scoreData?.score} />
                           {factsCount > 0 && (
                             <div style={{ fontSize: '0.78rem', color: 'var(--sh-text-muted)', marginTop: 'auto' }}>
                               Фактов в отчёте: {factsCount}

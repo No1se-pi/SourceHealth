@@ -242,12 +242,16 @@ export const SourceCraftPage: React.FC = () => {
                 maxLength={4096}
                 disabled={busy}
                 placeholder="sc_pat_..."
+                aria-describedby="pat-help"
                 style={{
                   width: '100%',
                   fontFamily: 'var(--sh-font-mono)',
                   fontSize: '0.9rem',
                 }}
               />
+              <div id="pat-help" style={{ marginTop: '0.5rem', fontSize: '0.82rem', color: 'var(--sh-text-muted)' }}>
+                PAT используется только сервером и хранится в зашифрованном виде ограниченное время.
+              </div>
             </div>
             <div>
               <Button type="submit" variant="primary" disabled={busy} loading={busy}>
@@ -300,15 +304,18 @@ export const SourceCraftPage: React.FC = () => {
                 }}
               >
                 <div style={{ flex: '1 1 240px' }}>
+                  <label htmlFor="sourcecraft-organization" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 500 }}>
+                    Slug организации SourceCraft
+                  </label>
                   <input
+                    id="sourcecraft-organization"
                     type="text"
                     required
                     value={organization}
                     onChange={(e) => setOrganization(e.target.value)}
                     pattern="[A-Za-z0-9_-]{1,128}"
                     disabled={busy}
-                    placeholder="Имя организации (например: lct-hackaton-2026)"
-                    aria-label="Имя организации"
+                    placeholder="lct-hackaton-2026"
                     style={{ width: '100%' }}
                   />
                 </div>
@@ -320,6 +327,7 @@ export const SourceCraftPage: React.FC = () => {
               <div style={{ fontSize: '0.82rem', color: 'var(--sh-text-muted)' }}>
                 Доступность списка определяется правами токена в SourceCraft. Анализ доступен для публичных проектов.
               </div>
+              {items.length > 0 && <div style={{ fontSize: '0.85rem' }}>{items.length} репозиториев найдено</div>}
 
               {more && (
                 <div
@@ -385,7 +393,7 @@ export const SourceCraftPage: React.FC = () => {
                                 </Button>
                               ) : (
                                 <span style={{ fontSize: '0.8rem', color: 'var(--sh-text-muted)' }}>
-                                  Закрытый репозиторий
+                                  Анализ недоступен
                                 </span>
                               )}
                             </td>
