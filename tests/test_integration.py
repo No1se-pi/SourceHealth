@@ -346,6 +346,39 @@ class PersistenceTests(unittest.TestCase):
             with self.sessions() as db:
                 self.assertIsNone(db.get(Repository, self.repository_id).likes)
 
+    def test_score_preview_never_changes_leaderboard_ranking(self):
+        preview_ref = RepositoryRef.from_url(
+            f"https://sourcecraft.dev/test/preview-{uuid4().hex}", visibility="public")
+        preview_id = self.service.register_repository(preview_ref)
+        categories = {
+            name: {"category": name, "score": 90, "availability": "available",
+                   "explanation": "test", "evidence_refs": []}
+            for name in ("activity", "issues")
+        }
+        try:
+            with self.sessions() as db:
+                db.get(Repository, self.repository_id).health_score = 50
+                run = AnalysisRun(repository_id=preview_id, status="completed", trigger="manual", profile="mvp-v1",
+                                  fingerprint=uuid4().hex, completed_at=datetime.now(UTC),
+                                  scoring_policy_version="mvp-score-v1.2", analyzer_contract_version="3.0",
+                                  health_score=None, category_scores=categories)
+                db.add(run)
+                db.flush()
+                db.get(Repository, preview_id).latest_analysis_id = run.id
+                db.commit()
+            with TestClient(create_app(self.settings, sessions=self.sessions, redis=self.redis)) as client:
+                items = client.get("/api/v1/repositories", params={"limit": 100}).json()["items"]
+            positions = {item["id"]: index for index, item in enumerate(items)}
+            self.assertLess(positions[str(self.repository_id)], positions[str(preview_id)])
+            preview = next(item for item in items if item["id"] == str(preview_id))
+            self.assertIsNone(preview["health_score"])
+            self.assertEqual(preview["score_preview"]["score"], 90)
+        finally:
+            with self.sessions.begin() as db:
+                db.execute(update(Repository).where(Repository.id == preview_id).values(latest_analysis_id=None))
+                db.execute(delete(AnalysisRun).where(AnalysisRun.repository_id == preview_id))
+                db.execute(delete(Repository).where(Repository.id == preview_id))
+
     def tearDown(self):
         with self.sessions.begin() as db:
             ids = list(db.scalars(select(AnalysisRun.id).where(AnalysisRun.repository_id == self.repository_id)))
@@ -516,6 +549,7 @@ class PersistenceTests(unittest.TestCase):
             self.assertEqual(payload["category_scores"]["security"]["availability"], "no_data")
             self.assertEqual(payload["score_coverage"]["nominal_weight_percent"], 80)
             self.assertEqual(payload["score_coverage"]["unscored_categories"], ["security"])
+            self.assertTrue(payload["score_preview"]["numeric"])
             self.assertEqual(payload["head_sha"], SHA)
             for forbidden in ("untrusted", "do-not-store", "private name", "error_messages"):
                 self.assertNotIn(forbidden, result.text)
@@ -525,6 +559,7 @@ class PersistenceTests(unittest.TestCase):
             listing = client.get("/api/v1/repositories", params={"limit": 100}).json()
             listed = next(row for row in listing["items"] if row["id"] == str(self.repository_id))
             self.assertEqual(listed["health_score"], payload["health_score"])
+            self.assertEqual(listed["score_preview"], payload["score_preview"])
             cached = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={}, headers=headers)
             self.assertEqual(cached.json()["id"], run_id)
             runtime.analyze.assert_called_once()

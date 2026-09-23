@@ -290,6 +290,7 @@ export interface components {
                 [key: string]: components["schemas"]["AnalyzerResultDTO"];
             };
             score_coverage?: components["schemas"]["ScoreCoverageDTO"] | null;
+            score_preview?: components["schemas"]["ScorePreviewDTO"] | null;
         };
         /** AnalysisPage */
         AnalysisPage: {
@@ -514,6 +515,7 @@ export interface components {
             last_activity_at: string | null;
             /** Latest Analysis Id */
             latest_analysis_id: string | null;
+            score_preview?: components["schemas"]["ScorePreviewDTO"] | null;
             /** Sourcecraft Id */
             sourcecraft_id: string | null;
             /** Default Branch */
@@ -565,6 +567,7 @@ export interface components {
             last_activity_at: string | null;
             /** Latest Analysis Id */
             latest_analysis_id: string | null;
+            score_preview?: components["schemas"]["ScorePreviewDTO"] | null;
         };
         /**
          * RunStatus
@@ -581,6 +584,17 @@ export interface components {
             unscored_categories: components["schemas"]["Category"][];
             /** Partial Categories */
             partial_categories: components["schemas"]["Category"][];
+        };
+        /** ScorePreviewDTO */
+        ScorePreviewDTO: {
+            /** Score */
+            score?: number | null;
+            /** Nominal Weight Percent */
+            nominal_weight_percent: number;
+            /** Scored Categories */
+            scored_categories: number;
+            /** Numeric */
+            numeric: boolean;
         };
         /** SourceCraftConnect */
         SourceCraftConnect: {

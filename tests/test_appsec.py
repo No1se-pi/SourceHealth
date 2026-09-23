@@ -9,6 +9,7 @@ from sourcehealth.core.domain import DataAvailability, RepositoryRef
 from sourcehealth.integrations.sourcecraft.appsec import SourceCraftAppSecClient
 from sourcehealth.integrations.sourcecraft.client import SourceCraftError
 from sourcehealth.integrations.sourcecraft.collectors import AppSecCollector
+from sourcehealth.markdown import render_markdown
 from sourcehealth.scoring.engine import ScoringEngine
 from sourcehealth.scoring.mvp import MVPPolicy
 
@@ -59,6 +60,11 @@ class AppSecTests(unittest.TestCase):
         serialized = json.dumps(report.to_public_dict())
         self.assertEqual(report.category_scores["security"]["score"], 80)
         self.assertNotIn("must-not-persist", serialized)
+        markdown = render_markdown(report)
+        self.assertIn("Official SourceCraft AppSec", markdown)
+        self.assertIn("| High | 1 | -20 |", markdown)
+        self.assertIn("Security: max(0, 100 - 20) = 80", markdown)
+        self.assertNotIn("must-not-persist", markdown)
 
     def test_unfinished_unknown_and_auth_failures_never_score(self):
         def unfinished(request):
