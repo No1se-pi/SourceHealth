@@ -1,0 +1,11 @@
+[Unit]
+Description=SourceHealth scheduler one-shot
+After=sourcehealth.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/sourcehealth
+EnvironmentFile=/opt/sourcehealth/.env.production
+Environment=DATABASE_URL=postgresql+psycopg://sourcehealth:<url-encoded-password>@127.0.0.1:5432/sourcehealth
+Environment=REDIS_URL=redis://127.0.0.1:6379/0
+ExecStart=/opt/sourcehealth/.venv/bin/python -m sourcehealth.application enqueue-due
