@@ -9,12 +9,10 @@
 - Composition: 100 small Python files, a few docs/metadata files, and tiny deterministic
   text records. No secrets, binary junk or artificial history.
 
-## Final live result
+## Final live result (after PR #13 merge)
 
-The final run must be repeated after PR #13 is merged. The safe evidence fields below are
-the only values to record: fixture HEAD, tracked files, commits, working-copy bytes,
-analysis id, duration, terminal status, Health, coverage and cleanup status. Never record
-PATs, headers, cookies, raw responses or target source.
+Run date: 2026-09-23. The safe evidence fields below are the only values recorded. PATs,
+headers, cookies, raw responses and target source were not persisted.
 
 Current known fixture evidence:
 
@@ -24,6 +22,16 @@ Current known fixture evidence:
 | tracked files | 10 000 |
 | commits | 1 |
 | working copy | 810 405 bytes |
+| analysis id | `9991e363-8ec0-4a1b-9a5e-8ec5f4c092e2` |
+| terminal status | `partial` (AppSec credential unavailable for CLI acceptance run) |
+| Health / coverage | `61.17` / `65%` |
+| duration | `10.707 s` reported by acceptance; `12 s` wall clock |
+| scoring policy | `mvp-score-v1.2` from current base |
+| cleanup | PASS: no temporary analysis containers or volumes |
+
+Probe completed `overall=ok`, authenticated `true`, with all platform collectors available.
+The analysis scanned 10 000 files / 810 405 bytes and observed 10 026 entries. Partial status
+is explicit and does not convert unavailable AppSec data to a zero score.
 
 ## Local boundary benchmark
 
@@ -45,4 +53,4 @@ AppSec, partial semantics or Docker isolation.
 ## Known limitations
 
 The fixture qualifies by file count, not commit count or working-copy size. Browser OAuth
-acceptance and production run evidence are separate gates.
+acceptance and production deployment checks are separate gates.

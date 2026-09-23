@@ -5,11 +5,11 @@
 
 | Gate | Status | Evidence |
 |---|---|---|
-| Large repository | PASS after final run | [LARGE_REPO_ACCEPTANCE](LARGE_REPO_ACCEPTANCE.md) |
+| Large repository | PASS | Final post-PR13 run, 10 000 files, 10.707 s, cleanup PASS: [LARGE_REPO_ACCEPTANCE](LARGE_REPO_ACCEPTANCE.md) |
 | Fixture boundary 10 001 | PASS | benchmark: `file_limit` → partial, score не превращается в 0 |
-| Official SourceCraft AppSec | PASS / LIVE | текущая production acceptance и `docs/APPSEC_ACCEPTANCE.md` |
+| Official SourceCraft AppSec | PASS / LIVE | implementation merged in PR #12; current contract/evidence: `docs/APPSEC_ACCEPTANCE.md` |
 | `/demo` fallback | PASS | explicit `/demo`, prominent `DEMO DATASET / OFFLINE DEMO` |
-| Production deployment | PASS / LIVE | <https://sourcehealth.tech>; bundle in `deploy/` |
+| Production deployment | PASS / LIVE | <https://sourcehealth.tech>; reproducible bundle in `deploy/` |
 | Docker socket invariant | PASS | backend, worker, scheduler have no socket; only host worker-code is trusted |
 | Unit / Ruff / diff | run in PR | commands from `docs/TESTING.md` |
 | Integration | run in PR | PostgreSQL `_test`, Redis DB 15 |
