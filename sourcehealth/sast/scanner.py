@@ -98,6 +98,8 @@ class SASTScanner:
             if suffix not in by_suffix:
                 by_suffix[suffix] = tuple(r for r in self.rules if not r.suffixes or suffix in r.suffixes)
             rules = by_suffix[suffix]
+            if any(rule.engine in {"python_call", "code_regex"} for rule in rules):
+                result.code_files_analyzed += 1
             # Большинство файлов не содержит ни одного префикса vendor-токенов.
             # Исключаем такие правила до цикла по строкам, один раз на файл.
             lowered = content.lower() if any(r.engine == "regex" for r in rules) else ""

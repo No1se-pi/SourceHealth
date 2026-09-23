@@ -41,3 +41,11 @@ Live API/Я ID/AppSec acceptance указывается отдельно от т
 ограничен меньшим из нормализованного количества commits и числа активных дней:
 однодневный burst не равен устойчивой работе. Версия входит в fingerprint; сохранённые
 отчёты v1/v1.1 не пересчитываются задним числом.
+
+## Уточнение policy 23.09.2026
+
+Large fixture подтвердил две связанные ошибки local SAST: Python AST findings не
+участвовали в score при `code_files_lexed=0`, а абсолютный штраф зависел от размера
+codebase. `mvp-score-v1.3` использует новый allowlisted `code_files_analyzed` и severity
+density на 100 поддерживаемых code files. Веса категорий и minimum coverage не менялись.
+Старые v1.2 reports остаются неизменными; версия входит в новый run fingerprint.

@@ -48,6 +48,11 @@ SourceHealth — сервис здоровья репозиториев SourceCr
 - [MANDATORY_100_CLOSURE](MANDATORY_100_CLOSURE.md) — итоговый журнал обязательной приёмки.
 - [FINAL_RELEASE_ACCEPTANCE](FINAL_RELEASE_ACCEPTANCE.md) — текущие release gates и внешние блокеры.
 - [LARGE_REPO_ACCEPTANCE](LARGE_REPO_ACCEPTANCE.md) — воспроизводимый fixture, локальные бюджеты и live handoff.
+- [PERFORMANCE_ACCEPTANCE](PERFORMANCE_ACCEPTANCE.md) — size-skew, scanner budgets и measured timings.
+- [APPSEC_INTERFACE_REVIEW](APPSEC_INTERFACE_REVIEW.md) — свежая проверка официального AppSec contract.
+- [OAUTH_SOURCECRAFT_BROWSER_ACCEPTANCE](OAUTH_SOURCECRAFT_BROWSER_ACCEPTANCE.md) — ручной live browser checklist.
+- [DEPLOYMENT_PRODUCTION](DEPLOYMENT_PRODUCTION.md) — production bundle и owner deployment steps.
+- [PR_DESCRIPTION](PR_DESCRIPTION.md) — готовый текст PR и внешние blockers.
 - [METRICS](METRICS.md) — сохранённый точный справочник Git-метрик.
 - [ADR](adr/README.md) — принятые архитектурные решения.
 

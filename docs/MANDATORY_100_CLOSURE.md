@@ -1,6 +1,6 @@
 # Mandatory 100 Closure — журнал приёмки
 
-Статус: **независимые этапы закрыты; Definition of Done заблокирован browser OAuth и large repo**.
+Статус на 2026-09-23: **large repository и performance закрыты; AppSec остаётся честным BLOCKED по public API contract; browser OAuth и production deployment требуют ручного шага владельца**.
 Дата: 21.09.2026.
 Ветка: `feature/` + `mandatory-100-closure`.
 Базовый GitHub commit: 679e10ea3a7cea45f6f022371b28f953aaac4966.
@@ -33,7 +33,7 @@ PR/merge/push feature в SourceCraft main запрещены до отдельн
 Swagger https://api.sourcecraft.tech/docs/sourcecraft.swagger.json, version 0.0.1,
 SHA256 `c3b1d84647cdf553cda63ff6e6ddf59d00ee36a5aa40470ad44607320639d7c3`.
 В paths не найдены appsec/sast/vulnerability/sarif/finding/incident/scanning routes.
-Это предварительный результат; полный AppSec/CLI review ещё не закончен.
+Повторная проверка 2026-09-23: официальный Swagger v0.0.1, 169 paths, SHA256 `dcd249cb7ad9247387ad76bd12b3d85c6a28a1cf05efd8c2fbbf0675f2cdfd8d`. Поиск в paths и schemas не нашёл поддерживаемых AppSec/SAST/SCA/finding/SARIF/SBOM ресурсов. Официальная документация подтверждает UI-инциденты и экспорт SARIF/SBOM, но не публикует auth/API contract для безопасного server-side collector. Поэтому production integration не придумывается, Security остаётся `sourcecraft_appsec / NO_DATA`.
 GET /user и GET /orgs/lct-hackaton-2026/repos успешно проверены с локальным PAT;
 личные данные и credential не сохранялись.
 Документация PAT: https://sourcecraft.dev/portal/docs/en/sourcecraft/operations/api-start.
@@ -122,6 +122,11 @@ AppSec severity, второстепенные likes, commit burst и незав�
 На пустых trackers Issues больше не даёт 100. У четырёх repositories coverage ниже
 минимума и общий Health честно null. Security у всей выборки NO_DATA. Абсолютные local SAST
 findings пока остаются калибровочным риском для очень больших codebases.
+
+23.09.2026 этот риск подтверждён на отдельном public fixture и исправлен в
+`mvp-score-v1.3`: severity нормализуется на 100 `code_files_analyzed`, Python AST-only
+findings больше не исключаются. Таблица выше остаётся исторической калибровкой v1.2;
+она не пересчитана задним числом. Large fixture принят отдельным 11-м scale case.
 
 ### Live team-41 и RQ repair
 

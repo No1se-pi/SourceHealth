@@ -12,6 +12,8 @@
   не перекалиброваны без реальных данных. Старые отчёты не переписываются.
 - `mvp-score-v1.2`: пустой issue tracker не получает 100; recent activity требует
   и количества commits, и распределения по пяти активным дням для максимума.
+- `mvp-score-v1.3`: local SAST использует severity density на 100 уникальных
+  поддерживаемых code files и включает Python AST findings. Веса не менялись.
 - Documentation/Debt имеют независимую полноту. Ошибка code file не обнуляет охват README.
 - Backend `score_coverage`, новый OpenAPI/TS contract; рядом со Score на страницах
   repository/analysis видны номинальный процент, missing и partial категории.

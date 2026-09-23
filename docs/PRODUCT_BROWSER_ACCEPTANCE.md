@@ -85,7 +85,7 @@
 - Все **40 приёмочных скриншотов** сформированы в реальном браузере Microsoft Edge / Chromium headless через CDP скриптом [`scripts/run_browser_acceptance.mjs`](../scripts/run_browser_acceptance.mjs).
 - **Кроссплатформенность:** Скрипт поддерживает Windows, Linux и macOS с автоматическим выбором `npm`/`npm.cmd` и обнаружением установленных браузеров Edge / Google Chrome / Chromium.
 - **Строгое соответствие контракту OpenAPI:** Все мок-фикстуры приведены в 100% соответствие с `docs/openapi.json` и `frontend/src/api/generated.ts`:
-  - `AnalysisDetails` и `AnalysisSummary` используют актуальные поля `health_score`, `queued_at`, `started_at`, `completed_at`, `scoring_policy_version: "mvp-score-v1.2"`, `analyzer_contract_version: "v1"`, `error_code`.
+  - `AnalysisDetails` и `AnalysisSummary` используют актуальные поля `health_score`, `queued_at`, `started_at`, `completed_at`, `scoring_policy_version: "mvp-score-v1.3"`, `analyzer_contract_version: "v1"`, `error_code`.
   - Устранены устаревшие поля `score` и `created_at`.
   - Категории `CategoryScoreDTO` содержат `category`, `score`, `availability`, `explanation`, `evidence_refs` (устаревшее поле `weight` удалено).
   - Рекомендации `RecommendationDTO` используют числовой приоритет `priority: number` (1, 2, 3), `suggested_action`, `expected_impact` (устаревшие поля `effort` и `action` удалены).

@@ -130,9 +130,21 @@ class MVPAnalyticsTests(unittest.TestCase):
     def test_repository_scale_alone_does_not_change_score(self):
         report = self.report()
         baseline = self.score(deepcopy(report)).health_score
+        report.checks["sast"].metrics["files_scanned"] = 10000
         report.checks["technical_debt"].metrics["code_files"] = 10000
-        report.checks["sast"].metrics["code_files_lexed"] = 10000
         self.assertEqual(self.score(report).health_score, baseline)
+
+    def test_sast_uses_code_density_and_includes_python_ast_findings(self):
+        report = self.report()
+        sast = report.checks["sast"]
+        sast.metrics.update(code_files_analyzed=100, code_files_lexed=0,
+                            python_files_parsed=2, summary={"high": 0, "medium": 2, "low": 0})
+        small = self.score(deepcopy(report)).category_scores["code_health"]["score"]
+        sast.metrics.update(code_files_analyzed=10000,
+                            summary={"high": 0, "medium": 200, "low": 0})
+        large = self.score(report).category_scores["code_health"]["score"]
+        self.assertEqual(small, large)
+        self.assertLess(small, 100)
 
     def test_platform_activity_complete_no_release_and_partial(self):
         result = PlatformActivityAnalyzer().analyze(self.context)

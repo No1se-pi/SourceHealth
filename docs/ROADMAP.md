@@ -5,7 +5,7 @@
 - Documentation snapshot analyzer; Issues и CI collectors/analyzers.
 - PR/contributors/published releases, Activity совместно с прежним GitActivity.
 - Local SAST + TODO/FIXME density, bounded blame age и большие code files.
-- mvp-score-v1.2, minimum coverage, empty-issues/commit-burst controls, детерминированные рекомендации и Markdown.
+- mvp-score-v1.3, minimum coverage, empty-issues/commit-burst/size-density controls, детерминированные рекомендации и Markdown.
 - Public URL import, ограниченное org/global discovery по официальному Swagger.
 - Один mvp-v1 run через trusted analysis-code, шесть category slots и persistence.
 - Контрактные unit tests и настоящий HTTP/RQ/PostgreSQL/Redis end-to-end с fixtures
@@ -13,7 +13,9 @@
 
 Эти пункты реализованы и локально проверены. Public live SourceCraft pipeline, bounded discovery,
 10-repository calibration и пользовательское public connection API подтверждены 20–21.09.2026.
-Ручной OAuth browser acceptance и настоящий large-repository scenario ещё не закрыты.
+Large-repository scenario закрыт отдельным public SourceCraft fixture и документирован в
+[LARGE_REPO_ACCEPTANCE](LARGE_REPO_ACCEPTANCE.md). Ручной OAuth browser acceptance остаётся
+единственным обязательным runtime gate, который требует владельца credentials.
 
 ## P0 — оставшаяся внешняя и продуктовая приёмка
 
@@ -27,8 +29,8 @@
 | Я ID → private SourceCraft permission bridge | Backend + организаторы | Подтверждённый механизм проверки прав; private остаются disabled |
 | Живой public каталог и отчёты | Backend/Analyzer | Закрыто: bounded discovery 10, 9 импортов, изоляция ошибки одного repo, live leaderboard persistence |
 | Калибровка policy | Analyzer/Backend | Закрыто для v1.2 на 10 public repos; таблица и ограничения в MANDATORY_100_CLOSURE |
-| Реальный вход и UI flow | Frontend/Backend | OAuth app, public import → run → partial/evidence/recommendations → Markdown, logout |
-| Большой repository | Analyzer/Backend | SourceCraft repo ≥10 000 tracked files или ≥20 000 commits или ≥500 МБ; time/memory/coverage/cleanup |
+| Реальный вход и UI flow | Frontend/Backend + владелец | OAuth app и ручной Yandex → PAT → public import → run → Markdown → logout; [checklist](OAUTH_SOURCECRAFT_BROWSER_ACCEPTANCE.md) |
+| Большой repository | Analyzer/Backend | Закрыто: public fixture ≥10 000 tracked files; time/coverage/cleanup в [acceptance](LARGE_REPO_ACCEPTANCE.md) |
 | Лайки рейтинга | Backend | Закрыто: только reaction_counts.positive_low; team-41 Diamond не считается Like |
 | Стенд и материалы сдачи | Вся команда | Deployment, SourceCraft repository, URL, презентация, видео, примеры отчётов |
 

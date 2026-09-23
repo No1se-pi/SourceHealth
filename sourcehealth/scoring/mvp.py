@@ -21,7 +21,7 @@ def usable(check):
 
 
 class MVPPolicy:
-    version = "mvp-score-v1.2"
+    version = "mvp-score-v1.3"
 
     def evaluate(self, results):
         categories = {}
@@ -112,12 +112,14 @@ class MVPPolicy:
             if m.get("age_complete"):
                 components.append((10, 100 * (1 - clamp((m["oldest_marker_age_days"] or 0) / 365))))
             checks.append(debt)
-        if usable(sast) and sast.metrics.get("code_files_lexed", 0) > 0:
+        if usable(sast) and sast.metrics.get("code_files_analyzed", 0) > 0:
             summary = sast.metrics["summary"]
-            components.append((40, max(0, 100 - 15 * summary["high"] - 5 * summary["medium"] - summary["low"])))
+            analyzed = sast.metrics["code_files_analyzed"]
+            weighted_findings = 15 * summary["high"] + 5 * summary["medium"] + summary["low"]
+            components.append((40, max(0, 100 - 100 * weighted_findings / analyzed)))
             checks.append(sast)
         assign("code_health", components, checks, minimum=50,
-               explanation="TODO/FIXME density 40, large files 10, marker age 10, local SAST 40; нужно ≥50 внутренних весов.")
+               explanation="TODO/FIXME density 40, large files 10, marker age 10, local SAST severity density на 100 code files 40; нужно ≥50 внутренних весов.")
 
         # Reserved normalized AppSec input, not an external client or a fabricated production finding.
         security = [r for r in results.values() if r.category == "security" and r.source == "sourcecraft_appsec" and usable(r)]

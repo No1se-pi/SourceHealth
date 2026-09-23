@@ -1,5 +1,13 @@
 # Интеграция SourceCraft
 
+## Актуальный статус, 23.09.2026
+
+Public API analytics и live large-repository pipeline приняты. AppSec остаётся внешним
+BLOCKED: свежий Swagger v0.0.1 (169 paths, SHA256
+`dcd249cb7ad9247387ad76bd12b3d85c6a28a1cf05efd8c2fbbf0675f2cdfd8d`) не публикует
+findings/SARIF/SBOM contract. Подробный журнал: [APPSEC_INTERFACE_REVIEW](APPSEC_INTERFACE_REVIEW.md).
+Исторические hashes ниже не заменяют свежую проверку.
+
 Проверено по официальной [Swagger](https://api.sourcecraft.tech/docs/sourcecraft.swagger.json)
 19.09.2026: info.version `0.0.1`, SHA-256 скачанного файла
 `c3b1d84647cdf553cda63ff6e6ddf59d00ee36a5aa40470ad44607320639d7c3`.

@@ -81,7 +81,7 @@ force существует в application, HTTP policy предстоит сог
 
 Для `mvp-v1` AnalysisDetails возвращает шесть category slots и category-level
 `data_coverage`; checks дополнительно содержат documentation, technical_debt, issues,
-cicd, platform_activity. Score — по [SCORING](SCORING.md), текущая policy `mvp-score-v1.2`.
+cicd, platform_activity. Score — по [SCORING](SCORING.md), текущая policy `mvp-score-v1.3`.
 `head_sha` — фактический snapshot. Старые профили сохраняют check-level coverage и
 nullable baseline. Snapshot failure/недоступный AppSec допускают partial report.
 

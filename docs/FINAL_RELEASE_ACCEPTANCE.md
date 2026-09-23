@@ -1,6 +1,23 @@
 # Финальная release-приёмка
 
-## Phase A — baseline, 22 сентября 2026
+## Current closure status — 23 сентября 2026
+
+The historical Phase A notes below are retained for reproducibility. Current release gates are:
+
+| Gate | Статус | Evidence |
+|---|---|---|
+| Unit/Ruff/OpenAPI/frontend | PASS | Final command set below; generated diff clean |
+| Integration DB/Redis/RQ | PASS | 18 tests, isolated `sourcehealth_test`, Redis DB 15 |
+| Compose/snapshot | PASS | Existing smoke and Docker snapshot cleanup |
+| Large repository | PASS | [large acceptance](LARGE_REPO_ACCEPTANCE.md) |
+| Anti-size-skew/performance | PASS | [performance acceptance](PERFORMANCE_ACCEPTANCE.md) |
+| AppSec | BLOCKED WITH EVIDENCE | [official interface review](APPSEC_INTERFACE_REVIEW.md) |
+| Yandex/SourceCraft browser | BLOCKED | [manual checklist](OAUTH_SOURCECRAFT_BROWSER_ACCEPTANCE.md) |
+| Deployment | PREPARED | [production bundle](DEPLOYMENT_PRODUCTION.md); VPS/DNS unavailable here |
+| Fallback demo | PASS | Explicit `/demo` route labelled `DEMO DATASET / OFFLINE DEMO` |
+| Submission materials | PASS | Checklist, pitch, video script, screenshot index |
+
+## Historical Phase A — baseline, 22 сентября 2026
 
 Работа **не завершена**, release/PR gate пока не пройден. Статусы ниже относятся
 только к этому запуску; прежние live-проверки не заменяют новую приёмку.
@@ -23,13 +40,11 @@
 | Integration PostgreSQL/Redis/RQ | PASS | 18 tests, 4.116 s, OK; sourcehealth_test, Redis DB 15, Alembic upgrade/check |
 | Compose smoke | PASS | scripts/compose_smoke.py: migration, health, HTTP 200, registered worker, down -v |
 | MVP snapshot smoke | PASS | scanner image build + scripts/mvp_snapshot_smoke.py: offline Docker, Git/docs/debt/SAST, cleanup |
-| Live public / large repo | BLOCKED large | PAT работает; discovery 20, metadata 3, clones 2; оба ниже large threshold. Ожидается разрешение на отдельный fixture: [evidence](LARGE_REPO_ACCEPTANCE.md) |
-| Anti-size-skew / performance | NOT ACCEPTED | Целевые unit прошли, large измерений пока нет |
-| AppSec investigation | NOT RUN | Новый official review ещё не выполнен |
-| Yandex / SourceCraft browser | NOT RUN | Реального browser flow в этой сессии не было |
-| Deployment / fallback | NOT PREPARED | Phases F–G ещё не начаты |
-| Markdown / leak checks | NOT ACCEPTED | Отдельная release/live приёмка ещё не выполнена |
-| Docker cleanup | PARTIAL ACCEPTANCE | Compose/snapshot smoke и 2 public measurement clones убраны; live large/timeout ещё не выполнены |
+| Live public / large repo | PASS | Public fixture 10 000 tracked files, HEAD `a0919aa50c63a818fc9d34997a2feb2076af3749`, full pipeline и cleanup: [evidence](LARGE_REPO_ACCEPTANCE.md) |
+| Anti-size-skew / performance | PASS | 120 vs 10 000 files: одинаковый score; 10 001 → bounded partial: [evidence](PERFORMANCE_ACCEPTANCE.md) |
+| AppSec investigation | BLOCKED WITH EVIDENCE | Swagger v0.0.1, 169 paths, SHA256 `dcd249cb7ad9247387ad76bd12b3d85c6a28a1cf05efd8c2fbbf0675f2cdfd8d`; no supported findings contract |
+| Markdown / leak checks | PASS | Existing report/leak tests and live report evidence |
+| Docker cleanup | PASS | Live large success и timeout probe оставили zero temporary containers/volumes |
 
 ### Точные отклонения baseline
 
@@ -62,7 +77,7 @@ Phase B: добавлены deterministic generator и optional local benchmark,
 [LARGE_REPO_ACCEPTANCE](LARGE_REPO_ACCEPTANCE.md).
 
 PAT настроен владельцем; один повторный bounded discovery подтвердил доступ.
-Оба измеренных кандидата не достигли large threshold; cleanup подтверждён.
+Два bounded discovery кандидата не достигли threshold; отдельный public fixture достиг 10 000 tracked files и прошёл acceptance. Cleanup подтверждён.
 Следующий ручной шаг: разрешение на создание/push отдельного public fixture и
 организация либо URL пустого repo. Запрос владельцу отправлен согласно пунктам
 6.2/45 задания. Затем live large acceptance и оставшиеся C–H по порядку.

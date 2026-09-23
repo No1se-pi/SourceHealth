@@ -60,7 +60,7 @@ function makeAnalysisSummary(overrides = {}) {
     completed_at: '2026-09-20T14:36:12Z',
     head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
     health_score: 88,
-    scoring_policy_version: 'mvp-score-v1.2',
+    scoring_policy_version: 'mvp-score-v1.3',
     analyzer_contract_version: 'v1',
     error_code: null,
     ...overrides
@@ -146,7 +146,7 @@ function makeAnalysisDetails(overrides = {}) {
     completed_at: '2026-09-20T14:36:12Z',
     head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
     health_score: 88,
-    scoring_policy_version: 'mvp-score-v1.2',
+    scoring_policy_version: 'mvp-score-v1.3',
     analyzer_contract_version: 'v1',
     error_code: null,
     category_scores: {},
@@ -390,7 +390,7 @@ const fixtureAnalysisHistory = [
     head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
     profile: 'mvp-v1',
     trigger: 'manual',
-    scoring_policy_version: 'mvp-score-v1.2',
+    scoring_policy_version: 'mvp-score-v1.3',
     analyzer_contract_version: 'v1',
     error_code: null
   })

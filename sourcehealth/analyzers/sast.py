@@ -18,7 +18,7 @@ class SASTAnalyzerAdapter:
         scan = self.scanner.scan(context.repo_path).to_dict()
         metrics = {key: scan.pop(key) for key in (
             "files_scanned", "bytes_read", "entries_seen", "python_files_parsed",
-            "files_with_findings", "code_files_lexed", "summary",
+            "files_with_findings", "code_files_lexed", "code_files_analyzed", "summary",
         )}
         findings = scan.pop("findings")
         status = "ok" if scan["complete"] else "partial"

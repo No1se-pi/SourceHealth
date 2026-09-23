@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-ANALYZER_VERSION = "0.3.0"
+ANALYZER_VERSION = "0.4.0"
 
 
 @dataclass(frozen=True)
@@ -96,6 +96,7 @@ class ScanResult:
     python_files_parsed: int = 0
     files_with_findings: int = 0
     code_files_lexed: int = 0
+    code_files_analyzed: int = 0
     diagnostics: list[dict[str, Any]] = field(default_factory=list)
 
     def skip(self, reason: str, *, incomplete: bool = False) -> None:

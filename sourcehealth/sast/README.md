@@ -364,7 +364,8 @@ JSON не исполняет код, но плохой regex может надо
 - `skipped`: счётчики причин пропусков;
 - `rule_ids` и `config`: применённые проверки и лимиты;
 - `ruleset_digest`: SHA-256 доверенных правил для сравнения их версий;
-- `python_files_parsed`, `code_files_lexed`, `files_with_findings`: дополнительная статистика;
+- `code_files_analyzed`: уникальные поддерживаемые code files — знаменатель density scoring;
+- `python_files_parsed`, `code_files_lexed`, `files_with_findings`: дополнительная статистика движков;
 - `diagnostics`: до 100 координат неполноты без текста ошибок/исходников;
 - `schema_version`, `analyzer`, `analyzer_version`: контракт, имя и версия движка.
 

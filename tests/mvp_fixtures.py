@@ -42,7 +42,7 @@ def runtime_payload():
     commits = [Commit(str(i), "", "", NOW, "") for i in range(20)]
     return {"schema_version": "1.0", "complete": True, "checks": {
         "git_activity": {"status": "ok", "metrics": GitActivityAnalyzer().analyze(commits, now=NOW).to_dict()},
-        "sast": ScanResult(files_scanned=10, code_files_lexed=10).to_dict(),
+        "sast": ScanResult(files_scanned=10, code_files_lexed=10, code_files_analyzed=10).to_dict(),
         "documentation": docs.to_dict(), "technical_debt": debt.to_dict(),
     }}
 

@@ -1,4 +1,4 @@
-# Детерминированная методика mvp-score-v1.2
+# Детерминированная методика mvp-score-v1.3
 
 `MVPPolicy` включена для `mvp-v1`. `platform-v1` и `code-v1` сохраняют
 `UnconfiguredPolicy / unconfigured-v1` с nullable score. Policy не выполняет I/O,
@@ -9,6 +9,9 @@
 новая policy version автоматически меняет fingerprint нового запуска.
 Изменение 21.09.2026: v1.2 не оценивает полностью пустой issue tracker как 100 и
 ограничивает недавнюю Git-активность меньшим из signals commit count/active days.
+Изменение 23.09.2026: v1.3 считает local SAST по severity density на 100 уникальных
+поддерживаемых code files. Python AST findings теперь участвуют в Code Health;
+нейтральные data files не меняют знаменатель. Старые v1.2 reports не пересчитываются.
 
 ## Итог и coverage
 
@@ -94,11 +97,14 @@ Duration/recent failures/latest status информативны, не меняю
 | TODO/FIXME density | `100 × (1 − C(marker_density / 5))` | 40 |
 | Большие файлы | `100 × (1 − C(large_files / code_files))` | 10 |
 | Возраст маркеров | `100 × (1 − C(oldest_marker_age_days / 365))` | 10 |
-| Local SAST | `max(0,100 − 15×high − 5×medium − low)` | 40 |
+| Local SAST | `max(0,100 − 100×(15×high + 5×medium + low)/code_files_analyzed)` | 40 |
 
 Нужно **≥50 известных внутренних весов**. Debt требует полного snapshot и code_files>0.
 Возраст учитывается только при age_complete; чистый набор без маркеров даёт 100 этому
-компоненту. Local SAST требует полного check и code_files_lexed>0. Один SAST без debt
+компоненту. Local SAST требует полного check и `code_files_analyzed>0`. Счётчик
+учитывает каждый поддерживаемый code file один раз; число нейтральных data/docs files
+его не увеличивает. `python_files_parsed` и `code_files_lexed` остаются диагностикой
+работы отдельных движков. Один SAST без debt
 не даёт численного Code Health. Debt без SAST может дать partial score по ≥50 весам.
 Репозиторий без поддерживаемых code files не получает фиктивный 100.
 
@@ -126,6 +132,7 @@ source/input, сейчас в production не срабатывает. Кажда
 
 Fixtures покрывают healthy/bad/empty/partial/outage, порог coverage, все шесть
 категорий, Security unavailable, монотонность ухудшения/исправления при фиксированном
-охвате, replay без зависимости от wall clock/popularity. ScoringEngine проверяет
+охвате, одинаковую SAST density для small/large, Python AST-only findings и replay
+без зависимости от wall clock/popularity. ScoringEngine проверяет
 диапазон, finite числа, source Security и references. Новая формула требует новой
 policy version/fingerprint; сохранённые reports не переписываются.

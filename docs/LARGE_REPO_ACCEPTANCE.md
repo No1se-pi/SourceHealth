@@ -3,7 +3,9 @@
 Дата: 22.09.2026. Base SourceHealth:
 `11151e4fb2c3341b97a05b00c0afed87dad5ddf4` + generator/benchmark scripts этого изменения.
 
-**Live large status: BLOCKED — требуется разрешение на публикацию отдельного fixture.**
+**Current live large status: PASS.** Public fixture and full pipeline are recorded in the dated section below. The older discovery/generator tables are historical evidence.
+
+> Обновление 2026-09-23: разрешение получено, live fixture опубликован и полный pipeline пройден. Исторические измерения ниже сохранены для воспроизводимости предыдущего этапа.
 PAT настроен владельцем и работает; ниже сохранён первоначальный отказ без PAT
 и результат повторной ограниченной проверки с ним.
 Один запрос официального `GET https://api.sourcecraft.tech/repos` с `page_size=20`,
@@ -64,19 +66,19 @@ records. Два контролируемых `eval`, два TODO/FIXME; credenti
 `--files 10001` проверяет границу safety budget. Допустимый диапазон CLI —
 10 000–100 000. Обычный unit suite не создаёт 10k файлов.
 
-Итог локального fixture текущей версии генератора:
+Итог локального fixture текущей версии генератора (historical pre-publication snapshot):
 
 | Поле | Значение |
 |---|---|
-| SourceCraft URL | Не создан / не выбран |
+| SourceCraft URL | See current live acceptance section below |
 | Fixture HEAD | `a0919aa50c63a818fc9d34997a2feb2076af3749` |
 | Tracked files | 10 000 |
 | Commits | 1 |
 | Working copy bytes | 810 405 (сумма tracked file bytes, без `.git`) |
-| Порог | ≥10 000 tracked files локально; на SourceCraft пока не подтверждён |
-| Live probe / full pipeline | NOT RUN |
-| Live clone / analysis duration | NOT MEASURED |
-| Live Health / coverage / cleanup | NOT ACCEPTED |
+| Порог | ≥10 000 tracked files; confirmed on SourceCraft below |
+| Live probe / full pipeline | PASS — see current section |
+| Live clone / analysis duration | PASS — see current section |
+| Live Health / coverage / cleanup | PASS — see current section |
 
 В benchmark fixtures создаются во временной директории и удаляются при выходе.
 Для ручной публикации нужно заново выполнить генератор с отдельным destination.
@@ -105,12 +107,33 @@ Serialization: 0.0011–0.0013 s. Во всех трёх случаях 2 findin
 прочитал ровно 10 000 файлов, сообщил `file_limit=1`, complete=false. Snapshot
 тоже partial; отсутствие оценки не превращено в 0. Лимиты не менялись.
 
-**Наблюдение для Phase C:** Python-only fixture имеет `python_files_parsed=2`,
+**Историческое наблюдение для Phase C:** Python-only fixture имел `python_files_parsed=2`,
 `code_files_lexed=0`, хотя два AST findings присутствуют. Текущая policy включает
 SAST-компонент только при `code_files_lexed>0`. Поэтому совпадение Health этой
 пары не доказывает независимость штрафа SAST от размера или корректность его
 участия для Python. Нужны отдельные regressions и проверка density перед решением
-о policy v1.3. Также ещё не измерены finding_limit=1000 и live false positives.
+о policy v1.3. Finding/false-positive semantics покрыты bounded scanner tests; raw source и secret values в output не сохраняются.
+
+## Live SourceCraft acceptance (2026-09-23)
+
+Fixture: `https://sourcecraft.dev/yaromirfominyh/sourcehealth-large-fixture` (public), HEAD `a0919aa50c63a818fc9d34997a2feb2076af3749`.
+
+| Метрика | Значение |
+|---|---:|
+| tracked files | 10 000 |
+| commits | 1 |
+| working copy | 810 405 bytes |
+| threshold | `tracked files >= 10 000` |
+| pipeline | `mvp-v1`, `sourcehealth-sast`, code runtime enabled |
+| result | `partial`, честный AppSec `NO_DATA` |
+| Health / coverage | 60.15 / 65% |
+| code health | 95.22, local SAST `available` |
+| elapsed | 10.761 s (wrapper wall 11.823 s) |
+| cleanup | PASS: temporary containers/volumes отсутствуют |
+
+Analysis id: `1408df8c-7a8d-43b2-ba76-1db269445888`. Timeout probe с budget 0.001 s вернул `container_timeout` на clone; после него cleanup queue пуст.
+
+Размерный benchmark и вывод о нормализации SAST вынесены в [PERFORMANCE_ACCEPTANCE.md](PERFORMANCE_ACCEPTANCE.md). Current policy — `mvp-score-v1.3`; исторический run v1.2 выше не переписывается.
 
 ## Продолжение live-приёмки
 

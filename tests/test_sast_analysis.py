@@ -164,6 +164,15 @@ class AnalysisTests(unittest.TestCase):
             result = self.scan('def add(a, b):\n    return a + b\n')
         self.assertTrue(result.complete)
         self.assertEqual(result.python_files_parsed, 0)
+        self.assertEqual(result.code_files_analyzed, 1)
+
+    def test_code_files_analyzed_counts_supported_files_once(self):
+        (self.root / "safe.py").write_text("value = 1\n", encoding="utf-8")
+        (self.root / "unsafe.py").write_text("eval(data)\n", encoding="utf-8")
+        (self.root / "neutral.txt").write_text("neutral\n", encoding="utf-8")
+        result = SASTScanner().scan(self.root)
+        self.assertEqual(result.code_files_analyzed, 2)
+        self.assertEqual(result.python_files_parsed, 1)
 
     def test_match_capture_shadows_import(self):
         result = self.scan('import pickle\nmatch data:\n    case {"value": pickle}:\n        pickle.loads(data)\n')

@@ -1,0 +1,9 @@
+[Unit]
+Description=SourceHealth scheduler one-shot
+After=sourcehealth.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/sourcehealth
+EnvironmentFile=/opt/sourcehealth/.env.production
+ExecStart=/opt/sourcehealth/.venv/bin/python -m sourcehealth.application enqueue-due

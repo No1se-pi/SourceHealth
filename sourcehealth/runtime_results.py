@@ -16,7 +16,7 @@ MVP_CLASSIFICATION = {**CLASSIFICATION, "documentation": ("documentation", "git_
 RUNTIME_ERRORS = frozenset({"docker_unavailable", "container_timeout", "docker_command_failed",
                             "invalid_or_missing_report", "invalid_report", "inconsistent_report"})
 SAST_COUNTERS = ("files_scanned", "bytes_read", "entries_seen", "python_files_parsed",
-                 "files_with_findings", "code_files_lexed")
+                 "files_with_findings", "code_files_lexed", "code_files_analyzed")
 SKIP_REASONS = frozenset({"file_limit", "total_bytes_limit", "timeout", "long_line", "finding_limit",
                           "binary", "encoding", "read_error", "entry_limit", "excluded", "link",
                           "depth_limit", "special_file", "hardlink", "file_changed_or_limit",
