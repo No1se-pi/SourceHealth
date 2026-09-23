@@ -32,6 +32,7 @@ class RepositorySummary(BaseModel):
     likes: int | None
     last_activity_at: datetime | None
     latest_analysis_id: UUID | None
+    score_preview: "ScorePreviewDTO | None" = None
 
 
 class RepositoryDetails(RepositorySummary):
@@ -123,20 +124,30 @@ class ScoreCoverageDTO(BaseModel):
     partial_categories: list[Category]
 
 
+class ScorePreviewDTO(BaseModel):
+    score: float | None = Field(default=None, ge=0, le=100)
+    nominal_weight_percent: int = Field(ge=0, le=100)
+    scored_categories: int = Field(ge=0, le=6)
+    numeric: bool
+
+
 class AnalysisDetails(AnalysisSummary):
     category_scores: dict[str, CategoryScoreDTO]
     data_coverage: dict[str, DataAvailability]
     recommendations: list[RecommendationDTO]
     checks: dict[str, AnalyzerResultDTO]
     score_coverage: ScoreCoverageDTO | None = None
+    score_preview: ScorePreviewDTO | None = None
 
     @model_validator(mode="after")
     def derive_score_coverage(self):
-        from sourcehealth.scoring.coverage import score_coverage
+        from sourcehealth.scoring.coverage import score_coverage, score_preview
 
-        coverage = score_coverage(self.scoring_policy_version,
-                                  {name: category.model_dump() for name, category in self.category_scores.items()})
+        categories = {name: category.model_dump() for name, category in self.category_scores.items()}
+        coverage = score_coverage(self.scoring_policy_version, categories)
         self.score_coverage = ScoreCoverageDTO(**coverage) if coverage is not None else None
+        preview = score_preview(self.scoring_policy_version, categories)
+        self.score_preview = ScorePreviewDTO(**preview) if preview is not None else None
         return self
 
 

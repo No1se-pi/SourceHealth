@@ -40,16 +40,18 @@ export function RepositoryImport() {
       </div>
 
       <form onSubmit={submit} className="sc-import-form">
+        <label htmlFor="repository-import-url" className="sr-only">URL публичного репозитория SourceCraft</label>
         <div className="sc-import-input-row">
           <input
+            id="repository-import-url"
             type="url"
             required
             maxLength={512}
             value={url}
             disabled={pending}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://sourcecraft.dev/org/repo"
-            aria-label="URL открытого репозитория SourceCraft"
+            placeholder="https://sourcecraft.dev/org/repository"
+            aria-describedby="repository-import-help"
             className="sc-import-input"
           />
           <Button
@@ -59,10 +61,13 @@ export function RepositoryImport() {
             disabled={pending || !url.trim()}
             loading={pending}
           >
-            {pending ? 'Проверка…' : 'Импортировать'}
+            {pending ? 'Проверяем…' : 'Добавить репозиторий'}
           </Button>
         </div>
       </form>
+      <span id="repository-import-help" className="sc-import-hint">
+        SourceHealth проверит публичность репозитория и добавит его в каталог.
+      </span>
 
       {error != null && (
         <div className="sc-import-error-wrap">

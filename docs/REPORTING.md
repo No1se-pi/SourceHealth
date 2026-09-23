@@ -32,3 +32,9 @@ PDF позже строится из той же модели/Markdown: доба
 считать Score внутри PDF запрещено. PDF engine до конкретной задачи не добавлен.
 Renderer unit test проверяет deterministic output, null markers и escaping;
 интеграционный тест проверяет HTTP download реального сохранённого AnalysisRun.
+## Explainability
+
+Если официальный Health Score ещё не рассчитан, Markdown показывает Source Soul как
+предварительный backend-derived preview с охватом и явным предупреждением об отсутствии
+в рейтинге. Для доступного official AppSec выводятся только агрегированные severity counts
+и формула штрафа; raw findings, snippets и secret values в отчёт не попадают.

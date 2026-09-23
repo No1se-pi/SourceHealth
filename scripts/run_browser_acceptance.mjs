@@ -20,11 +20,12 @@ function makeRepositorySummary(overrides = {}) {
     repository_slug: 'fast-service',
     canonical_url: 'https://sourcecraft.dev/demo-org/fast-service',
     visibility: 'public',
-    health_score: 88,
+    health_score: 70.5,
     language: 'TypeScript',
     likes: 42,
     last_activity_at: '2026-09-20T14:30:00Z',
     latest_analysis_id: 'b0000001-0000-0000-0000-000000000001',
+    score_preview: null,
     ...overrides
   };
 }
@@ -36,7 +37,7 @@ function makeRepositoryDetails(overrides = {}) {
     repository_slug: 'fast-service',
     canonical_url: 'https://sourcecraft.dev/demo-org/fast-service',
     visibility: 'public',
-    health_score: 88,
+    health_score: 70.5,
     language: 'TypeScript',
     likes: 42,
     last_activity_at: '2026-09-20T14:30:00Z',
@@ -44,6 +45,7 @@ function makeRepositoryDetails(overrides = {}) {
     sourcecraft_id: 'sc-987654',
     default_branch: 'main',
     head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
+    score_preview: null,
     ...overrides
   };
 }
@@ -59,7 +61,7 @@ function makeAnalysisSummary(overrides = {}) {
     started_at: '2026-09-20T14:35:02Z',
     completed_at: '2026-09-20T14:36:12Z',
     head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
-    health_score: 88,
+    health_score: 70.5,
     scoring_policy_version: 'mvp-score-v1.2',
     analyzer_contract_version: 'v1',
     error_code: null,
@@ -145,7 +147,7 @@ function makeAnalysisDetails(overrides = {}) {
     started_at: '2026-09-20T14:35:02Z',
     completed_at: '2026-09-20T14:36:12Z',
     head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
-    health_score: 88,
+    health_score: 70.5,
     scoring_policy_version: 'mvp-score-v1.2',
     analyzer_contract_version: 'v1',
     error_code: null,
@@ -154,6 +156,7 @@ function makeAnalysisDetails(overrides = {}) {
     recommendations: [],
     checks: {},
     score_coverage: null,
+    score_preview: null,
     ...overrides
   };
 }
@@ -215,16 +218,23 @@ function validateScoreCoverage(sc, context) {
   assert(Array.isArray(sc.partial_categories), `${context}.partial_categories must be an array`);
 }
 
+function validateScorePreview(preview, context) {
+  assertRequiredKeys(preview, ['score', 'nominal_weight_percent', 'scored_categories', 'numeric'], context);
+  assert(typeof preview.numeric === 'boolean', `${context}.numeric must be a boolean`);
+}
+
 function validateRepositorySummary(repo, context) {
-  assertRequiredKeys(repo, ['id', 'organization_slug', 'repository_slug', 'canonical_url', 'visibility', 'health_score', 'language', 'likes', 'last_activity_at', 'latest_analysis_id'], context);
+  assertRequiredKeys(repo, ['id', 'organization_slug', 'repository_slug', 'canonical_url', 'visibility', 'health_score', 'language', 'likes', 'last_activity_at', 'latest_analysis_id', 'score_preview'], context);
   assertNoKeys(repo, ['created_at', 'updated_at', 'score', 'default_branch', 'head_sha'], context);
   assert(!repo.canonical_url.includes('sourcecraft.tech'), `${context}.canonical_url must not use sourcecraft.tech (use sourcecraft.dev)`);
+  if (repo.score_preview != null) validateScorePreview(repo.score_preview, `${context}.score_preview`);
 }
 
 function validateRepositoryDetails(repo, context) {
-  assertRequiredKeys(repo, ['id', 'organization_slug', 'repository_slug', 'canonical_url', 'visibility', 'health_score', 'language', 'likes', 'last_activity_at', 'latest_analysis_id', 'sourcecraft_id', 'default_branch', 'head_sha'], context);
+  assertRequiredKeys(repo, ['id', 'organization_slug', 'repository_slug', 'canonical_url', 'visibility', 'health_score', 'language', 'likes', 'last_activity_at', 'latest_analysis_id', 'sourcecraft_id', 'default_branch', 'head_sha', 'score_preview'], context);
   assertNoKeys(repo, ['created_at', 'updated_at', 'score'], context);
   assert(!repo.canonical_url.includes('sourcecraft.tech'), `${context}.canonical_url must not use sourcecraft.tech (use sourcecraft.dev)`);
+  if (repo.score_preview != null) validateScorePreview(repo.score_preview, `${context}.score_preview`);
 }
 
 function validateAnalysisSummary(as, context) {
@@ -233,7 +243,7 @@ function validateAnalysisSummary(as, context) {
 }
 
 function validateAnalysisDetails(ad, context) {
-  assertRequiredKeys(ad, ['id', 'repository_id', 'profile', 'status', 'trigger', 'queued_at', 'started_at', 'completed_at', 'head_sha', 'health_score', 'scoring_policy_version', 'analyzer_contract_version', 'error_code', 'category_scores', 'data_coverage', 'recommendations', 'checks'], context);
+  assertRequiredKeys(ad, ['id', 'repository_id', 'profile', 'status', 'trigger', 'queued_at', 'started_at', 'completed_at', 'head_sha', 'health_score', 'scoring_policy_version', 'analyzer_contract_version', 'error_code', 'category_scores', 'data_coverage', 'recommendations', 'checks', 'score_preview'], context);
   assertNoKeys(ad, ['score', 'created_at', 'evidence'], context);
   assert(!Array.isArray(ad.checks), `${context}.checks must be Record<string, AnalyzerResultDTO>, not an Array`);
   assert(typeof ad.checks === 'object' && ad.checks !== null, `${context}.checks must be an object`);
@@ -250,6 +260,7 @@ function validateAnalysisDetails(ad, context) {
   if (ad.score_coverage != null) {
     validateScoreCoverage(ad.score_coverage, `${context}.score_coverage`);
   }
+  if (ad.score_preview != null) validateScorePreview(ad.score_preview, `${context}.score_preview`);
 }
 
 // ============================================================================
@@ -290,7 +301,8 @@ const fixtureLeaderboardItems = [
     language: 'Python',
     likes: null,
     last_activity_at: null,
-    latest_analysis_id: 'b0000006-0000-0000-0000-000000000006'
+    latest_analysis_id: 'b0000002-0000-0000-0000-000000000002',
+    score_preview: { score: 43.81, nominal_weight_percent: 30, scored_categories: 2, numeric: true }
   }),
   makeRepositorySummary({
     id: 'a0000003-0000-0000-0000-000000000003',
@@ -339,7 +351,7 @@ const fixtureRepoHealthy = makeRepositoryDetails({
   default_branch: 'main',
   head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
   sourcecraft_id: 'sc-987654',
-  health_score: 88,
+  health_score: 70.5,
   language: 'TypeScript',
   likes: 42,
   last_activity_at: '2026-09-20T14:30:00Z',
@@ -359,7 +371,8 @@ const fixtureRepoNoData = makeRepositoryDetails({
   language: 'Python',
   likes: null,
   last_activity_at: null,
-  latest_analysis_id: null
+  latest_analysis_id: 'b0000002-0000-0000-0000-000000000002',
+  score_preview: { score: 43.81, nominal_weight_percent: 30, scored_categories: 2, numeric: true }
 });
 
 const fixtureRepoLongSlug = makeRepositoryDetails({
@@ -383,7 +396,7 @@ const fixtureAnalysisHistory = [
     id: 'b0000001-0000-0000-0000-000000000001',
     repository_id: 'a0000001-0000-0000-0000-000000000001',
     status: 'completed',
-    health_score: 88,
+    health_score: 70.5,
     queued_at: '2026-09-20T14:35:00Z',
     started_at: '2026-09-20T14:35:02Z',
     completed_at: '2026-09-20T14:36:12Z',
@@ -400,7 +413,7 @@ const fixtureAnalysisCompleted = makeAnalysisDetails({
   id: 'b0000001-0000-0000-0000-000000000001',
   repository_id: 'a0000001-0000-0000-0000-000000000001',
   status: 'completed',
-  health_score: 88,
+  health_score: 70.5,
   category_scores: {
     documentation: makeCategoryScore('documentation', {
       score: 92,
@@ -415,9 +428,9 @@ const fixtureAnalysisCompleted = makeAnalysisDetails({
       evidence_refs: ['ev-ci-1']
     }),
     security: makeCategoryScore('security', {
-      score: 80,
+      score: 0,
       availability: 'available',
-      explanation: 'Уязвимостей высокой и критической степени не обнаружено.',
+      explanation: 'Official AppSec: штрафы снизили численную оценку до минимального значения.',
       evidence_refs: ['ev-sec-1']
     }),
     activity: makeCategoryScore('activity', {
@@ -495,13 +508,14 @@ const fixtureAnalysisCompleted = makeAnalysisDetails({
     sourcecraft_appsec: makeAnalyzerResult('sourcecraft_appsec', {
       source: 'sourcecraft_appsec',
       category: 'security',
+      metrics: { complete: true, open_by_severity: { critical: 0, high: 5, medium: 13, low: 5 }, total_open: 23 },
       evidence: [
         makeEvidence({
           id: 'ev-sec-1',
           source: 'sourcecraft_appsec',
           type: 'vulnerability_scan',
           reference: 'appsec/latest',
-          summary: 'Уязвимостей высокой и критической степени не обнаружено',
+          summary: 'Official AppSec агрегаты собраны полностью',
           url: 'https://sourcecraft.dev/demo-org/fast-service/security',
           location: null,
           timestamp: '2026-09-20T14:35:15Z'
@@ -562,38 +576,40 @@ const fixtureAnalysisCompleted = makeAnalysisDetails({
     scored_categories: 6,
     unscored_categories: [],
     partial_categories: []
-  })
+  }),
+  score_preview: { score: 70.5, nominal_weight_percent: 100, scored_categories: 6, numeric: true }
 });
 
 const fixtureAnalysisPartial = makeAnalysisDetails({
   id: 'b0000002-0000-0000-0000-000000000002',
-  repository_id: 'a0000001-0000-0000-0000-000000000001',
+  repository_id: 'a0000002-0000-0000-0000-000000000002',
   status: 'partial',
-  health_score: 72,
+  health_score: null,
   category_scores: {
-    documentation: makeCategoryScore('documentation', { score: 90, availability: 'available', explanation: 'README.md найден в корне проекта.', evidence_refs: [] }),
+    documentation: makeCategoryScore('documentation', { score: null, availability: 'no_data', explanation: 'Недостаточно данных.', evidence_refs: [] }),
     cicd: makeCategoryScore('cicd', { score: null, availability: 'no_data', explanation: 'Данные CI/CD недоступны в SourceCraft.', evidence_refs: [] }),
-    security: makeCategoryScore('security', { score: 85, availability: 'available', explanation: 'Базовое сканирование уязвимостей завершено.', evidence_refs: [] }),
-    activity: makeCategoryScore('activity', { score: 65, availability: 'available', explanation: 'Умеренная активность за последние 30 дней.', evidence_refs: [] }),
-    issues: makeCategoryScore('issues', { score: null, availability: 'no_data', explanation: 'Трекер задач не активирован.', evidence_refs: [] }),
-    code_health: makeCategoryScore('code_health', { score: 75, availability: 'available', explanation: 'Локальный анализ кода выполнен частично.', evidence_refs: [] })
+    security: makeCategoryScore('security', { score: null, availability: 'no_data', explanation: 'Official AppSec пока недоступен.', evidence_refs: [] }),
+    activity: makeCategoryScore('activity', { score: 87.61, availability: 'available', explanation: 'Активность рассчитана по Git.', evidence_refs: [] }),
+    issues: makeCategoryScore('issues', { score: 0, availability: 'available', explanation: 'Наблюдения есть; итог категории равен нулю.', evidence_refs: [] }),
+    code_health: makeCategoryScore('code_health', { score: null, availability: 'no_data', explanation: 'Недостаточно данных.', evidence_refs: [] })
   },
   data_coverage: {
-    documentation: 'available',
+    documentation: 'no_data',
     cicd: 'no_data',
-    security: 'available',
+    security: 'no_data',
     activity: 'available',
-    issues: 'no_data',
-    code_health: 'available'
+    issues: 'available',
+    code_health: 'no_data'
   },
   score_coverage: makeScoreCoverage({
-    nominal_weight_percent: 70,
-    scored_categories: 4,
-    unscored_categories: ['cicd', 'issues'],
+    nominal_weight_percent: 30,
+    scored_categories: 2,
+    unscored_categories: ['documentation', 'cicd', 'security', 'code_health'],
     partial_categories: []
   }),
   recommendations: [],
-  checks: {}
+  checks: {},
+  score_preview: { score: 43.81, nominal_weight_percent: 30, scored_categories: 2, numeric: true }
 });
 
 const fixtureAnalysisFailed = makeAnalysisDetails({
@@ -814,7 +830,7 @@ const mockServer = http.createServer((req, res) => {
 
   // 12. SourceCraft connection
   if (url.pathname === '/api/v1/sourcecraft/connection') {
-    if (url.searchParams.get('disconnected') === '1') {
+    if (url.searchParams.get('disconnected') === '1' || req.headers.referer?.includes('disconnected=1')) {
       res.writeHead(200);
       return res.end(JSON.stringify({ connected: false }));
     }
@@ -992,6 +1008,14 @@ await sendCdp('Runtime.enable');
 // Full Acceptance Matrix: 40 screenshots
 // ============================================================================
 const tasks = [
+  // Product explainability / Source Soul focused acceptance
+  { name: ['41', 'explainability', 'leaderboard', 'source', 'soul', 'desktop.png'].join('-'), url: 'http://127.0.0.1:5173/?theme=dark', width: 1440, height: 900 },
+  { name: ['42', 'explainability', 'leaderboard', 'source', 'soul', 'mobile.png'].join('-'), url: 'http://127.0.0.1:5173/?theme=dark', width: 390, height: 844 },
+  { name: ['43', 'explainability', 'analysis', 'appsec', 'zero.png'].join('-'), url: 'http://127.0.0.1:5173/analyses/b0000001-0000-0000-0000-000000000001?theme=dark', width: 1440, height: 1100, action: 'open-appsec-explanation' },
+  { name: ['44', 'explainability', 'repository', 'source', 'soul.png'].join('-'), url: 'http://127.0.0.1:5173/repositories/a0000002-0000-0000-0000-000000000002?theme=dark', width: 1440, height: 1000 },
+  { name: ['45', 'explainability', 'sourcecraft', 'connected.png'].join('-'), url: 'http://127.0.0.1:5173/sourcecraft?theme=dark', width: 1440, height: 900 },
+  { name: ['46', 'explainability', 'sourcecraft', 'pat', 'form.png'].join('-'), url: 'http://127.0.0.1:5173/sourcecraft?disconnected=1&theme=dark', width: 1440, height: 900 },
+
   // 1. Leaderboard across viewports & themes
   { name: '01-leaderboard-light-1440.png', url: 'http://127.0.0.1:5173/?theme=light', width: 1440, height: 900 },
   { name: '02-leaderboard-dark-1440.png', url: 'http://127.0.0.1:5173/?theme=dark', width: 1440, height: 900 },
@@ -1084,9 +1108,12 @@ const tasks = [
   }
 ];
 
+const acceptanceFilter = process.env.ACCEPTANCE_FILTER;
+const selectedTasks = acceptanceFilter ? tasks.filter((task) => task.name.includes(acceptanceFilter)) : tasks;
+
 let failureCount = 0;
 
-for (const task of tasks) {
+for (const task of selectedTasks) {
   const filePath = path.join(outDir, task.name);
   console.log(`Processing ${task.name} (${task.width}x${task.height}) on ${task.url}...`);
 
@@ -1124,6 +1151,17 @@ for (const task of tasks) {
         })()`
       });
       await new Promise((r) => setTimeout(r, 350));
+    } else if (task.action === 'open-appsec-explanation') {
+      console.log('  -> Opening AppSec score explanation...');
+      await sendCdp('Runtime.evaluate', {
+        expression: `(function() {
+          const details = [...document.querySelectorAll('details.score-explanation')]
+            .find((node) => node.textContent.includes('Official SourceCraft AppSec'));
+          if (details) details.open = true;
+          return !!details;
+        })()`
+      });
+      await new Promise((r) => setTimeout(r, 350));
     }
 
     // 4. Capture screenshot
@@ -1153,5 +1191,5 @@ if (failureCount > 0) {
   process.exit(1);
 }
 
-console.log(`\nAll ${tasks.length} browser acceptance screenshots completed and verified successfully.`);
+console.log(`\nAll ${selectedTasks.length} browser acceptance screenshots completed and verified successfully.`);
 process.exit(0);

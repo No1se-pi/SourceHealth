@@ -146,6 +146,12 @@ class ServerFoundationTests(unittest.TestCase):
             self.assertEqual(client.get("/api/v1/me").status_code, 401)
             self.assertEqual(client.get("/api/v1/auth/yandex/login").status_code, 503)
 
+    def test_openapi_exposes_backend_owned_score_preview(self):
+        schemas = create_app(Settings(_env_file=None), sessions=Mock(), redis=Mock()).openapi()["components"]["schemas"]
+        self.assertIn("ScorePreviewDTO", schemas)
+        for name in ("AnalysisDetails", "RepositorySummary", "RepositoryDetails"):
+            self.assertIn("score_preview", schemas[name]["properties"])
+
     def test_database_exception_does_not_leak_credentials(self):
         from sqlalchemy.exc import OperationalError
 

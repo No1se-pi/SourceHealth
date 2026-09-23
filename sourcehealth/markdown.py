@@ -3,7 +3,7 @@
 import html
 import re
 
-from sourcehealth.scoring.coverage import score_coverage
+from sourcehealth.scoring.coverage import score_coverage, score_preview
 
 
 def _text(value) -> str:
@@ -24,7 +24,18 @@ def render_markdown(report) -> str:
     lines = [f"# SourceHealth — {_text(title)}", "", f"Репозиторий: {_text(repository['canonical_url'])}",
              f"Анализ: {_text(report['completed_at'])}",
              f"Методика: {_text(report.get('scoring_policy_version', 'unconfigured-v1'))}", "",
-             f"Repo Health Score: {score if score is not None else 'NO_DATA — оценка не рассчитана'}", "",
+             f"Repo Health Score: {score if score is not None else 'NO_DATA — итоговая оценка пока не рассчитана'}", ""]
+    preview = score_preview(report.get("scoring_policy_version"), report.get("category_scores", {}))
+    if score is None and preview:
+        if preview["numeric"]:
+            lines += [f"Source Soul: ≈{preview['score']} / 100",
+                      f"Предварительная оценка по {preview['nominal_weight_percent']}% номинального веса, "
+                      f"{preview['scored_categories']} из 6 категорий."]
+        else:
+            lines += ["Source Soul: формируется",
+                      f"Охват: {preview['nominal_weight_percent']}%, категорий: {preview['scored_categories']}."]
+        lines += ["Source Soul не является официальным Health Score и не участвует в рейтинге.", ""]
+    lines += [
              "## Категории", "", "| Категория | Score | Доступность | Объяснение |", "|---|---|---|---|"]
     for name, category in sorted(report.get("category_scores", {}).items()):
         value = category.get("score")
@@ -46,6 +57,22 @@ def render_markdown(report) -> str:
         lines.append(f"- {_text(name)}: {_text(check['availability'])}; находок: {len(check.get('findings', []))}.")
         for finding in check.get("findings", []):
             lines.append(f"  - {_text(finding.get('rule_id', 'finding'))}: {_text(finding.get('path', ''))}")
+    appsec = next((check for check in report.get("checks", {}).values()
+                   if check.get("source") == "sourcecraft_appsec"
+                   and check.get("availability") == "available"
+                   and check.get("metrics", {}).get("complete") is True), None)
+    counts = appsec.get("metrics", {}).get("open_by_severity") if appsec else None
+    if isinstance(counts, dict) and all(type(counts.get(k)) is int for k in ("critical", "high", "medium", "low")):
+        weights = {"critical": 40, "high": 20, "medium": 5, "low": 1}
+        penalty = sum(counts[name] * weights[name] for name in weights)
+        security_score = report.get("category_scores", {}).get("security", {}).get("score")
+        lines += ["", "### Official SourceCraft AppSec", "", "| Severity | Open | Penalty |",
+                  "|---|---:|---:|"]
+        for name in weights:
+            lines.append(f"| {name.title()} | {counts[name]} | {-counts[name] * weights[name]} |")
+        lines += ["", f"Итого открыто: {sum(counts.values())}.", "",
+                  f"Security: max(0, 100 - {penalty}) = "
+                  f'{security_score if security_score is not None else "NO_DATA"}.']
     lines += ["", "## Рекомендации", ""]
     recommendations = sorted(report.get("recommendations", []), key=lambda r: (r["priority"], r["id"]))
     for item in recommendations:

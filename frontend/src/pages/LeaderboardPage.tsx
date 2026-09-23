@@ -8,6 +8,7 @@ import { LoadingState } from '../components/common/LoadingState';
 import { EmptyState } from '../components/common/EmptyState';
 import { ErrorState } from '../components/common/ErrorState';
 import { RepositoryImport } from '../components/common/RepositoryImport';
+import { SourceSoul } from '../components/common/SourceSoul';
 
 const POPULAR_LANGUAGES = [
   'TypeScript',
@@ -232,6 +233,7 @@ export const LeaderboardPage: React.FC = () => {
                     <th scope="col">Язык</th>
                     <th scope="col">Лайки</th>
                     <th scope="col">Активность</th>
+                    <th scope="col">Source Soul</th>
                     <th scope="col" style={{ textAlign: 'right' }}>
                       Health Score
                     </th>
@@ -251,7 +253,7 @@ export const LeaderboardPage: React.FC = () => {
                             fontSize: '0.88rem',
                           }}
                         >
-                          {position}
+                          {repo.health_score !== null && repo.health_score !== undefined ? position : '—'}
                         </td>
                         <td>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
@@ -303,6 +305,7 @@ export const LeaderboardPage: React.FC = () => {
                         <td style={{ color: 'var(--sh-text-secondary)', fontSize: '0.85rem' }}>
                           {formatLastActivity(repo.last_activity_at)}
                         </td>
+                        <td>{repo.health_score == null ? <SourceSoul preview={repo.score_preview} compact /> : '—'}</td>
                         <td style={{ textAlign: 'right' }}>
                           <ScoreDisplay score={repo.health_score} size="md" />
                         </td>
@@ -347,7 +350,7 @@ export const LeaderboardPage: React.FC = () => {
                             fontSize: '0.85rem',
                           }}
                         >
-                          #{position}
+                          {repo.health_score !== null && repo.health_score !== undefined ? `#${position}` : '—'}
                         </span>
                         <Link
                           to={`/repositories/${repo.id}`}
@@ -362,6 +365,7 @@ export const LeaderboardPage: React.FC = () => {
                       </div>
                       <ScoreDisplay score={repo.health_score} size="sm" />
                     </div>
+                    {repo.health_score == null && <SourceSoul preview={repo.score_preview} compact />}
 
                     <div
                       style={{

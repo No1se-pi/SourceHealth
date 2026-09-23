@@ -1818,6 +1818,16 @@
                 "type": "null"
               }
             ]
+          },
+          "score_preview": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScorePreviewDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -2466,6 +2476,16 @@
             ],
             "title": "Latest Analysis Id"
           },
+          "score_preview": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScorePreviewDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "sourcecraft_id": {
             "anyOf": [
               {
@@ -2649,6 +2669,16 @@
               }
             ],
             "title": "Latest Analysis Id"
+          },
+          "score_preview": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScorePreviewDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -2716,6 +2746,46 @@
           "partial_categories"
         ],
         "title": "ScoreCoverageDTO"
+      },
+      "ScorePreviewDTO": {
+        "properties": {
+          "score": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "nominal_weight_percent": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Nominal Weight Percent"
+          },
+          "scored_categories": {
+            "type": "integer",
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Scored Categories"
+          },
+          "numeric": {
+            "type": "boolean",
+            "title": "Numeric"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nominal_weight_percent",
+          "scored_categories",
+          "numeric"
+        ],
+        "title": "ScorePreviewDTO"
       },
       "SourceCraftConnect": {
         "properties": {
