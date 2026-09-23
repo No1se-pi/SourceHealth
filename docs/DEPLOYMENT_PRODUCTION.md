@@ -2,6 +2,8 @@
 
 Текущий production стенд работает на `https://sourcehealth.tech`. В `deploy/` находится воспроизводимый bundle для обновления: Caddy обслуживает собранный frontend и проксирует только `/api/*` на backend; PostgreSQL и Redis публикуются только на loopback; generic worker не получает Docker socket. `worker-code` запускается отдельным host-level systemd service и только он создаёт изолированные code-analysis containers.
 
+Последняя безопасная проверка health endpoint: 2026-09-23, `GET https://sourcehealth.tech/api/v1/health` → `{"status":"ok","service":"sourcehealth"}`.
+
 ## Применение владельцем
 
 1. Скопировать `.env.production.example` в `.env.production`, заполнить значения на сервере и ограничить права файла. `SESSION_SECRET` и `SOURCECRAFT_CREDENTIAL_KEY` должны быть независимыми случайными значениями.
