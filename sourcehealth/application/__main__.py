@@ -93,16 +93,14 @@ def main(argv=None):
             dispatch_pending(sessions, redis, settings.analysis_timeout)
             print(f"imported={imported} discovery_availability={found.availability.value}")
         elif args.command in {"catalog-sync", "maintain"}:
-            from sourcehealth.catalog.sync import CatalogSync, queue_backlog
+            from sourcehealth.catalog.sync import CatalogSync
 
             result = CatalogSync(sessions, settings).run()
-            if args.command == "maintain" and queue_backlog(sessions) < settings.catalog_sync_queue_limit:
+            if args.command == "maintain":
                 from sourcehealth.auth.service import AuthService
                 from sourcehealth.auth.sourcecraft import SourceCraftConnection
 
-                from .services import lease_scheduled_credentials
-                scheduled = service.enqueue_due()
-                lease_scheduled_credentials(sessions, SourceCraftConnection(AuthService(settings, redis, sessions)), scheduled)
+                scheduled = service.enqueue_due(SourceCraftConnection(AuthService(settings, redis, sessions)))
                 result["scheduled"] = len(scheduled)
                 result["dispatched"] = dispatch_pending(sessions, redis, settings.analysis_timeout)
             print(json.dumps(result))
@@ -115,9 +113,7 @@ def main(argv=None):
                 from sourcehealth.auth.service import AuthService
                 from sourcehealth.auth.sourcecraft import SourceCraftConnection
 
-                from .services import lease_scheduled_credentials
-                scheduled = service.enqueue_due()
-                lease_scheduled_credentials(sessions, SourceCraftConnection(AuthService(settings, redis, sessions)), scheduled)
+                service.enqueue_due(SourceCraftConnection(AuthService(settings, redis, sessions)))
             print(f"enqueued={dispatch_pending(sessions, redis, settings.analysis_timeout)}")
     finally:
         redis.close()

@@ -124,9 +124,8 @@ class SourceCraftConnection:
         run_key = self._analysis_key(analysis_id)
         nonce = secrets.token_bytes(12)
         encrypted = nonce + self._cipher().encrypt(nonce, pat.encode(), run_key.encode())
-        self.redis.set(run_key, encrypted, ex=min(ttl, self.settings.sourcecraft_connection_ttl,
-                                                  self.settings.analysis_timeout + 300))
-        return True
+        return bool(self.redis.set(run_key, encrypted, ex=min(
+            ttl, self.settings.sourcecraft_connection_ttl, self.settings.analysis_timeout + 300), nx=True))
 
     def lease_user_for_analysis(self, user_id, analysis_id):
         """Create a short run lease from an explicitly retained user credential."""
@@ -138,8 +137,8 @@ class SourceCraftConnection:
         run_key = self._analysis_key(analysis_id)
         nonce = secrets.token_bytes(12)
         encrypted = nonce + self._cipher().encrypt(nonce, pat.encode(), run_key.encode())
-        self.redis.set(run_key, encrypted, ex=min(ttl, self.settings.analysis_timeout + 300))
-        return True
+        return bool(self.redis.set(
+            run_key, encrypted, ex=min(ttl, self.settings.analysis_timeout + 300), nx=True))
 
     def analysis_credential(self, analysis_id):
         return self._decrypt(self._analysis_key(analysis_id))
