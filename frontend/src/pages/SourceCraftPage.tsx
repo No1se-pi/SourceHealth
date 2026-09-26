@@ -62,15 +62,16 @@ export const SourceCraftPage: React.FC = () => {
     event.preventDefault();
     const form = event.currentTarget;
     const field = form.elements.namedItem('pat') as HTMLInputElement;
-    const patValue = field.value;
-    const pending = api.connectSourcecraft(patValue, retention);
-    field.value = ''; // Credential never enters React state or browser storage.
-    setPatLength(0);
+    const patValue = field?.value || '';
     setBusy(true);
     setMessage('');
     setIsError(false);
     try {
-      const conn = await pending;
+      const conn = await api.connectSourcecraft(patValue, retention);
+      if (field) {
+        field.value = '';
+      }
+      setPatLength(0);
       setConnected(conn.connected);
       if (typeof conn.expires_in === 'number') {
         setExpiresIn(conn.expires_in);
@@ -324,7 +325,7 @@ export const SourceCraftPage: React.FC = () => {
               <Badge variant="success">● SourceCraft подключён</Badge>
               <span style={{ fontSize: '0.85rem', color: 'var(--sh-text-muted)' }}>
                 {expiresIn !== null && expiresIn > 0
-                  ? `Осталось: ${formatTtl(expiresIn)}`
+                  ? `Токен действует ещё: ${formatTtl(expiresIn)}`
                   : 'Токен активен в рамках текущей сессии'}
               </span>
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>

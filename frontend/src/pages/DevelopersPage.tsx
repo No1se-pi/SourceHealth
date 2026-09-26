@@ -16,15 +16,14 @@ export const DevelopersPage: React.FC = () => {
 
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://sourcehealth.tech';
   const badgeUrl = isValidRepo ? `${origin}/api/v1/badges/${parts[0]}/${parts[1]}.svg` : '';
-  const repoPageUrl = isValidRepo ? `${origin}/repositories/${parts[0]}/${parts[1]}` : '';
 
   const badgeSnippet = useMemo(() => {
     if (!isValidRepo) return '';
     if (badgeFormat === 'markdown') {
-      return `[![SourceHealth](${badgeUrl})](${repoPageUrl})`;
+      return `![SourceHealth](${badgeUrl})`;
     }
-    return `<a href="${repoPageUrl}"><img src="${badgeUrl}" alt="SourceHealth" /></a>`;
-  }, [isValidRepo, badgeFormat, badgeUrl, repoPageUrl]);
+    return `<img src="${badgeUrl}" alt="SourceHealth" />`;
+  }, [isValidRepo, badgeFormat, badgeUrl]);
 
   const endpoints = [
     {
@@ -65,14 +64,17 @@ export const DevelopersPage: React.FC = () => {
   "id": "c1f7a09d-83b6-4c28-98e6-d98c25781a50",
   "organization_slug": "sourcecraft",
   "repository_slug": "platform",
+  "canonical_url": "https://sourcecraft.dev/sourcecraft/platform",
+  "visibility": "public",
   "health_score": 82.4,
-  "data_coverage": {
-    "documentation": "available",
-    "testing": "available",
-    "security": "available"
-  },
+  "language": "Python",
+  "likes": 42,
+  "last_activity_at": "2026-09-20T14:30:00Z",
+  "latest_analysis_id": "b0000001-0000-0000-0000-000000000001",
+  "score_preview": null,
+  "sourcecraft_id": "sc-987654",
   "default_branch": "main",
-  "language": "Python"
+  "head_sha": "a1b2c3d4e5f67890abcdef1234567890abcdef12"
 }`;
 
   return (

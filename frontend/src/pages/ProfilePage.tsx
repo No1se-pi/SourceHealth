@@ -18,7 +18,7 @@ const REFRESH_OPTIONS = [
   { value: '6h', label: 'Каждые 6 часов' },
   { value: '24h', label: 'Раз в сутки' },
   { value: '7d', label: 'Раз в неделю' },
-  { value: 'off', label: 'Не запрашивать чаще' },
+  { value: 'off', label: 'Не обновлять автоматически' },
 ];
 
 const ACHIEVEMENT_ICONS: Record<string, string> = {
@@ -195,7 +195,7 @@ export const ProfilePage: React.FC = () => {
             {profile.sourcecraft.connected ? (
               <>
                 <div style={{ fontSize: '0.88rem' }}>
-                  Осталось действия токена: <strong>{formatTtl(profile.sourcecraft.expires_in)}</strong>
+                  Токен действует ещё: <strong>{formatTtl(profile.sourcecraft.expires_in)}</strong>
                 </div>
 
                 {profile.sourcecraft.expires_in < 1800 && (
