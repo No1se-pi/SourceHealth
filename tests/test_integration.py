@@ -106,6 +106,7 @@ class PersistenceTests(unittest.TestCase):
             self.assertNotIn(credential.encode(), self.redis.get(credential_key))
             analysis_id = uuid4()
             self.assertTrue(service.lease_for_analysis(token, analysis_id))
+            self.assertFalse(service.lease_for_analysis(token, analysis_id))
             run_key = service._analysis_key(analysis_id)
             ciphertext = self.redis.get(run_key)
             self.assertNotIn(credential.encode(), ciphertext)
@@ -776,6 +777,11 @@ class PersistenceTests(unittest.TestCase):
                     with self.assertRaises(ServiceError) as error:
                         self.service.import_public_repository(self.ref.canonical_url, client=source)
                     self.assertEqual(error.exception.code, "public_repository_unverified")
+                with self.sessions() as db:
+                    expected = "unknown" if status in {200, 404} else "public"
+                    self.assertEqual(db.get(Repository, self.repository_id).visibility, expected)
+                with self.sessions.begin() as db:
+                    db.get(Repository, self.repository_id).visibility = "public"
         with self.sessions() as db:
             self.assertIsNone(db.get(Repository, self.repository_id).sourcecraft_id)
 
@@ -808,6 +814,7 @@ class PersistenceTests(unittest.TestCase):
             with self.sessions.begin() as db:
                 db.get(Repository, self.repository_id).visibility = "private"
             self.assertEqual(client.get(f"/api/v1/analyses/{run.id}").status_code, 404)
+            self.assertEqual(client.get(f"/api/v1/badges/{self.ref.organization_slug}/{self.ref.repository_slug}.svg").status_code, 404)
             self.assertEqual(client.get(f"/api/v1/analyses/{run.id}/report.md").status_code, 404)
 
     def test_oauth_pkce_cookie_state_session_and_logout(self):

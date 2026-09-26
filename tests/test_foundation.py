@@ -152,6 +152,14 @@ class ServerFoundationTests(unittest.TestCase):
         for name in ("AnalysisDetails", "RepositorySummary", "RepositoryDetails"):
             self.assertIn("score_preview", schemas[name]["properties"])
 
+    def test_openapi_is_served_under_api_prefix(self):
+        with TestClient(create_app(Settings(_env_file=None), sessions=Mock(), redis=Mock())) as client:
+            response = client.get("/api/openapi.json")
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(response.headers["content-type"].startswith("application/json"))
+            self.assertEqual(response.json()["info"]["title"], "SourceHealth API")
+            self.assertEqual(client.get("/openapi.json").status_code, 404)
+
     def test_database_exception_does_not_leak_credentials(self):
         from sqlalchemy.exc import OperationalError
 

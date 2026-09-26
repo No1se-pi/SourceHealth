@@ -56,6 +56,72 @@ class CISemanticsTests(unittest.TestCase):
 
 
 class CatalogValidationTests(unittest.TestCase):
+    def test_concurrent_invocation_skips_before_network(self):
+        class Guard:
+            def __enter__(self): return self
+            def __exit__(self, *args): return None
+            def scalar(self, statement, params): return False
+            def commit(self): return None
+
+        class Sessions:
+            def __call__(self): return Guard()
+
+        result = CatalogSync(Sessions(), SimpleNamespace()).run()
+        self.assertEqual(result, {"skipped": True, "reason": "catalog_sync_already_running"})
+
+    def test_recent_completed_cycle_skips_without_network(self):
+        state = SimpleNamespace(page_token=None, cycle_started_at=None,
+                                last_completed_at=datetime.now(UTC), updated_at=datetime.now(UTC))
+
+        class DB:
+            def get(self, model, key, **kwargs): return state
+
+        class Sessions:
+            @contextmanager
+            def begin(self): yield DB()
+
+        settings = SimpleNamespace(catalog_cycle_interval_seconds=3600)
+        result = CatalogSync(Sessions(), settings,
+                             client_factory=lambda **kwargs: self.fail("network must not be called")).run()
+        self.assertEqual(result, {"skipped": True, "reason": "catalog_cycle_not_due"})
+
+    def test_upsert_preserves_optional_metadata_and_identity_on_rename(self):
+        repository_id = uuid4()
+        row = SimpleNamespace(id=repository_id, sourcecraft_id="repo-1", organization_slug="team",
+                              repository_slug="old", canonical_url="https://sourcecraft.dev/team/old",
+                              visibility="public", default_branch="main", language="Python", likes=42)
+
+        class DB:
+            def __init__(self): self.calls = 0
+            def scalar(self, statement):
+                self.calls += 1
+                return row
+            def add(self, value): self.fail("existing row must not be replaced")
+
+        CatalogSync._upsert(DB(), {"sourcecraft_id": "repo-1", "organization_slug": "team",
+                                   "repository_slug": "renamed",
+                                   "canonical_url": "https://sourcecraft.dev/team/renamed",
+                                   "visibility": "public", "next_analysis_at": datetime.now(UTC)})
+        self.assertEqual(row.id, repository_id)
+        self.assertEqual(row.repository_slug, "renamed")
+        self.assertEqual(row.likes, 42)
+        self.assertEqual(row.language, "Python")
+        self.assertEqual(row.default_branch, "main")
+
+    def test_upsert_rejects_identity_collision(self):
+        first = SimpleNamespace(id=uuid4(), sourcecraft_id="repo-1")
+        second = SimpleNamespace(id=uuid4(), sourcecraft_id="repo-2")
+
+        class DB:
+            def __init__(self): self.values = iter((first, second))
+            def scalar(self, statement): return next(self.values)
+
+        with self.assertRaisesRegex(SourceCraftError, "repository_identity_conflict"):
+            CatalogSync._upsert(DB(), {"sourcecraft_id": "repo-1", "organization_slug": "team",
+                                       "repository_slug": "taken",
+                                       "canonical_url": "https://sourcecraft.dev/team/taken",
+                                       "visibility": "public", "next_analysis_at": datetime.now(UTC)})
+
     def test_catalog_allowlist_and_public_only(self):
         row = {"id": "repo-1", "slug": "project", "visibility": "public",
                "organization": {"slug": "team"}, "default_branch": "main",
@@ -75,6 +141,12 @@ class CatalogValidationTests(unittest.TestCase):
                 return state
 
             def execute(self, statement):
+                return None
+
+            def scalar(self, statement):
+                return None
+
+            def add(self, row):
                 return None
 
         class Sessions:
@@ -151,7 +223,18 @@ class AchievementTests(unittest.TestCase):
     def make_run(self, score=None, categories=None, completed=None):
         return SimpleNamespace(id=uuid4(), repository_id=uuid4(), status="completed",
                                queued_at=completed, completed_at=completed, health_score=score,
-                               scoring_policy_version="mvp-score-v1.2", category_scores=categories or {})
+                               scoring_policy_version="mvp-score-v1.2", category_scores=categories or {},
+                               results={"checks": {"sourcecraft_appsec": {
+                                   "source": "sourcecraft_appsec", "availability": "available",
+                                   "metrics": {"complete": True}}}})
+
+    def test_clean_scan_requires_official_appsec_provenance(self):
+        tracked = datetime(2026, 1, 2, tzinfo=UTC)
+        relation = SimpleNamespace(created_at=tracked)
+        run = self.make_run(100, {"security": {"score": 100, "availability": "available"}}, tracked)
+        run.results = {}
+        unlocked = {item["id"]: item["unlocked"] for item in derive([(run, relation)])}
+        self.assertFalse(unlocked["clean_scan"])
 
     def test_boundaries_security_and_old_history(self):
         tracked = datetime(2026, 1, 2, tzinfo=UTC)
