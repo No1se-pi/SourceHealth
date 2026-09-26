@@ -1,0 +1,22 @@
+[Unit]
+Description=SourceHealth trusted code-analysis worker
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/sourcehealth
+EnvironmentFile=/opt/sourcehealth/.env.production
+Environment=REDIS_URL=redis://127.0.0.1:6379/0
+Environment=ANALYSIS_PROFILE=mvp-v1
+Environment=CODE_RUNTIME_ENABLED=true
+Environment=CODE_RUNTIME_IMAGE=sourcehealth-sast
+Environment=CODE_RUNTIME_TIMEOUT=600
+Environment=ANALYSIS_TIMEOUT=1800
+ExecStart=/opt/sourcehealth/.venv/bin/python -m sourcehealth.application worker-code
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -63,6 +63,14 @@ class SnapshotTests(unittest.TestCase):
         self.assertTrue(docs.metrics["readme"])
         self.assertFalse(docs.metrics["run_instructions"])
 
+    def test_russian_quickstart_heading_detected(self):
+        self.files({"README.md": "# Проект\nОписание сервиса.\n## Быстрый старт\nСклонируйте репозиторий и запустите локально.\n"})
+        docs, _ = self.analyze()
+        self.assertTrue(docs.metrics["readme"])
+        self.assertTrue(docs.metrics["run_instructions"])
+        ev = next(e for e in docs.evidence if e.id == "documentation:run_instructions")
+        self.assertEqual(ev.location, "README.md")
+
     def test_debt_counts_age_and_size_without_executing_repository(self):
         self.files({"main.py": "# TODO refactor\n# FIXME bug\n" + "x = 1\n" * 1001,
                     "setup.py": "raise RuntimeError('must never execute')\n"})

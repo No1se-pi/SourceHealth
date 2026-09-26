@@ -7,6 +7,7 @@ import { AnalysisPage } from '../pages/AnalysisPage';
 import { AuthCallbackPage } from '../pages/AuthCallbackPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { SourceCraftPage } from '../pages/SourceCraftPage';
+import { DemoPage } from '../pages/DemoPage';
 
 export const AppRouter: React.FC = () => {
   return (
@@ -18,6 +19,7 @@ export const AppRouter: React.FC = () => {
           <Route path="/analyses/:id" element={<AnalysisPage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/sourcecraft" element={<SourceCraftPage />} />
+          <Route path="/demo" element={<DemoPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
