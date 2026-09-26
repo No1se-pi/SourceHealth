@@ -126,7 +126,7 @@ class SnapshotCollector:
                         docs["readme_bytes"] = len(content)
                         docs["readme_headings"] = len(re.findall(r"(?m)^#{1,6}\s+\S", text))
                     for key, pattern in {
-                        "run_instructions": r"(?im)(?:^#{1,6}\s+.*(?:quick\s*start|getting started|запуск)|\b(?:npm run dev|npm start|docker compose up|uvicorn|python -m)\b)",
+                        "run_instructions": r"(?im)(?:^#{1,6}\s+.*(?:quick\s*start|getting started|быстрый\s*старт|запуск)|\b(?:npm run dev|npm start|docker compose up|uvicorn|python -m)\b)",
                         "build_instructions": r"(?im)(?:^#{1,6}\s+.*(?:build|сборк)|\b(?:npm run build|docker build|cargo build|go build)\b)",
                         "test_instructions": r"(?im)(?:^#{1,6}\s+.*(?:test|тест)|\b(?:pytest|unittest|npm test|go test|cargo test)\b)",
                     }.items():

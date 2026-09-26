@@ -1,0 +1,10 @@
+[Unit]
+Description=Run SourceHealth scheduler periodically
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=sourcehealth-scheduler.service
+
+[Install]
+WantedBy=timers.target

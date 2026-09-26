@@ -1,0 +1,17 @@
+sourcehealth.tech {
+    encode gzip
+
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    handle {
+        root * /srv/frontend
+        try_files {path} /index.html
+        file_server
+    }
+}
+
+http://sourcehealth.tech {
+    redir https://sourcehealth.tech{uri} permanent
+}
