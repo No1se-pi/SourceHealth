@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     code_runtime_image: str = "sourcehealth-sast"
     code_runtime_timeout: int = Field(default=180, ge=1, le=1200)
     refresh_interval: int = Field(default=86400, ge=300)
+    catalog_sync_enabled: bool = False
+    catalog_sync_page_size: int = Field(default=100, ge=1, le=100)
+    catalog_sync_max_pages: int = Field(default=5, ge=1, le=100)
+    catalog_sync_queue_limit: int = Field(default=500, ge=1, le=100000)
+    scheduler_batch_size: int = Field(default=100, ge=1, le=1000)
+    scheduler_failed_retry_seconds: int = Field(default=3600, ge=1800, le=86400)
 
     @model_validator(mode="after")
     def runtime_budget(self):

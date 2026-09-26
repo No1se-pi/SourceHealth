@@ -6,9 +6,10 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
+from sourcehealth.catalog.scheduler import effective_interval
 from sourcehealth.core.domain import ACTIVE_STATUSES, RepositoryRef, validate_transition
 from sourcehealth.scoring.mvp import MVPPolicy
-from sourcehealth.storage.models import AnalysisRun, Repository
+from sourcehealth.storage.models import AnalysisRun, Repository, UserRepository
 
 from .cache import fingerprint
 
@@ -130,6 +131,9 @@ class AnalysisService:
             if target in ("completed", "partial", "failed"):
                 run.completed_at = now
                 run.error_code = error_code
+                if target == "failed":
+                    repo = db.get(Repository, run.repository_id, with_for_update=True)
+                    repo.next_analysis_at = now + timedelta(seconds=self.settings.scheduler_failed_retry_seconds)
 
     def finish(self, analysis_id: UUID, report) -> None:
         payload = report.to_public_dict()
@@ -156,19 +160,42 @@ class AnalysisService:
                 git = report.checks.get("git_activity")
                 if git and git.metrics.get("last_commit_date"):
                     repo.last_activity_at = datetime.fromisoformat(git.metrics["last_commit_date"])
-            repo.next_analysis_at = run.completed_at + timedelta(seconds=self.settings.refresh_interval)
+            preferences = list(db.scalars(select(UserRepository.refresh_preference).where(
+                UserRepository.repository_id == repo.id, UserRepository.refresh_preference != "off")))
+            repo.next_analysis_at = run.completed_at + effective_interval(repo.last_activity_at, preferences,
+                                                                           now=run.completed_at)
 
     def enqueue_due(self) -> list[UUID]:
         """Scheduler планирует задания. Он никогда не запускает анализ сам."""
         with self.sessions() as db:
             ids = list(db.scalars(select(Repository.id).where(Repository.visibility == "public",
                                   Repository.next_analysis_at <= datetime.now(UTC)).order_by(
-                                      Repository.next_analysis_at, Repository.id).limit(100)))
+                                      Repository.next_analysis_at, Repository.id).limit(
+                                          self.settings.scheduler_batch_size)))
         runs = []
         for repository_id in ids:
             run = self.request_analysis(repository_id, trigger="scheduled")
             runs.append(run.id)
             with self.sessions.begin() as db:
                 repo = db.get(Repository, repository_id, with_for_update=True)
-                repo.next_analysis_at = datetime.now(UTC) + timedelta(seconds=self.settings.refresh_interval)
+                # Reservation prevents repeated enqueue attempts while the durable run is active.
+                repo.next_analysis_at = datetime.now(UTC) + timedelta(
+                    seconds=max(300, self.settings.scheduler_failed_retry_seconds))
         return runs
+
+
+def lease_scheduled_credentials(sessions, connection, analysis_ids):
+    """Pick one deterministic consenting tracker; never place identity in RQ."""
+    for analysis_id in analysis_ids:
+        with sessions() as db:
+            run = db.get(AnalysisRun, analysis_id)
+            trackers = list(db.scalars(select(UserRepository.user_id).where(
+                UserRepository.repository_id == run.repository_id,
+                UserRepository.use_pat_for_scheduled_analysis.is_(True),
+            ).order_by(UserRepository.created_at, UserRepository.user_id).limit(100)))
+        for user_id in trackers:
+            try:
+                if connection.lease_user_for_analysis(user_id, analysis_id):
+                    break
+            except ServiceError:
+                break

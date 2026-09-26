@@ -27,6 +27,7 @@ def main(argv=None):
     configure_logging()
     parser = SafeParser()
     parser.add_argument("command", choices=("worker", "worker-code", "enqueue-due", "dispatch", "register", "discover",
+                                          "catalog-sync", "maintain",
                                           "probe-sourcecraft", "accept-public", "doctor"))
     parser.add_argument("url", nargs="?")
     parser.add_argument("--organization", help="Ограничить discovery одной организацией")
@@ -91,10 +92,32 @@ def main(argv=None):
                         continue
             dispatch_pending(sessions, redis, settings.analysis_timeout)
             print(f"imported={imported} discovery_availability={found.availability.value}")
+        elif args.command in {"catalog-sync", "maintain"}:
+            from sourcehealth.catalog.sync import CatalogSync, queue_backlog
+
+            result = CatalogSync(sessions, settings).run()
+            if args.command == "maintain" and queue_backlog(sessions) < settings.catalog_sync_queue_limit:
+                from sourcehealth.auth.service import AuthService
+                from sourcehealth.auth.sourcecraft import SourceCraftConnection
+
+                from .services import lease_scheduled_credentials
+                scheduled = service.enqueue_due()
+                lease_scheduled_credentials(sessions, SourceCraftConnection(AuthService(settings, redis, sessions)), scheduled)
+                result["scheduled"] = len(scheduled)
+                result["dispatched"] = dispatch_pending(sessions, redis, settings.analysis_timeout)
+            print(json.dumps(result))
         else:
             recover_abandoned(engine, sessions, settings)
             if args.command == "enqueue-due":
-                service.enqueue_due()
+                if settings.catalog_sync_enabled:
+                    from sourcehealth.catalog.sync import CatalogSync
+                    CatalogSync(sessions, settings).run()
+                from sourcehealth.auth.service import AuthService
+                from sourcehealth.auth.sourcecraft import SourceCraftConnection
+
+                from .services import lease_scheduled_credentials
+                scheduled = service.enqueue_due()
+                lease_scheduled_credentials(sessions, SourceCraftConnection(AuthService(settings, redis, sessions)), scheduled)
             print(f"enqueued={dispatch_pending(sessions, redis, settings.analysis_timeout)}")
     finally:
         redis.close()
