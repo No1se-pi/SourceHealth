@@ -39,7 +39,8 @@ def derive(rows):
             "documentation_enjoyer": _score(categories, "documentation") >= 90,
             "ci_wizard": _score(categories, "cicd") == 100,
             "clean_scan": (_score(categories, "security") == 100
-                           and categories.get("security", {}).get("availability") == "available"),
+                           and categories.get("security", {}).get("availability") == "available"
+                           and _official_security(run)),
             "healthy_project": run.health_score is not None and run.health_score >= 80,
             "recovery": (previous is not None and previous.health_score is not None and run.health_score is not None
                          and run.health_score - previous.health_score >= 20),
@@ -68,3 +69,12 @@ def _preview_numeric(run):
     from sourcehealth.scoring.coverage import score_preview
     preview = score_preview(run.scoring_policy_version, run.category_scores)
     return bool(preview and preview.get("numeric"))
+
+
+def _official_security(run):
+    results = run.results if isinstance(run.results, dict) else {}
+    check = results.get("checks", {}).get("sourcecraft_appsec", {})
+    metrics = check.get("metrics", {}) if isinstance(check, dict) else {}
+    return (check.get("source") == "sourcecraft_appsec"
+            and check.get("availability") == "available"
+            and metrics.get("complete") is True)

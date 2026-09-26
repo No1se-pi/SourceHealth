@@ -23,7 +23,7 @@ export const DevelopersPage: React.FC = () => {
             <li>GET /api/v1/analyses/&#123;id&#125;</li>
             <li>GET /api/v1/analyses/&#123;id&#125;/report.md</li>
           </ul>
-          <a href="/openapi.json">OpenAPI JSON</a>
+          <a href="/api/openapi.json">OpenAPI JSON</a>
         </Card>
         <Card title="README badge">
           <label className="growth-field">Репозиторий organization/repository

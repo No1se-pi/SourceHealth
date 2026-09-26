@@ -56,7 +56,9 @@ class RepositoryCollector:
             facts["likes"] = repository_likes(raw.get("rating"))
             return CollectedFacts("sourcecraft", DataAvailability.AVAILABLE, facts)
         except SourceCraftError as error:
-            return CollectedFacts("sourcecraft", DataAvailability.SOURCE_UNAVAILABLE, error=error.code)
+            availability = (DataAvailability.NO_DATA if error.code in {"not_found", "access_denied"}
+                            else DataAvailability.SOURCE_UNAVAILABLE)
+            return CollectedFacts("sourcecraft", availability, error=error.code)
 
 
 def repository_likes(rating: Any) -> int | None:

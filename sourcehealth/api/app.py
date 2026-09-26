@@ -43,6 +43,7 @@ def create_app(settings: Settings | None = None, *, sessions=None, redis=None) -
             redis.close()
 
     app = FastAPI(title="SourceHealth API", version="1.0.0", lifespan=lifespan,
+                  openapi_url="/api/openapi.json", docs_url="/api/docs",
                   responses={code: {"model": ErrorResponse} for code in (400, 401, 403, 404, 409, 422, 503)})
     app.state.auth = auth
     app.state.settings = settings

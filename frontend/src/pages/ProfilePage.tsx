@@ -12,6 +12,7 @@ export const ProfilePage: React.FC = () => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [available, setAvailable] = useState<ConnectedRepositories | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const load = () => api.profile().then(setProfile).catch((reason) => {
     setError(reason);
   });
@@ -19,6 +20,21 @@ export const ProfilePage: React.FC = () => {
   useEffect(() => {
     if (profile?.sourcecraft.connected) void api.mySourcecraftRepositories().then(setAvailable).catch(() => setAvailable(null));
   }, [profile?.sourcecraft.connected]);
+  const loadMore = async () => {
+    if (!available?.next_page_token) return;
+    setLoadingMore(true);
+    try {
+      const page = await api.mySourcecraftRepositories(available.next_page_token);
+      const seen = new Set<string>();
+      const items = [...available.items, ...page.items].filter((repo) => {
+        const key = repo.id ?? repo.url;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      setAvailable({ ...page, items });
+    } finally { setLoadingMore(false); }
+  };
   if (error) return <PageContainer><h1>Профиль</h1><ErrorState error={error} /></PageContainer>;
   if (!profile) return <PageContainer><h1>Профиль</h1><LoadingState /></PageContainer>;
   return (
@@ -56,6 +72,9 @@ export const ProfilePage: React.FC = () => {
               const imported = await api.importRepository(repo.url); await api.trackRepository(imported.id); await load();
             }}>Отслеживать</button> : <span>Анализ недоступен в текущей версии</span>}
           </div>)}
+        {available?.next_page_token && <button type="button" disabled={loadingMore} onClick={() => void loadMore()}>
+          {loadingMore ? 'Загрузка…' : 'Показать ещё'}
+        </button>}
       </Card>}
       <h2>Достижения</h2>
       <div className="achievement-grid">{profile.achievements.map((item) => (

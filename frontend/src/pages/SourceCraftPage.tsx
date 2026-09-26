@@ -189,8 +189,8 @@ export const SourceCraftPage: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
           <strong style={{ color: 'var(--sh-text-primary)' }}>Безопасность подключения:</strong>
           <span style={{ color: 'var(--sh-text-secondary)' }}>
-            Токен не сохраняется в браузере. SourceHealth хранит его на сервере в зашифрованном виде
-            только на время текущего подключения.
+            PAT не сохраняется в браузере. На сервере он хранится только в зашифрованном виде до выбранного срока
+            и может использоваться для разрешённого автоанализа.
           </span>
         </div>
       </div>
@@ -283,7 +283,7 @@ export const SourceCraftPage: React.FC = () => {
                 onClick={handleDisconnect}
                 style={{ color: 'var(--sh-health-danger)', borderColor: 'var(--sh-health-danger-border)' }}
               >
-                {busy ? 'Отключение…' : 'Отключить SourceCraft'}
+                {busy ? 'Удаление…' : 'Удалить PAT сейчас'}
               </Button>
             }
           >
