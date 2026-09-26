@@ -11,6 +11,9 @@
 | **Official SourceCraft AppSec** | PASS / LIVE | Реализован клиент `SourceCraftAppSecClient`; парсинг severity tanpa утечек SARIF/кода: `docs/APPSEC_ACCEPTANCE.md` |
 | **Documentation Quick Start (RU)** | PASS | Поддержан заголовок «Быстрый старт» в README без шелл-команд; регрессионный тест в `tests/test_mvp_snapshot.py` |
 | **Production Caddy routing** | PASS | Взаимоисключающие `handle /api/*` (reverse_proxy) и `handle` (SPA `try_files` + static files) в `deploy/Caddyfile` |
+| **Caddy syntax validation** | PASS | Реально выполнено `caddy validate --config deploy/Caddyfile` (exit code 0, `Valid configuration`) |
+| **Caddy behavioral test** | PASS | Реально выполнено: `/api/v1/health` $\to$ 200 backend JSON, `/some/spa/path` $\to$ 200 SPA `index.html`, `/api/not-real` $\to$ 404 backend JSON (не SPA index.html) |
+| **SourceCraft API + CLI (M-15)** | PASS / EVIDENCED INTERPRETATION | Официальный REST API (`https://api.sourcecraft.tech`) + Git endpoint; бинарник `src` для разработчиков не вызывается сервером; собственный `probe-sourcecraft` CLI протестирован |
 | **Systemd Service Environment** | PASS | Устранены плейсхолдерные overrides `DATABASE_URL` в `sourcehealth-scheduler` и `sourcehealth-worker-code` |
 | **Password Safety** | PASS | В `.env.production.example` задокументирована генерация URL-safe паролей без спецсимволов |
 | **Explicit `/demo` fallback** | PASS | Маршрут `/demo`, баннер `DEMO DATASET / OFFLINE DEMO` |
