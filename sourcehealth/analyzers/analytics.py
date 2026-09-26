@@ -73,14 +73,18 @@ class CIAnalyzer:
         terminal = success + failed
         durations = [i["duration_seconds"] for i in terminal if i.get("duration_seconds") is not None]
         configured = True if items else None
-        # Only a complete snapshot + complete empty API history proves no native CI configuration.
+        # Run evidence wins. Otherwise a complete snapshot can independently prove absence.
         config = context.metadata.get("ci_configured")
-        if complete and not items and config is False:
+        # Older replay fixtures predate the explicit completeness field; their
+        # asserted boolean was already produced only by a complete snapshot.
+        config_complete = context.metadata.get("ci_config_complete", config is not None) is True
+        if not items and config is False and config_complete:
             configured, availability = False, A.NOT_CONFIGURED
         elif config is True:
             configured = True
         cutoff = context.started_at - timedelta(days=30)
-        metrics = {"complete": complete, "configured": configured, "runs_observed": len(items),
+        metrics = {"complete": complete, "configured": configured, "config_path": context.metadata.get("ci_config_path"),
+                   "legacy_config": context.metadata.get("ci_config_legacy", False), "runs_observed": len(items),
                    "success_count": len(success) if complete else None,
                    "failure_count": len(failed) if complete else None,
                    "success_rate": len(success) / len(terminal) if complete and terminal else None,

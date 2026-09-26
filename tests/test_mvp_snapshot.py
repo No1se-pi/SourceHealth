@@ -58,6 +58,14 @@ class SnapshotTests(unittest.TestCase):
         docs, _ = self.analyze()
         self.assertFalse(docs.metrics["readme"])
         self.assertFalse(docs.metrics["run_instructions"])
+
+    def test_legacy_sourcecraft_ci_path_is_detected_with_provenance(self):
+        self.files({"README.md": "# Project", ".src.ci.yaml": "untrusted: true"})
+        docs, _ = self.analyze()
+        self.assertTrue(docs.metadata["ci_configured"])
+        self.assertEqual(docs.metadata["ci_config_path"], ".src.ci.yaml")
+        self.assertTrue(docs.metadata["ci_config_legacy"])
+        self.assertTrue(docs.metadata["ci_config_complete"])
         self.files({"README.md": "# Project\nDescription only"})
         docs, _ = self.analyze()
         self.assertTrue(docs.metrics["readme"])

@@ -25,7 +25,11 @@ class DocumentationAnalyzer:
                               availability=A.AVAILABLE if complete else A.PARTIAL,
                               category=self.category, source="git_snapshot", metrics=facts[self.name], evidence=evidence,
                               metadata={"head_sha": facts["head_sha"], "scope": facts["scope"],
-                                        "ci_configured": facts["ci_configured"], "complete": complete})
+                                        "ci_configured": facts["ci_configured"],
+                                        "ci_config_path": facts.get("ci_config_path"),
+                                        "ci_config_legacy": facts.get("ci_config_legacy", False),
+                                        "ci_config_complete": facts.get("ci_config_complete", False),
+                                        "complete": complete})
 
 
 class TechnicalDebtAnalyzer(DocumentationAnalyzer):
