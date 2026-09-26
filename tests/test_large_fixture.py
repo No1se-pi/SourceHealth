@@ -24,3 +24,17 @@ class LargeFixtureTests(unittest.TestCase):
                 generate(directory, 120)
         with self.assertRaises(ValueError):
             generate(SOURCE_ROOT / "must-not-create-fixture", 120)
+
+    def test_sast_file_limit_guard_is_bounded_and_deterministic(self):
+        """Проверка детерминированного срабатывания лимита файлов без ожидания таймаута."""
+        from sourcehealth.sast import SASTScanner, ScanConfig
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for i in range(5):
+                (root / f"file_{i}.py").write_text("eval(x)\n", encoding="utf-8")
+            scanner = SASTScanner(ScanConfig(max_files=3))
+            result = scanner.scan(root)
+            self.assertFalse(result.complete)
+            self.assertIn("file_limit", result.skipped)
+            self.assertEqual(result.files_scanned, 3)

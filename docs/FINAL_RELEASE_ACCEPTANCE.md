@@ -6,8 +6,8 @@
 
 | Gate | Status | Evidence |
 |---|---|---|
-| **Large repository ($\ge 10\,000$ files)** | PASS | Локальный бенчмарк `python -m scripts.large_repository_benchmark` на 120, 10 000 и 10 001 файлах: 10 000 файлов завершаются успешно (Health 82.31); 10 001 файл дает `file_limit`, статус `partial`, Health = null: [LARGE_REPO_ACCEPTANCE](LARGE_REPO_ACCEPTANCE.md) |
-| **Fixture boundary 10 001** | PASS | Скан останавливается по `file_limit`, Health не превращается в 0, coverage падает до 15% |
+| **Large repository ($\ge 10\,000$ files)** | PASS | Live-приёмка репозитория на 10 000 файлов зафиксирована в [LARGE_REPO_ACCEPTANCE](LARGE_REPO_ACCEPTANCE.md). Локальный бенчмарк `python -m scripts.large_repository_benchmark` на 120, 10 000 и 10 001 файлах подтверждает сохранение resource bounds: на 10 000 файлов Health 82.31 (SAST bounded таймаутом 30 с); на 10 001 файле статус `partial`, coverage 15%, Health = null (не 0) |
+| **Fixture boundary 10 001** | PASS | При 10 001 файле категории переходят в `partial`, Health = null (не превращается в 0), coverage падает до 15%. В локальном бенчмарке `file_limit` не фиксируется из-за предшествующего таймаута SAST (FILE-LIMIT PRECEDENCE: NOT PROVEN BY LOCAL 10K BENCHMARK DUE TO TIMEOUT PRECEDENCE); лимит файлов SAST протестирован детерминированно в `tests/test_sast.py` и `tests/test_large_fixture.py` |
 | **Official SourceCraft AppSec** | PASS / LIVE | Реализован клиент `SourceCraftAppSecClient`; парсинг severity без утечек SARIF/кода: `docs/APPSEC_ACCEPTANCE.md` |
 | **Documentation Quick Start (RU)** | PASS | Поддержан заголовок «Быстрый старт» в README без шелл-команд; регрессионный тест в `tests/test_mvp_snapshot.py` |
 | **Production Caddy routing** | PASS | Взаимоисключающие `handle /api/*` (reverse_proxy) и `handle` (SPA `try_files` + static files) в `deploy/Caddyfile` |
