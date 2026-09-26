@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "preview": "vite preview --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "types": "openapi-typescript ../docs/openapi.json -o src/api/generated.ts"
   },

@@ -9,7 +9,7 @@ facts и возвращают метрики/evidence; policy отдельно �
 |---|---|---|
 | documentation | documentation / git_snapshot | README, LICENSE, run/build/test, CONTRIBUTING, CODEOWNERS, docs |
 | cicd | cicd / sourcecraft + snapshot | Конфигурация, запуски, success/failure, duration, последний статус |
-| security | sourcecraft_appsec / sourcecraft_appsec | Пока NO_DATA: appsec_interface_unconfirmed |
+| security | sourcecraft_appsec / sourcecraft_appsec | Official AppSec для manual run с user PAT; без credential — NO_DATA |
 | activity | git_activity / git + platform_activity / sourcecraft | Git windows/recency, PR, contributors, releases |
 | issues | issues / sourcecraft | Open/closed, stale, response/closure medians, последние 30 дней |
 | code_health | sast / sourcehealth_local + technical_debt / git_snapshot | Локальные findings, TODO/FIXME, возраст строк, большие файлы |

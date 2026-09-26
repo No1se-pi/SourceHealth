@@ -23,7 +23,7 @@
 | Задача | Владелец | Что нужно / критерий |
 |---|---|---|
 | Успешный public SourceCraft доступ | Backend + владелец доступа | Закрыто: metadata/analytics, worker pipeline и bounded discovery приняты live |
-| Official AppSec | Backend + организаторы | Base URL/auth/full schema/enums/repo mapping и sanitized real fixture; затем подключить collector |
+| Official AppSec | Backend | Закрыто: live OpenAPI/Bearer/repo mapping, run-scoped PAT, bounded collector и safe aggregates; browser end-to-end фиксируется отдельно |
 | Я ID → private SourceCraft permission bridge | Backend + организаторы | Подтверждённый механизм проверки прав; private остаются disabled |
 | Живой public каталог и отчёты | Backend/Analyzer | Закрыто: bounded discovery 10, 9 импортов, изоляция ошибки одного repo, live leaderboard persistence |
 | Калибровка policy | Analyzer/Backend | Закрыто для v1.2 на 10 public repos; таблица и ограничения в MANDATORY_100_CLOSURE |

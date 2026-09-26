@@ -58,10 +58,26 @@ class SnapshotTests(unittest.TestCase):
         docs, _ = self.analyze()
         self.assertFalse(docs.metrics["readme"])
         self.assertFalse(docs.metrics["run_instructions"])
+
+    def test_legacy_sourcecraft_ci_path_is_detected_with_provenance(self):
+        self.files({"README.md": "# Project", ".src.ci.yaml": "untrusted: true"})
+        docs, _ = self.analyze()
+        self.assertTrue(docs.metadata["ci_configured"])
+        self.assertEqual(docs.metadata["ci_config_path"], ".src.ci.yaml")
+        self.assertTrue(docs.metadata["ci_config_legacy"])
+        self.assertTrue(docs.metadata["ci_config_complete"])
         self.files({"README.md": "# Project\nDescription only"})
         docs, _ = self.analyze()
         self.assertTrue(docs.metrics["readme"])
         self.assertFalse(docs.metrics["run_instructions"])
+
+    def test_russian_quickstart_heading_detected(self):
+        self.files({"README.md": "# Проект\nОписание сервиса.\n## Быстрый старт\nСклонируйте репозиторий и запустите локально.\n"})
+        docs, _ = self.analyze()
+        self.assertTrue(docs.metrics["readme"])
+        self.assertTrue(docs.metrics["run_instructions"])
+        ev = next(e for e in docs.evidence if e.id == "documentation:run_instructions")
+        self.assertEqual(ev.location, "README.md")
 
     def test_debt_counts_age_and_size_without_executing_repository(self):
         self.files({"main.py": "# TODO refactor\n# FIXME bug\n" + "x = 1\n" * 1001,

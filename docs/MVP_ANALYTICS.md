@@ -105,9 +105,9 @@ commit — [LIVE_ACCEPTANCE](LIVE_ACCEPTANCE.md).
 
 - Public platform: один целевой repository принят на живом API. Остались discovery,
   first/repeat UI flow и калибровка на нескольких разных repositories.
-- Security: `NO_DATA / appsec_interface_unconfirmed`. Нужны официальный base URL,
-  auth, полная schema/enums, repository mapping и sanitized real fixture. Local SAST
-  не даёт Security score. Synthetic official fixture проверяет только внутреннюю policy.
+- Security: official AppSec доступен manual run с connected user PAT. Без run credential — `NO_DATA`.
+  Local SAST не даёт Security score; official aggregate описан в
+  [APPSEC_ACCEPTANCE](APPSEC_ACCEPTANCE.md).
 - Private: отсутствует подтверждённый Я ID → SourceCraft permissions bridge,
   поэтому private disabled. Реальный OAuth browser flow отдельно не принят.
 - Global discovery: endpoint GET /repos **подтверждён и реализован**; неизвестный

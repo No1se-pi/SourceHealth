@@ -10,6 +10,12 @@ import { LoadingState } from '../components/common/LoadingState';
 import { ErrorState } from '../components/common/ErrorState';
 import { RecommendationCard } from '../components/common/RecommendationCard';
 import { EvidenceList } from '../components/common/EvidenceList';
+import { SourceSoul } from '../components/common/SourceSoul';
+import { CategoryDetails } from '../components/common/CategoryDetails';
+import { Breadcrumbs } from '../components/common/Breadcrumbs';
+import { CopyButton } from '../components/common/CopyButton';
+import { usePageTitle } from '../utils/usePageTitle';
+import { formatDateTime, formatDurationSeconds, humanizeErrorCode } from '../utils/formatters';
 import {
   CATEGORY_ORDER,
   CATEGORY_LABELS,
@@ -22,6 +28,8 @@ export const AnalysisPage: React.FC = () => {
   const [run, setRun] = useState<Analysis>();
   const [error, setError] = useState<unknown>();
   const [loading, setLoading] = useState(true);
+
+  usePageTitle(run ? `Анализ ${run.id.substring(0, 8)}` : 'Анализ');
 
   const requestGenRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -86,38 +94,30 @@ export const AnalysisPage: React.FC = () => {
 
   const statusMeta = run ? STATUS_CONFIG[run.status] : null;
 
+  const missingCategories = run
+    ? CATEGORY_ORDER.filter((catKey) => {
+        const scoreData = run.category_scores?.[catKey];
+        const availability = scoreData?.availability ?? run.data_coverage?.[catKey] ?? 'no_data';
+        return availability === 'no_data';
+      })
+    : [];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-6)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <Link
-            to="/"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              fontSize: '0.9rem',
-              color: 'var(--sh-text-muted)',
-            }}
-          >
-            ← К лидерборду
-          </Link>
-          {run && run.repository_id && (
-            <Link
-              to={`/repositories/${run.repository_id}`}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                fontSize: '0.9rem',
-                color: 'var(--sh-text-muted)',
-              }}
-            >
-              ← К репозиторию
-            </Link>
-          )}
-        </div>
-      </div>
+      <Breadcrumbs
+        items={[
+          { label: 'Рейтинг', href: '/' },
+          ...(run?.repository_id
+            ? [{ label: 'Репозиторий', href: `/repositories/${run.repository_id}` }]
+            : []),
+          { label: `Анализ ${run ? run.id.substring(0, 8) : id.substring(0, 8)}` },
+        ]}
+        backLink={
+          run?.repository_id
+            ? { label: 'Назад к репозиторию', href: `/repositories/${run.repository_id}` }
+            : { label: 'Назад к рейтингу', href: '/' }
+        }
+      />
 
       {error ? (
         <ErrorState
@@ -137,32 +137,73 @@ export const AnalysisPage: React.FC = () => {
         <Card
           title="Анализ репозитория"
           subtitle={
-            <span style={{ fontFamily: 'var(--sh-font-mono)', fontSize: '0.85rem' }}>
-              ID запуска: {run.id}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+              <span style={{ fontFamily: 'var(--sh-font-mono)', fontSize: '0.85rem' }}>
+                ID запуска: {run.id}
+              </span>
+              <CopyButton
+                value={run.id}
+                label=""
+                title="Скопировать ID запуска"
+                size="sm"
+              />
+              {run.scoring_policy_version && (
+                <span
+                  style={{
+                    fontSize: '0.75rem',
+                    padding: '0.15rem 0.45rem',
+                    borderRadius: 'var(--sh-radius-sm)',
+                    backgroundColor: 'var(--sh-bg-base)',
+                    border: '1px solid var(--sh-border-subtle)',
+                    color: 'var(--sh-text-secondary)',
+                    fontFamily: 'var(--sh-font-mono)',
+                  }}
+                >
+                  {run.scoring_policy_version}
+                </span>
+              )}
+              {run.completed_at && run.queued_at && (
+                <span style={{ fontSize: '0.82rem', color: 'var(--sh-text-muted)' }}>
+                  Время анализа: {formatDurationSeconds(Math.max(0, Math.round((new Date(run.completed_at).getTime() - new Date(run.queued_at).getTime()) / 1000)))}
+                </span>
+              )}
+            </div>
           }
           headerAction={
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
-              {statusMeta && (
-                <Badge variant={statusMeta.variant}>
-                  {statusMeta.inProgress && (
-                    <span
-                      className="animate-spin"
-                      style={{
-                        width: '0.7em',
-                        height: '0.7em',
-                        border: '1.5px solid currentColor',
-                        borderRightColor: 'transparent',
-                        borderRadius: '50%',
-                        display: 'inline-block',
-                      }}
-                      aria-hidden="true"
-                    />
-                  )}
-                  <span>{statusMeta.label}</span>
-                </Badge>
-              )}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <CopyButton
+                  value={() => window.location.href}
+                  label="Скопировать ссылку"
+                  allowShare={true}
+                  shareTitle={`Анализ ${run.id.substring(0, 8)} · SourceHealth`}
+                  size="sm"
+                />
+                {statusMeta && (
+                  <Badge variant={statusMeta.variant}>
+                    {statusMeta.inProgress && (
+                      <span
+                        className="animate-spin"
+                        style={{
+                          width: '0.7em',
+                          height: '0.7em',
+                          border: '1.5px solid currentColor',
+                          borderRightColor: 'transparent',
+                          borderRadius: '50%',
+                          display: 'inline-block',
+                        }}
+                        aria-hidden="true"
+                      />
+                    )}
+                    <span>{statusMeta.label}</span>
+                  </Badge>
+                )}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--sh-text-muted)' }}>
+                Официальный Health
+              </div>
               <ScoreDisplay score={run.health_score} size="lg" />
+              {run.health_score === null && <SourceSoul preview={run.score_preview} />}
               <ScoreCoverage analysis={run} />
             </div>
           }
@@ -179,37 +220,105 @@ export const AnalysisPage: React.FC = () => {
             >
               <div style={{ fontSize: '0.85rem', color: 'var(--sh-text-muted)' }}>
                 {run.completed_at ? (
-                  <span>Завершено: {new Date(run.completed_at).toLocaleString('ru-RU')}</span>
+                  <span>Завершено: {formatDateTime(run.completed_at)}</span>
                 ) : (
-                  <span>В очереди с {new Date(run.queued_at).toLocaleString('ru-RU')}</span>
+                  <span>В очереди с {formatDateTime(run.queued_at)}</span>
                 )}
               </div>
               {['completed', 'partial'].includes(run.status) && (
-                <a
-                  href={`/api/v1/analyses/${encodeURIComponent(run.id)}/report.md`}
-                  download
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.4rem',
-                    backgroundColor: 'var(--sh-bg-surface-elevated)',
-                    color: 'var(--sh-text-primary)',
-                    border: '1px solid var(--sh-border-default)',
-                    padding: '0.45rem 0.85rem',
-                    borderRadius: 'var(--sh-radius-sm)',
-                    fontSize: '0.88rem',
-                    fontWeight: 500,
-                    textDecoration: 'none',
-                  }}
-                >
-                  <span>⬇ Скачать отчёт (Markdown)</span>
-                </a>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <a
+                    href={`/api/v1/analyses/${encodeURIComponent(run.id)}/report.md`}
+                    download
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      backgroundColor: 'var(--sh-bg-surface-elevated)',
+                      color: 'var(--sh-text-primary)',
+                      border: '1px solid var(--sh-border-default)',
+                      padding: '0.45rem 0.85rem',
+                      borderRadius: 'var(--sh-radius-sm)',
+                      fontSize: '0.88rem',
+                      fontWeight: 500,
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <span>⬇ Скачать отчёт (Markdown)</span>
+                  </a>
+                  <CopyButton
+                    value={() => `${window.location.origin}/api/v1/analyses/${encodeURIComponent(run.id)}/report.md`}
+                    label="Скопировать ссылку на отчёт"
+                    copiedLabel="Ссылка скопирована!"
+                    size="sm"
+                  />
+                </div>
               )}
             </div>
           }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-6)' }}>
-            {run.error_code && (
+            {run.status === 'partial' && (
+              <div
+                role="status"
+                style={{
+                  padding: 'var(--sh-space-3) var(--sh-space-4)',
+                  backgroundColor: 'var(--sh-health-warning-bg)',
+                  border: '1px solid var(--sh-health-warning-border)',
+                  borderRadius: 'var(--sh-radius-sm)',
+                  color: 'var(--sh-health-warning)',
+                  fontSize: '0.88rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                <span aria-hidden="true">⚠️</span>
+                <span>Анализ завершён частично. Доступные категории рассчитаны, отсутствующие данные не стали нулём.</span>
+              </div>
+            )}
+
+            {run.status === 'failed' && (
+              <div
+                role="alert"
+                style={{
+                  padding: 'var(--sh-space-3) var(--sh-space-4)',
+                  backgroundColor: 'var(--sh-health-danger-bg)',
+                  border: '1px solid var(--sh-health-danger-border)',
+                  borderRadius: 'var(--sh-radius-sm)',
+                  color: 'var(--sh-health-danger)',
+                  fontSize: '0.88rem',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '0.5rem',
+                }}
+              >
+                <span>
+                  {run.error_code ? humanizeErrorCode(run.error_code) : 'Анализ завершился с ошибкой.'}
+                </span>
+                {run.repository_id && (
+                  <Link
+                    to={`/repositories/${run.repository_id}`}
+                    style={{
+                      backgroundColor: 'var(--sh-bg-surface-elevated)',
+                      color: 'var(--sh-text-primary)',
+                      border: '1px solid var(--sh-border-default)',
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: 'var(--sh-radius-sm)',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      textDecoration: 'none',
+                    }}
+                  >
+                    К репозиторию для перезапуска ↗
+                  </Link>
+                )}
+              </div>
+            )}
+
+            {run.error_code && run.status !== 'failed' && (
               <div
                 role="alert"
                 style={{
@@ -221,7 +330,28 @@ export const AnalysisPage: React.FC = () => {
                   fontSize: '0.9rem',
                 }}
               >
-                Код ошибки анализа: <strong>{run.error_code}</strong>
+                Код ошибки анализа: <strong>{humanizeErrorCode(run.error_code)}</strong> ({run.error_code})
+              </div>
+            )}
+
+            {missingCategories.length > 0 && (
+              <div
+                style={{
+                  padding: '0.6rem 0.85rem',
+                  backgroundColor: 'var(--sh-bg-base)',
+                  border: '1px solid var(--sh-border-subtle)',
+                  borderRadius: 'var(--sh-radius-sm)',
+                  fontSize: '0.85rem',
+                  color: 'var(--sh-text-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                <span aria-hidden="true">ℹ️</span>
+                <span>
+                  Не хватает данных для полной оценки: {missingCategories.map((c) => CATEGORY_LABELS[c]).join(', ')}. Официальный Health рассчитан по доступным категориям.
+                </span>
               </div>
             )}
 
@@ -231,8 +361,8 @@ export const AnalysisPage: React.FC = () => {
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                  gap: 'var(--sh-space-4)',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                  gap: 'var(--sh-space-3)',
                 }}
               >
                 {CATEGORY_ORDER.map((catKey) => {
@@ -260,6 +390,11 @@ export const AnalysisPage: React.FC = () => {
                       <div>
                         <ScoreDisplay score={scoreData?.score ?? null} size="md" />
                       </div>
+                      {scoreData?.score == null && availability === 'available' && (
+                        <span style={{ fontSize: '0.8rem', color: 'var(--sh-text-muted)' }}>
+                          Недостаточно наблюдений для численной оценки
+                        </span>
+                      )}
                       {scoreData?.explanation && (
                         <p
                           style={{
@@ -272,6 +407,7 @@ export const AnalysisPage: React.FC = () => {
                           {scoreData.explanation}
                         </p>
                       )}
+                      <CategoryDetails category={catKey} checks={run.checks} score={scoreData?.score} />
                       {scoreData?.evidence_refs && scoreData.evidence_refs.length > 0 && (
                         <EvidenceList
                           evidenceRefs={scoreData.evidence_refs}
@@ -287,7 +423,9 @@ export const AnalysisPage: React.FC = () => {
 
             {/* Recommendations Section */}
             <div>
-              <h3 style={{ marginBottom: 'var(--sh-space-3)' }}>Рекомендации по улучшению</h3>
+              <h3 style={{ marginBottom: 'var(--sh-space-3)' }}>
+                Рекомендации по улучшению ({run.recommendations ? run.recommendations.length : 0})
+              </h3>
               {run.recommendations && run.recommendations.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-3)' }}>
                   {[...run.recommendations]

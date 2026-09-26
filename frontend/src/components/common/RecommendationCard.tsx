@@ -66,10 +66,10 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({
       </div>
 
       <div>
-        <h4 style={{ margin: '0 0 0.35rem 0', fontSize: '1rem', color: 'var(--sh-text-primary)' }}>
+        <h4 style={{ margin: '0 0 0.35rem 0', fontSize: '1rem', color: 'var(--sh-text-primary)', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
           {recommendation.title}
         </h4>
-        <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--sh-text-secondary)', lineHeight: 1.5 }}>
+        <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--sh-text-secondary)', lineHeight: 1.5, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
           {recommendation.description}
         </p>
       </div>
@@ -83,7 +83,7 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({
           fontSize: '0.88rem',
         }}
       >
-        <span style={{ fontWeight: 600, color: 'var(--sh-brand)' }}>Действие: </span>
+        <span style={{ fontWeight: 600, color: 'var(--sh-brand-text)' }}>Действие: </span>
         <span style={{ color: 'var(--sh-text-primary)' }}>{recommendation.suggested_action}</span>
       </div>
 

@@ -30,7 +30,7 @@ class MVPPolicy:
             availability = relevant[0].availability if relevant else A.NO_DATA
             if any(r.availability != availability for r in relevant):
                 availability = A.PARTIAL
-            explanation = ("SourceCraft AppSec interface is not confirmed; Security не заменяется local SAST."
+            explanation = ("Official SourceCraft AppSec не предоставил пригодных данных для этой оценки; local SAST не заменяет Security."
                            if category == Category.SECURITY else "Недостаточно полных наблюдений для оценки категории.")
             categories[category.value] = CategoryScore(category, availability=availability, explanation=explanation)
 

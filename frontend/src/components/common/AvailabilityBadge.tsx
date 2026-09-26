@@ -10,29 +10,29 @@ interface AvailabilityConfig {
 
 const AVAILABILITY_CONFIG: Record<DataAvailability, AvailabilityConfig> = {
   available: {
-    label: 'Данные есть',
+    label: 'Источник доступен',
     variant: 'success',
-    description: 'Факты успешно собраны и подтверждены',
+    description: 'Источник успешно собран',
   },
   partial: {
     label: 'Частично',
     variant: 'warning',
-    description: 'Часть источников фактов недоступна или неполна',
+    description: 'Часть данных получена, но их недостаточно для полной оценки.',
   },
   no_data: {
-    label: 'Нет данных',
+    label: 'Недостаточно данных',
     variant: 'neutral',
-    description: 'Данные по этой категории отсутствуют в репозитории',
+    description: 'Источник не предоставил достаточно данных. Это не ноль и не штраф.',
   },
   source_unavailable: {
     label: 'Источник недоступен',
     variant: 'warning',
-    description: 'Внешний сервис или API платформы временно недоступны',
+    description: 'Источник временно недоступен',
   },
   not_configured: {
     label: 'Не настроено',
     variant: 'neutral',
-    description: 'Инструмент (например CI/CD или AppSec) не подключён к репозиторию',
+    description: 'Источник или инструмент не настроен',
   },
   not_applicable: {
     label: 'Не применимо',

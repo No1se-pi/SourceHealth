@@ -96,7 +96,7 @@ class MVPAnalyticsTests(unittest.TestCase):
         self.assertIsNone(metrics["median_first_external_response_hours"])
 
     def test_coverage_weight_is_not_category_count_or_full_scan_claim(self):
-        from sourcehealth.scoring.coverage import score_coverage
+        from sourcehealth.scoring.coverage import score_coverage, score_preview
 
         report = self.score(self.report())
         coverage = score_coverage(report.scoring_policy_version, report.category_scores)
@@ -106,6 +106,16 @@ class MVPAnalyticsTests(unittest.TestCase):
         report.category_scores["activity"]["availability"] = "partial"
         self.assertEqual(score_coverage(report.scoring_policy_version, report.category_scores)["partial_categories"], ["activity"])
         self.assertIsNone(score_coverage("future-unknown", report.category_scores))
+        categories = {name: {"score": None} for name in WEIGHTS}
+        categories["activity"]["score"] = 87.61
+        categories["issues"]["score"] = 0
+        self.assertEqual(score_preview(MVPPolicy.version, categories), {
+            "score": 43.81, "nominal_weight_percent": 30, "scored_categories": 2, "numeric": True})
+        categories["issues"]["score"] = None
+        self.assertEqual(score_preview(MVPPolicy.version, categories), {
+            "score": None, "nominal_weight_percent": 15, "scored_categories": 1, "numeric": False})
+        categories["activity"]["score"] = None
+        self.assertIsNone(score_preview(MVPPolicy.version, categories))
 
     def test_empty_issues_are_observed_but_not_scored(self):
         self.context.sourcecraft_facts["issues"]["items"] = []

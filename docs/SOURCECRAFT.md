@@ -132,3 +132,18 @@ rating остаётся null; полный sparse массив без positive_l
 CI Run публичный `id` пока отсутствует по Swagger; устойчивый ключ — `slug`.
 Дата Unix epoch для незавершённой стадии не считается фактическим завершением.
 Проверки и оставшаяся работа: [MANDATORY_100_CLOSURE](MANDATORY_100_CLOSURE.md).
+
+## Official AppSec: актуальный контракт 23.09.2026
+
+Предыдущие разделы про неподтверждённый интерфейс сохранены как история проверки
+обычного SourceCraft Swagger. Отдельный AppSec OpenAPI доступен на
+`https://appsec.sourcecraft.tech/openapi`; base URL и Bearer PAT подтверждены live.
+
+Ручной анализ с подключённым PAT получает `gitRepo` из Repository API, проверяет
+`/v1/scans/latest`, затем строковый `FINISHED` через `/v1/scans/{scanUuid}` и читает
+`/v1/defect-groups` с camelCase pagination. Открытые groups запрашиваются явными status-фильтрами;
+severity задаётся строками `CRITICAL/HIGH/MEDIUM/LOW`, поэтом numeric ordinal DTO не угадываются.
+
+Сохраняется только агрегат `complete`, `scan_uuid`, `open_by_severity`, `total_open`.
+Raw response, SARIF, descriptions, paths, snippets и secret values не сохраняются. Без run credential,
+для scheduled runs и при 401/403/404 Security остаётся `NO_DATA`. Детали: [APPSEC_ACCEPTANCE](APPSEC_ACCEPTANCE.md).

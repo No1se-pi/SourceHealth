@@ -32,6 +32,7 @@ class RepositorySummary(BaseModel):
     likes: int | None
     last_activity_at: datetime | None
     latest_analysis_id: UUID | None
+    score_preview: "ScorePreviewDTO | None" = None
 
 
 class RepositoryDetails(RepositorySummary):
@@ -123,20 +124,30 @@ class ScoreCoverageDTO(BaseModel):
     partial_categories: list[Category]
 
 
+class ScorePreviewDTO(BaseModel):
+    score: float | None = Field(default=None, ge=0, le=100)
+    nominal_weight_percent: int = Field(ge=0, le=100)
+    scored_categories: int = Field(ge=0, le=6)
+    numeric: bool
+
+
 class AnalysisDetails(AnalysisSummary):
     category_scores: dict[str, CategoryScoreDTO]
     data_coverage: dict[str, DataAvailability]
     recommendations: list[RecommendationDTO]
     checks: dict[str, AnalyzerResultDTO]
     score_coverage: ScoreCoverageDTO | None = None
+    score_preview: ScorePreviewDTO | None = None
 
     @model_validator(mode="after")
     def derive_score_coverage(self):
-        from sourcehealth.scoring.coverage import score_coverage
+        from sourcehealth.scoring.coverage import score_coverage, score_preview
 
-        coverage = score_coverage(self.scoring_policy_version,
-                                  {name: category.model_dump() for name, category in self.category_scores.items()})
+        categories = {name: category.model_dump() for name, category in self.category_scores.items()}
+        coverage = score_coverage(self.scoring_policy_version, categories)
         self.score_coverage = ScoreCoverageDTO(**coverage) if coverage is not None else None
+        preview = score_preview(self.scoring_policy_version, categories)
+        self.score_preview = ScorePreviewDTO(**preview) if preview is not None else None
         return self
 
 
@@ -157,19 +168,72 @@ class UserDTO(BaseModel):
 class SourceCraftConnect(BaseModel):
     model_config = ConfigDict(extra="forbid")
     pat: str = Field(min_length=1, max_length=4096, repr=False)
+    retention_seconds: Literal[1800, 21600, 86400, 604800] = 1800
 
 
 class SourceCraftConnectionDTO(BaseModel):
     connected: bool
     expires_in: int
+    retention_seconds: Literal[1800, 21600, 86400, 604800] = 1800
+
+
+class SourceCraftRetentionUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    retention_seconds: Literal[1800, 21600, 86400, 604800]
 
 
 class ConnectedRepositoryDTO(BaseModel):
+    id: str | None = None
+    organization_slug: str | None = None
+    repository_slug: str | None = None
     url: str
     visibility: Literal["public", "private", "internal"]
     can_analyze: bool
+    default_branch: str | None = None
+    is_empty: bool | None = None
 
 
 class ConnectedRepositoriesDTO(BaseModel):
     items: list[ConnectedRepositoryDTO]
     has_more: bool
+    next_page_token: str | None = None
+
+
+class ProfileRepositoryDTO(BaseModel):
+    repository_id: UUID
+    organization_slug: str
+    repository_slug: str
+    health_score: float | None
+    score_preview: ScorePreviewDTO | None = None
+    last_analysis_at: datetime | None
+    last_activity_at: datetime | None
+    analysis_status: RunStatus | None
+    next_analysis_at: datetime
+    refresh_preference: Literal["adaptive", "1h", "6h", "24h", "7d", "off"]
+    use_pat_for_scheduled_analysis: bool
+
+
+class RepoTrackIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    repository_id: UUID
+
+
+class RepoTrackPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    refresh_preference: Literal["adaptive", "1h", "6h", "24h", "7d", "off"]
+    scheduled_pat: bool = Field(False, alias="use_pat_for_scheduled_analysis")
+
+
+class AchievementDTO(BaseModel):
+    id: str
+    title: str
+    description: str
+    unlocked: bool
+    unlocked_at: datetime | None
+    repository_id: UUID | None
+
+
+class ProfileDTO(BaseModel):
+    sourcecraft: SourceCraftConnectionDTO
+    repositories: list[ProfileRepositoryDTO]
+    achievements: list[AchievementDTO]

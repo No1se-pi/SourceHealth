@@ -16,33 +16,35 @@ export const mockHealthyRepo = {
   id: 'a0000001-0000-0000-0000-000000000001',
   organization_slug: 'demo-org',
   repository_slug: 'fast-service',
-  canonical_url: 'https://sourcecraft.tech/demo-org/fast-service',
+  canonical_url: 'https://sourcecraft.dev/demo-org/fast-service',
   visibility: 'public',
   health_score: 88,
   language: 'TypeScript',
   likes: 42,
   last_activity_at: '2026-09-16T14:30:00Z',
   latest_analysis_id: 'b0000001-0000-0000-0000-000000000001',
+  score_preview: { score: 87.45, nominal_weight_percent: 100, scored_categories: 6, numeric: true },
 } satisfies Repository;
 
 export const mockNoDataRepo = {
   id: 'a0000002-0000-0000-0000-000000000002',
   organization_slug: 'newbie-corp',
   repository_slug: 'empty-starter',
-  canonical_url: 'https://sourcecraft.tech/newbie-corp/empty-starter',
+  canonical_url: 'https://sourcecraft.dev/newbie-corp/empty-starter',
   visibility: 'public',
   health_score: null, // NO_DATA: not calculated yet, NOT zero!
   language: 'Python',
   likes: null,
   last_activity_at: null,
   latest_analysis_id: null,
+  score_preview: null,
 } satisfies Repository;
 
 export const mockRepoDetails = {
   id: 'a0000001-0000-0000-0000-000000000001',
   organization_slug: 'demo-org',
   repository_slug: 'fast-service',
-  canonical_url: 'https://sourcecraft.tech/demo-org/fast-service',
+  canonical_url: 'https://sourcecraft.dev/demo-org/fast-service',
   visibility: 'public',
   health_score: 88,
   language: 'TypeScript',
@@ -52,6 +54,7 @@ export const mockRepoDetails = {
   sourcecraft_id: 'sc-987654',
   default_branch: 'main',
   head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
+  score_preview: { score: 87.45, nominal_weight_percent: 100, scored_categories: 6, numeric: true },
 } satisfies RepositoryDetails;
 
 export const mockEmptyRepositoryPage = {
@@ -72,7 +75,7 @@ export const mockCompletedAnalysis = {
   completed_at: '2026-09-16T14:28:45Z',
   head_sha: 'e7e88ab123456789abcdef0123456789abcdef01',
   health_score: 88,
-  scoring_policy_version: 'v1',
+  scoring_policy_version: 'mvp-score-v1.2',
   analyzer_contract_version: 'v1',
   error_code: null,
   category_scores: {
@@ -169,7 +172,7 @@ export const mockCompletedAnalysis = {
           type: 'file_presence',
           reference: 'README.md',
           summary: 'README.md найден в корне репозитория (1200 слов, разделы Quickstart и API)',
-          url: 'https://sourcecraft.tech/demo-org/fast-service/src/branch/main/README.md',
+          url: 'https://sourcecraft.dev/demo-org/fast-service/src/branch/main/README.md',
           location: 'README.md:1',
           timestamp: '2026-09-16T14:28:10Z',
         },
@@ -196,9 +199,84 @@ export const mockCompletedAnalysis = {
           type: 'vulnerability',
           reference: 'finding/sc-appsec-9042',
           summary: 'SourceCraft AppSec: обнаружено предупреждение средней критичности (CWE-89, SQL injection risk)',
-          url: 'https://sourcecraft.tech/demo-org/fast-service/security/findings/9042',
+          url: 'https://sourcecraft.dev/demo-org/fast-service/security/findings/9042',
           location: 'src/api/search.py:42',
           timestamp: '2026-09-16T14:28:15Z',
+        },
+      ],
+    },
+    cicd: {
+      analyzer: 'cicd_analyzer',
+      status: 'ok',
+      availability: 'available',
+      source: 'sourcecraft_ci',
+      category: 'cicd',
+      analyzer_version: '1.0.0',
+      contract_version: '1.0.0',
+      metrics: { builds_total: 45, success_rate: 0.98 },
+      findings: [],
+      metadata: {},
+      error: null,
+      evidence: [
+        {
+          id: 'ev-ci-1',
+          source: 'sourcecraft_ci',
+          type: 'pipeline_run',
+          reference: 'pipeline/build-and-test',
+          summary: 'CI пайплайн успешно завершён на коммите ветки main (тесты: 120/120)',
+          url: 'https://sourcecraft.dev/demo-org/fast-service/pipelines/42',
+          location: '.sourcecraft/workflows/ci.yml:1',
+          timestamp: '2026-09-16T14:28:12Z',
+        },
+      ],
+    },
+    activity: {
+      analyzer: 'git_activity',
+      status: 'ok',
+      availability: 'available',
+      source: 'git_log',
+      category: 'activity',
+      analyzer_version: '1.0.0',
+      contract_version: '1.0.0',
+      metrics: { commits_30d: 38, active_contributors: 4 },
+      findings: [],
+      metadata: {},
+      error: null,
+      evidence: [
+        {
+          id: 'ev-act-1',
+          source: 'git_log',
+          type: 'commit_frequency',
+          reference: 'commits/recent',
+          summary: 'Высокая частота коммитов: 38 коммитов от 4 авторов за последние 30 дней',
+          url: 'https://sourcecraft.dev/demo-org/fast-service/commits',
+          location: null,
+          timestamp: '2026-09-16T14:28:18Z',
+        },
+      ],
+    },
+    issues: {
+      analyzer: 'issue_tracker',
+      status: 'ok',
+      availability: 'available',
+      source: 'sourcecraft_issues',
+      category: 'issues',
+      analyzer_version: '1.0.0',
+      contract_version: '1.0.0',
+      metrics: { open_issues: 3, closed_issues_30d: 14, median_close_hours: 18 },
+      findings: [],
+      metadata: {},
+      error: null,
+      evidence: [
+        {
+          id: 'ev-iss-1',
+          source: 'sourcecraft_issues',
+          type: 'issue_metrics',
+          reference: 'issues/stats',
+          summary: 'Медианное время ответа 18 часов, 14 закрытых тикетов за месяц',
+          url: 'https://sourcecraft.dev/demo-org/fast-service/issues',
+          location: null,
+          timestamp: '2026-09-16T14:28:19Z',
         },
       ],
     },
@@ -228,7 +306,23 @@ export const mockCompletedAnalysis = {
       ],
     },
   },
+  score_coverage: {
+    nominal_weight_percent: 100,
+    scored_categories: 6,
+    unscored_categories: [],
+    partial_categories: [],
+  },
+  score_preview: { score: 87.45, nominal_weight_percent: 100, scored_categories: 6, numeric: true },
 } satisfies Analysis;
+
+export const mockSoulRepo = {
+  ...mockNoDataRepo,
+  id: 'a0000003-0000-0000-0000-000000000003',
+  repository_slug: 'soul-preview',
+  canonical_url: 'https://sourcecraft.dev/newbie-corp/soul-preview',
+  latest_analysis_id: 'b0000002-0000-0000-0000-000000000002',
+  score_preview: { score: 43.81, nominal_weight_percent: 30, scored_categories: 2, numeric: true },
+} satisfies Repository;
 
 export const mockQueuedAnalysis = {
   id: 'b0000003-0000-0000-0000-000000000003',
@@ -248,6 +342,7 @@ export const mockQueuedAnalysis = {
   data_coverage: {},
   recommendations: [],
   checks: {},
+  score_preview: null,
 } satisfies Analysis;
 
 export const mockRunningAnalysis = {
@@ -268,6 +363,7 @@ export const mockRunningAnalysis = {
   data_coverage: {},
   recommendations: [],
   checks: {},
+  score_preview: null,
 } satisfies Analysis;
 
 export const mockFailedAnalysis = {
@@ -358,6 +454,13 @@ export const mockNoDataAnalysis = {
   },
   recommendations: [],
   checks: {},
+  score_coverage: {
+    nominal_weight_percent: 0,
+    scored_categories: 0,
+    unscored_categories: ['documentation', 'cicd', 'security', 'activity', 'issues', 'code_health'],
+    partial_categories: [],
+  },
+  score_preview: null,
 } satisfies Analysis;
 
 export const mockPartialAnalysis = {
@@ -396,4 +499,11 @@ export const mockPartialAnalysis = {
   },
   recommendations: [],
   checks: {},
+  score_coverage: {
+    nominal_weight_percent: 25,
+    scored_categories: 1,
+    unscored_categories: ['security'],
+    partial_categories: ['documentation'],
+  },
+  score_preview: { score: null, nominal_weight_percent: 15, scored_categories: 1, numeric: false },
 } satisfies Analysis;

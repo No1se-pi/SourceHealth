@@ -1,6 +1,7 @@
 """Typed settings: создаются на границе процесса, не во время импорта core."""
 
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -33,6 +34,13 @@ class Settings(BaseSettings):
     code_runtime_image: str = "sourcehealth-sast"
     code_runtime_timeout: int = Field(default=180, ge=1, le=1200)
     refresh_interval: int = Field(default=86400, ge=300)
+    catalog_sync_enabled: bool = False
+    catalog_sync_page_size: int = Field(default=100, ge=1, le=100)
+    catalog_sync_max_pages: int = Field(default=5, ge=1, le=100)
+    catalog_sync_queue_limit: int = Field(default=500, ge=1, le=100000)
+    catalog_cycle_interval_seconds: int = Field(default=21600, ge=3600, le=604800)
+    scheduler_batch_size: int = Field(default=100, ge=1, le=1000)
+    scheduler_failed_retry_seconds: int = Field(default=3600, ge=1800, le=86400)
 
     @model_validator(mode="after")
     def runtime_budget(self):
@@ -54,4 +62,14 @@ class Settings(BaseSettings):
     def trusted_sourcecraft_host(cls, value: str) -> str:
         if value.rstrip("/") != "https://api.sourcecraft.tech":
             raise ValueError("only official SourceCraft API host is allowed")
+        return value.rstrip("/")
+
+    @field_validator("public_origin")
+    @classmethod
+    def trusted_public_origin(cls, value: str) -> str:
+        parsed = urlsplit(value.rstrip("/"))
+        local_http = parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+        if ((parsed.scheme != "https" and not local_http) or not parsed.netloc
+                or parsed.path or parsed.query or parsed.fragment or "@" in parsed.netloc):
+            raise ValueError("public_origin must be an HTTPS origin (HTTP is allowed only for localhost)")
         return value.rstrip("/")

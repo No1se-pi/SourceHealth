@@ -45,6 +45,8 @@ snapshot не обещается. Для массового каталога о�
 - AnalysisPage: items, limit, offset, has_more. История использует стабильный дополнительный
   порядок по UUID при одинаковом queued_at; total не вычисляется.
 - AnalysisDetails: Summary + category_scores/data_coverage/recommendations/checks.
+- `score_preview`: производный nullable `ScorePreviewDTO` в AnalysisDetails,
+  RepositorySummary и RepositoryDetails; не является Health Score и не влияет на сортировку.
 - AnalysisDetails.score_coverage: nullable объект, вычисленный backend из сохранённых
   category scores и известных весов policy; nominal_weight_percent, scored_categories,
   unscored_categories, partial_categories. Для неизвестной policy — null. Не означает

@@ -32,10 +32,10 @@ export const ScoreDisplay: React.FC<ScoreDisplayProps> = ({
           fontSize: fontSizes[size].value,
           fontWeight: 500,
         }}
-        title="Оценка ещё не рассчитана (NO_DATA)"
-        aria-label="Оценка здоровья: Нет данных"
+        title="Недостаточно наблюдений для численной оценки (NO_DATA)"
+        aria-label="Численная оценка пока не рассчитана"
       >
-        Нет данных
+        Пока не рассчитан
       </span>
     );
   }

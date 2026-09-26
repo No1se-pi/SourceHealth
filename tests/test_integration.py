@@ -24,19 +24,20 @@ if ENABLED:
     from rq import Queue, SimpleWorker
     from rq.job import Job
     from rq.timeouts import TimerDeathPenalty
-    from sqlalchemy import delete, select, text, update
+    from sqlalchemy import delete, func, select, text, update
     from sqlalchemy.engine import make_url
     from sqlalchemy.exc import IntegrityError
 
     from sourcehealth.api.app import create_app
     from sourcehealth.application.jobs import dispatch_pending, execute_analysis, lock_key, recover_abandoned
-    from sourcehealth.application.services import AnalysisService
+    from sourcehealth.application.services import AnalysisService, ServiceError
     from sourcehealth.auth.service import AuthService
     from sourcehealth.core import AnalysisContext
     from sourcehealth.core.domain import DataAvailability, RepositoryRef
+    from sourcehealth.profile.service import ProfileService
     from sourcehealth.settings import Settings
     from sourcehealth.storage.database import create_database
-    from sourcehealth.storage.models import AnalysisRun, Repository, User
+    from sourcehealth.storage.models import AnalysisRun, Repository, User, UserRepository
 
 
 @unittest.skipUnless(ENABLED, "set TEST_DATABASE_URL and TEST_REDIS_URL for PostgreSQL/Redis integration")
@@ -55,7 +56,7 @@ class PersistenceTests(unittest.TestCase):
         cls.redis = Redis.from_url(redis_url)
         cls.redis.ping()
         with cls.engine.connect() as db:
-            if db.scalar(text("select version_num from alembic_version")) != "0001":
+            if db.scalar(text("select version_num from alembic_version")) != "0002_product_growth":
                 raise RuntimeError("apply Alembic before integration tests")
 
     @classmethod
@@ -67,6 +68,88 @@ class PersistenceTests(unittest.TestCase):
         self.service = AnalysisService(self.sessions, self.settings)
         self.ref = RepositoryRef.from_url(f"https://sourcecraft.dev/test/repo-{uuid4().hex}", visibility="public")
         self.repository_id = self.service.register_repository(self.ref)
+
+    def test_bonus_compare_reads_two_public_repositories_without_writes(self):
+        other = RepositoryRef.from_url(f"https://sourcecraft.dev/test/compare-{uuid4().hex}", visibility="public")
+        other_id = self.service.register_repository(other)
+        before = None
+        canonical = {}
+        with self.sessions.begin() as db:
+            for repository_id, score in ((self.repository_id, 70), (other_id, 80)):
+                run = AnalysisRun(repository_id=repository_id, status="completed", trigger="manual",
+                                  profile="mvp-v1", fingerprint=uuid4().hex,
+                                  completed_at=datetime.now(UTC) - timedelta(minutes=1), health_score=score,
+                                  scoring_policy_version="mvp-score-v1.2", category_scores={})
+                db.add(run)
+                db.flush()
+                canonical[repository_id] = str(run.id)
+                db.add(AnalysisRun(repository_id=repository_id, status="completed", trigger="manual",
+                                   profile="code-v1", fingerprint=uuid4().hex,
+                                   completed_at=datetime.now(UTC), health_score=99,
+                                   scoring_policy_version="code-score-v1", category_scores={}))
+            before = db.scalar(select(func.count()).select_from(AnalysisRun))
+        with TestClient(create_app(self.settings, sessions=self.sessions, redis=self.redis),
+                        base_url="https://testserver") as client:
+            response = client.get("/api/v1/compare", params=[("repository_id", str(other_id)),
+                                                              ("repository_id", str(self.repository_id))])
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual([item["repository_id"] for item in response.json()["repositories"]],
+                         [str(other_id), str(self.repository_id)])
+        self.assertEqual([item["latest_analysis_id"] for item in response.json()["repositories"]],
+                         [canonical[other_id], canonical[self.repository_id]])
+        self.assertEqual([item["health_score"] for item in response.json()["repositories"]], [80, 70])
+        with self.sessions() as db:
+            self.assertEqual(db.scalar(select(func.count()).select_from(AnalysisRun)), before)
+
+    def test_bonus_integrity_reads_bounded_history(self):
+        categories = {name: {"score": 80, "availability": "available"} for name in
+                      ("documentation", "cicd", "security", "activity", "issues", "code_health")}
+        with self.sessions.begin() as db:
+            db.add(AnalysisRun(repository_id=self.repository_id, status="completed", trigger="manual",
+                               profile="mvp-v1", fingerprint=uuid4().hex,
+                               completed_at=datetime.now(UTC) - timedelta(minutes=1), health_score=50,
+                               scoring_policy_version="mvp-score-v1.2", category_scores=categories, results={}))
+            db.add(AnalysisRun(repository_id=self.repository_id, status="completed", trigger="manual",
+                               profile="mvp-v1", fingerprint=uuid4().hex, completed_at=datetime.now(UTC),
+                               health_score=80, scoring_policy_version="mvp-score-v1.2",
+                               category_scores=categories, results={"checks": {"git_activity": {"metrics": {
+                                   "commits_last_30_days": 20, "active_days_last_30_days": 1}}}}))
+            db.add(AnalysisRun(repository_id=self.repository_id, status="completed", trigger="manual",
+                               profile="code-v1", fingerprint=uuid4().hex,
+                               completed_at=datetime.now(UTC) + timedelta(seconds=1), health_score=5,
+                               scoring_policy_version="code-score-v1", category_scores={}, results={}))
+        with TestClient(create_app(self.settings, sessions=self.sessions, redis=self.redis),
+                        base_url="https://testserver") as client:
+            response = client.get(f"/api/v1/repositories/{self.repository_id}/integrity")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual({item["id"] for item in response.json()["signals"]}, {"commit_burst", "score_jump"})
+
+    def test_bonus_publicity_hides_revoked_repository(self):
+        with self.sessions.begin() as db:
+            run = AnalysisRun(repository_id=self.repository_id, status="completed", trigger="manual",
+                              profile="mvp-v1", fingerprint=uuid4().hex,
+                              completed_at=datetime.now(UTC) - timedelta(minutes=1), health_score=72,
+                              scoring_policy_version="mvp-score-v1.2")
+            db.add(run)
+            db.flush()
+            canonical_id = str(run.id)
+            db.add(AnalysisRun(repository_id=self.repository_id, status="completed", trigger="manual",
+                               profile="code-v1", fingerprint=uuid4().hex,
+                               completed_at=datetime.now(UTC), health_score=99,
+                               scoring_policy_version="code-score-v1"))
+        with TestClient(create_app(self.settings, sessions=self.sessions, redis=self.redis),
+                        base_url="https://attacker.invalid") as client:
+            response = client.get(f"/api/v1/publicity/repositories/{self.repository_id}",
+                                  headers={"host": "attacker.invalid", "x-forwarded-host": "attacker.invalid"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(response.json()["repository_url"].startswith("https://testserver/"))
+        self.assertEqual(response.json()["latest_analysis_id"], canonical_id)
+        self.assertEqual(response.json()["health_score"], 72)
+        with self.sessions.begin() as db:
+            db.get(Repository, self.repository_id).visibility = "unknown"
+        with TestClient(create_app(self.settings, sessions=self.sessions, redis=self.redis),
+                        base_url="https://testserver") as client:
+            self.assertEqual(client.get(f"/api/v1/publicity/repositories/{self.repository_id}").status_code, 404)
 
     def test_sourcecraft_connection_lifecycle(self):
         import base64
@@ -81,8 +164,10 @@ class PersistenceTests(unittest.TestCase):
         auth = AuthService(settings, self.redis, self.sessions)
         token, other = uuid4().hex, uuid4().hex
         credential = "unit-" + uuid4().hex
+        user_ids = {}
         for session in (token, other):
-            self.redis.set(auth._key("session", session), json.dumps({"id": str(uuid4())}), ex=120)
+            user_ids[session] = str(uuid4())
+            self.redis.set(auth._key("session", session), json.dumps({"id": user_ids[session]}), ex=120)
 
         def respond(request):
             self.assertEqual(request.headers["authorization"], "Bearer " + credential)
@@ -95,14 +180,31 @@ class PersistenceTests(unittest.TestCase):
         service = SourceCraftConnection(auth, client_factory=lambda **kw: SourceCraftClient(
             transport=httpx.MockTransport(respond), **kw))
         try:
+            self.assertFalse(service.lease_for_analysis(None, uuid4()))
             result = service.connect(token, credential)
             self.assertTrue(result["connected"])
-            self.assertLessEqual(result["expires_in"], 120)
-            self.assertNotIn(credential.encode(), self.redis.get(auth._key("sourcecraft", token)))
+            self.assertEqual(result["expires_in"], 1800)
+            credential_key = auth._key("user-sourcecraft", user_ids[token])
+            self.assertNotIn(credential.encode(), self.redis.get(credential_key))
+            analysis_id = uuid4()
+            self.assertTrue(service.lease_for_analysis(token, analysis_id))
+            self.assertFalse(service.lease_for_analysis(token, analysis_id))
+            run_key = service._analysis_key(analysis_id)
+            ciphertext = self.redis.get(run_key)
+            self.assertNotIn(credential.encode(), ciphertext)
+            self.assertGreater(self.redis.ttl(run_key), 0)
+            self.assertEqual(service.analysis_credential(analysis_id), credential)
+            copied_id = uuid4()
+            copied_key = service._analysis_key(copied_id)
+            self.redis.set(copied_key, ciphertext, ex=30)
+            self.assertIsNone(service.analysis_credential(copied_id))  # AES-GCM AAD binds ciphertext to run key.
+            self.assertFalse(service.lease_for_analysis(other, uuid4()))
+            service.delete_analysis_credential(analysis_id)
+            self.assertIsNone(self.redis.get(run_key))
             self.assertFalse(service.status(other)["connected"])
             repos = service.repositories(token, "test")
             self.assertEqual([r["can_analyze"] for r in repos["items"]], [True, False])
-            cipher_key = auth._key("sourcecraft", token)
+            cipher_key = credential_key
             self.redis.set(cipher_key, b"invalid-ciphertext", ex=30)
             with self.assertRaises(ServiceError):
                 service.repositories(token, "test")
@@ -114,12 +216,45 @@ class PersistenceTests(unittest.TestCase):
             self.assertFalse(service.status(token)["connected"])
             service.connect(token, credential)
             auth.logout(token)
-            self.assertIsNone(self.redis.get(auth._key("sourcecraft", token)))
+            self.assertIsNotNone(self.redis.get(credential_key))
             with self.assertRaises(ServiceError):
                 service.connect(token, credential)
         finally:
             auth.logout(token)
             auth.logout(other)
+
+    def test_profile_tracking_is_idempotent_and_user_scoped(self):
+        first, second = User(id=uuid4(), yandex_id="profile-" + uuid4().hex), User(
+            id=uuid4(), yandex_id="profile-" + uuid4().hex)
+        with self.sessions.begin() as db:
+            db.add_all((first, second))
+        profile = ProfileService(self.sessions)
+        profile.track(first.id, self.repository_id)
+        profile.track(first.id, self.repository_id)
+        with self.sessions() as db:
+            self.assertEqual(len(list(db.scalars(select(UserRepository).where(
+                UserRepository.user_id == first.id, UserRepository.repository_id == self.repository_id)))), 1)
+        with self.assertRaises(ServiceError):
+            profile.update(second.id, self.repository_id, refresh_preference="1h", use_pat=True)
+        updated = profile.update(first.id, self.repository_id, refresh_preference="6h", use_pat=True)
+        self.assertEqual(updated["refresh_preference"], "6h")
+        self.assertTrue(updated["use_pat_for_scheduled_analysis"])
+        profile.untrack(first.id, self.repository_id)
+        with self.sessions() as db:
+            self.assertIsNotNone(db.get(Repository, self.repository_id))
+
+    def test_public_badge_is_health_only_and_cached(self):
+        with self.sessions.begin() as db:
+            db.get(Repository, self.repository_id, with_for_update=True).health_score = 82.4
+        with TestClient(create_app(self.settings, sessions=self.sessions, redis=self.redis),
+                        base_url="https://testserver") as client:
+            response = client.get(f"/api/v1/badges/{self.ref.organization_slug}/{self.ref.repository_slug}.svg")
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(response.headers["content-type"].startswith("image/svg+xml"))
+            self.assertEqual(response.headers["cache-control"], "public, max-age=300")
+            self.assertIn("82", response.text)
+            self.assertNotIn("script", response.text.lower())
+            self.assertNotIn("foreignobject", response.text.lower())
 
     def test_connection_http_guards(self):
         import json
@@ -145,6 +280,178 @@ class PersistenceTests(unittest.TestCase):
         finally:
             auth.logout(token)
 
+    def test_connected_pat_bypasses_no_data_cache_without_orphaning_cached_run(self):
+        import base64
+        import json
+
+        from sourcehealth.auth.sourcecraft import SourceCraftConnection
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        settings = self.settings.model_copy(update={"sourcecraft_credential_key": SecretStr(
+            base64.urlsafe_b64encode(os.urandom(32)).decode())})
+        service = AnalysisService(self.sessions, settings)
+        cached = service.request_analysis(self.repository_id)
+        with self.sessions.begin() as db:
+            row = db.get(AnalysisRun, cached.id)
+            row.status, row.completed_at = "partial", datetime.now(UTC)
+            row.results = {"checks": {"sourcecraft_appsec": {
+                "source": "sourcecraft_appsec", "availability": "no_data", "metrics": {}}}}
+
+        auth = AuthService(settings, self.redis, self.sessions)
+        token = uuid4().hex
+        self.redis.set(auth._key("session", token), json.dumps({"id": str(uuid4())}), ex=120)
+        credential = "unit-" + uuid4().hex
+        connection = SourceCraftConnection(auth, client_factory=lambda **kw: SourceCraftClient(
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"id": "user-1"})), **kw))
+        connection.connect(token, credential)
+        app = create_app(settings, sessions=self.sessions, redis=self.redis)
+        dispatched = []
+
+        def assert_credential_precedes_dispatch(sessions, redis, timeout):
+            if dispatched:
+                return 0
+            with sessions() as db:
+                queued = db.scalar(select(AnalysisRun).where(
+                    AnalysisRun.repository_id == self.repository_id, AnalysisRun.status == "queued"))
+            self.assertIsNotNone(queued)
+            self.assertEqual(connection.analysis_credential(queued.id), credential)
+            dispatched.append(queued.id)
+            return 0
+
+        try:
+            with (TestClient(app, base_url="https://testserver") as client,
+                  patch("sourcehealth.api.routers.repositories.dispatch_pending",
+                        side_effect=assert_credential_precedes_dispatch)):
+                client.cookies.set("sh_session", token)
+                response = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={},
+                                       headers={"Origin": "https://testserver"})
+                self.assertEqual(response.status_code, 202, response.text)
+                fresh_id = UUID(response.json()["id"])
+                self.assertNotEqual(fresh_id, cached.id)
+                self.assertEqual(dispatched, [fresh_id])
+                self.assertIsNotNone(self.redis.get(connection._analysis_key(fresh_id)))
+
+                connection.delete_analysis_credential(fresh_id)
+                with self.sessions.begin() as db:
+                    row = db.get(AnalysisRun, fresh_id)
+                    row.status, row.completed_at = "partial", datetime.now(UTC)
+                    row.results = {"checks": {"sourcecraft_appsec": {
+                        "source": "sourcecraft_appsec", "availability": "available",
+                        "metrics": {"complete": True, "open_by_severity": {}}}}}
+                cached_response = client.post(
+                    f"/api/v1/repositories/{self.repository_id}/analyses", json={},
+                    headers={"Origin": "https://testserver"})
+                self.assertEqual(cached_response.json()["id"], str(fresh_id))
+                self.assertIsNone(self.redis.get(connection._analysis_key(fresh_id)))
+        finally:
+            auth.logout(token)
+
+    def test_scheduled_active_run_cannot_be_upgraded_with_browser_credential(self):
+        import base64
+        import json
+
+        from sourcehealth.auth.sourcecraft import SourceCraftConnection
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        settings = self.settings.model_copy(update={"sourcecraft_credential_key": SecretStr(
+            base64.urlsafe_b64encode(os.urandom(32)).decode())})
+        scheduled = AnalysisService(self.sessions, settings).request_analysis(
+            self.repository_id, trigger="scheduled")
+        auth = AuthService(settings, self.redis, self.sessions)
+        token = uuid4().hex
+        self.redis.set(auth._key("session", token), json.dumps({"id": str(uuid4())}), ex=120)
+        credential = "unit-" + uuid4().hex
+        connection = SourceCraftConnection(auth, client_factory=lambda **kw: SourceCraftClient(
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"id": "user-1"})), **kw))
+        connection.connect(token, credential)
+        existing_keys = set(self.redis.scan_iter("auth:analysis-sourcecraft:*"))
+        try:
+            with (TestClient(create_app(settings, sessions=self.sessions, redis=self.redis),
+                             base_url="https://testserver") as client,
+                  patch("sourcehealth.api.routers.repositories.dispatch_pending", return_value=0)):
+                client.cookies.set("sh_session", token)
+                response = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={},
+                                       headers={"Origin": "https://testserver"})
+            self.assertEqual(response.status_code, 202, response.text)
+            self.assertEqual(response.json()["id"], str(scheduled.id))
+            self.assertIsNone(connection.analysis_credential(scheduled.id))
+            self.assertEqual(set(self.redis.scan_iter("auth:analysis-sourcecraft:*")), existing_keys)
+        finally:
+            auth.logout(token)
+
+    def test_second_user_cannot_overwrite_first_users_analysis_credential(self):
+        import base64
+        import json
+
+        from sourcehealth.auth.sourcecraft import SourceCraftConnection
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        settings = self.settings.model_copy(update={"sourcecraft_credential_key": SecretStr(
+            base64.urlsafe_b64encode(os.urandom(32)).decode())})
+        auth = AuthService(settings, self.redis, self.sessions)
+        first_token, second_token = uuid4().hex, uuid4().hex
+        for token in (first_token, second_token):
+            self.redis.set(auth._key("session", token), json.dumps({"id": str(uuid4())}), ex=120)
+        credentials = ("unit-a-" + uuid4().hex, "unit-b-" + uuid4().hex)
+        connection = SourceCraftConnection(auth, client_factory=lambda **kw: SourceCraftClient(
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"id": "user"})), **kw))
+        connection.connect(first_token, credentials[0])
+        connection.connect(second_token, credentials[1])
+        existing_keys = set(self.redis.scan_iter("auth:analysis-sourcecraft:*"))
+        try:
+            with (TestClient(create_app(settings, sessions=self.sessions, redis=self.redis),
+                             base_url="https://testserver") as client,
+                  patch("sourcehealth.api.routers.repositories.dispatch_pending", return_value=0)):
+                client.cookies.set("sh_session", first_token)
+                first = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={},
+                                    headers={"Origin": "https://testserver"})
+                client.cookies.set("sh_session", second_token)
+                second = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={},
+                                     headers={"Origin": "https://testserver"})
+            self.assertEqual(first.status_code, 202, first.text)
+            self.assertEqual(second.status_code, 202, second.text)
+            self.assertEqual(second.json()["id"], first.json()["id"])
+            run_id = UUID(first.json()["id"])
+            self.assertEqual(connection.analysis_credential(run_id), credentials[0])
+            current_keys = set(self.redis.scan_iter("auth:analysis-sourcecraft:*"))
+            self.assertEqual(current_keys - existing_keys, {connection._analysis_key(run_id).encode()})
+            connection.delete_analysis_credential(run_id)
+        finally:
+            auth.logout(first_token)
+            auth.logout(second_token)
+
+    def test_credential_lease_failure_does_not_create_or_dispatch_run(self):
+        import base64
+        import json
+
+        from sourcehealth.auth.sourcecraft import SourceCraftConnection
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        settings = self.settings.model_copy(update={"sourcecraft_credential_key": SecretStr(
+            base64.urlsafe_b64encode(os.urandom(32)).decode())})
+        auth = AuthService(settings, self.redis, self.sessions)
+        token = uuid4().hex
+        self.redis.set(auth._key("session", token), json.dumps({"id": str(uuid4())}), ex=120)
+        connection = SourceCraftConnection(auth, client_factory=lambda **kw: SourceCraftClient(
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"id": "user-1"})), **kw))
+        connection.connect(token, "unit-" + uuid4().hex)
+        try:
+            with (TestClient(create_app(settings, sessions=self.sessions, redis=self.redis),
+                             base_url="https://testserver") as client,
+                  patch("sourcehealth.api.routers.repositories.SourceCraftConnection.lease_for_analysis",
+                        return_value=False),
+                  patch("sourcehealth.api.routers.repositories.dispatch_pending") as dispatch):
+                client.cookies.set("sh_session", token)
+                response = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={},
+                                       headers={"Origin": "https://testserver"})
+            self.assertEqual(response.status_code, 409, response.text)
+            dispatch.assert_not_called()
+            with self.sessions() as db:
+                self.assertIsNone(db.scalar(select(AnalysisRun).where(
+                    AnalysisRun.repository_id == self.repository_id)))
+        finally:
+            auth.logout(token)
+
     def test_rating_import_updates_and_clears_unknown(self):
         from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
 
@@ -158,6 +465,39 @@ class PersistenceTests(unittest.TestCase):
             self.service.import_public_repository(self.ref.canonical_url, client=client)
             with self.sessions() as db:
                 self.assertIsNone(db.get(Repository, self.repository_id).likes)
+
+    def test_score_preview_never_changes_leaderboard_ranking(self):
+        preview_ref = RepositoryRef.from_url(
+            f"https://sourcecraft.dev/test/preview-{uuid4().hex}", visibility="public")
+        preview_id = self.service.register_repository(preview_ref)
+        categories = {
+            name: {"category": name, "score": 90, "availability": "available",
+                   "explanation": "test", "evidence_refs": []}
+            for name in ("activity", "issues")
+        }
+        try:
+            with self.sessions() as db:
+                db.get(Repository, self.repository_id).health_score = 50
+                run = AnalysisRun(repository_id=preview_id, status="completed", trigger="manual", profile="mvp-v1",
+                                  fingerprint=uuid4().hex, completed_at=datetime.now(UTC),
+                                  scoring_policy_version="mvp-score-v1.2", analyzer_contract_version="3.0",
+                                  health_score=None, category_scores=categories)
+                db.add(run)
+                db.flush()
+                db.get(Repository, preview_id).latest_analysis_id = run.id
+                db.commit()
+            with TestClient(create_app(self.settings, sessions=self.sessions, redis=self.redis)) as client:
+                items = client.get("/api/v1/repositories", params={"limit": 100}).json()["items"]
+            positions = {item["id"]: index for index, item in enumerate(items)}
+            self.assertLess(positions[str(self.repository_id)], positions[str(preview_id)])
+            preview = next(item for item in items if item["id"] == str(preview_id))
+            self.assertIsNone(preview["health_score"])
+            self.assertEqual(preview["score_preview"]["score"], 90)
+        finally:
+            with self.sessions.begin() as db:
+                db.execute(update(Repository).where(Repository.id == preview_id).values(latest_analysis_id=None))
+                db.execute(delete(AnalysisRun).where(AnalysisRun.repository_id == preview_id))
+                db.execute(delete(Repository).where(Repository.id == preview_id))
 
     def tearDown(self):
         with self.sessions.begin() as db:
@@ -329,6 +669,7 @@ class PersistenceTests(unittest.TestCase):
             self.assertEqual(payload["category_scores"]["security"]["availability"], "no_data")
             self.assertEqual(payload["score_coverage"]["nominal_weight_percent"], 80)
             self.assertEqual(payload["score_coverage"]["unscored_categories"], ["security"])
+            self.assertTrue(payload["score_preview"]["numeric"])
             self.assertEqual(payload["head_sha"], SHA)
             for forbidden in ("untrusted", "do-not-store", "private name", "error_messages"):
                 self.assertNotIn(forbidden, result.text)
@@ -338,6 +679,7 @@ class PersistenceTests(unittest.TestCase):
             listing = client.get("/api/v1/repositories", params={"limit": 100}).json()
             listed = next(row for row in listing["items"] if row["id"] == str(self.repository_id))
             self.assertEqual(listed["health_score"], payload["health_score"])
+            self.assertEqual(listed["score_preview"], payload["score_preview"])
             cached = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={}, headers=headers)
             self.assertEqual(cached.json()["id"], run_id)
             runtime.analyze.assert_called_once()
@@ -347,6 +689,76 @@ class PersistenceTests(unittest.TestCase):
             self.assertEqual(row.results["category_scores"], row.category_scores)
             self.assertEqual(row.results["recommendations"], row.recommendations)
             self.assertEqual(len(row.data_coverage), 6)
+
+    def test_connected_pat_runs_appsec_pipeline_and_deletes_lease(self):
+        import base64
+        import json
+        from unittest.mock import Mock
+
+        from sourcehealth.auth.sourcecraft import SourceCraftConnection
+        from sourcehealth.integrations.sourcecraft.appsec import SourceCraftAppSecClient
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+        from tests.mvp_fixtures import runtime_payload, sourcecraft_transport
+
+        class TestWorker(SimpleWorker):
+            death_penalty_class = TimerDeathPenalty
+
+        settings = self.settings.model_copy(update={
+            "analysis_profile": "mvp-v1",
+            "sourcecraft_credential_key": SecretStr(base64.urlsafe_b64encode(os.urandom(32)).decode()),
+        })
+        normal_transport = sourcecraft_transport(self.ref.repository_slug)
+        auth = AuthService(settings, self.redis, self.sessions)
+        token = uuid4().hex
+        self.redis.set(auth._key("session", token), json.dumps({"id": str(uuid4())}), ex=120)
+        credential = "unit-" + uuid4().hex
+        connection = SourceCraftConnection(auth, client_factory=lambda **kw: SourceCraftClient(
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"id": "user-1"})), **kw))
+        connection.connect(token, credential)
+
+        def normal_client(**kwargs):
+            return SourceCraftClient(transport=normal_transport, **kwargs)
+
+        sensitive_marker = "SUPER_SECRET_" + "VALUE_SHOULD_NEVER_PERSIST"
+
+        def appsec_handler(request):
+            if request.url.path == "/v1/scans/latest":
+                return httpx.Response(200, json={"uuid": "scan-fixture"})
+            if request.url.path == "/v1/scans/scan-fixture":
+                return httpx.Response(200, json={"status": "FINISHED"})
+            rows = ([{"uuid": "group-fixture", "codeBlock": sensitive_marker}]
+                    if request.url.params.get("severity") == "MEDIUM" else [])
+            return httpx.Response(200, json={"data": rows, "nextPageToken": "", "totalSize": len(rows)})
+
+        def appsec_client(**kwargs):
+            return SourceCraftAppSecClient(transport=httpx.MockTransport(appsec_handler), sleep=lambda _: None, **kwargs)
+
+        runtime = Mock()
+        runtime.analyze.return_value = runtime_payload()
+        app = create_app(settings, sessions=self.sessions, redis=self.redis)
+        try:
+            with (TestClient(app, base_url="https://testserver") as client,
+                  patch("sourcehealth.application.jobs.SourceCraftClient", side_effect=normal_client),
+                  patch("sourcehealth.application.jobs.SourceCraftAppSecClient", side_effect=appsec_client),
+                  patch("sourcehealth.application.jobs.Settings", return_value=settings),
+                  patch("sourcehealth.application.jobs.configured_runtime", return_value=runtime)):
+                client.cookies.set("sh_session", token)
+                response = client.post(f"/api/v1/repositories/{self.repository_id}/analyses", json={},
+                                       headers={"Origin": "https://testserver"})
+                self.assertEqual(response.status_code, 202, response.text)
+                run_id = UUID(response.json()["id"])
+                self.assertIsNotNone(self.redis.get(connection._analysis_key(run_id)))
+                TestWorker([Queue("analysis-code", connection=self.redis)], connection=self.redis).work(
+                    burst=True, logging_level="WARNING")
+                result = client.get(f"/api/v1/analyses/{run_id}")
+                self.assertEqual(result.status_code, 200, result.text)
+                payload = result.json()
+                self.assertEqual(payload["category_scores"]["security"]["score"], 95)
+                self.assertEqual(payload["checks"]["sourcecraft_appsec"]["metrics"]["total_open"], 1)
+                self.assertNotIn(sensitive_marker, result.text)
+                self.assertIsNone(self.redis.get(connection._analysis_key(run_id)))
+        finally:
+            auth.logout(token)
 
     def test_public_analysis_history_is_stable_paginated_and_private_safe(self):
         queued_at = datetime(2026, 9, 20, 12, tzinfo=UTC)
@@ -447,6 +859,11 @@ class PersistenceTests(unittest.TestCase):
                     with self.assertRaises(ServiceError) as error:
                         self.service.import_public_repository(self.ref.canonical_url, client=source)
                     self.assertEqual(error.exception.code, "public_repository_unverified")
+                with self.sessions() as db:
+                    expected = "unknown" if status in {200, 404} else "public"
+                    self.assertEqual(db.get(Repository, self.repository_id).visibility, expected)
+                with self.sessions.begin() as db:
+                    db.get(Repository, self.repository_id).visibility = "public"
         with self.sessions() as db:
             self.assertIsNone(db.get(Repository, self.repository_id).sourcecraft_id)
 
@@ -479,6 +896,7 @@ class PersistenceTests(unittest.TestCase):
             with self.sessions.begin() as db:
                 db.get(Repository, self.repository_id).visibility = "private"
             self.assertEqual(client.get(f"/api/v1/analyses/{run.id}").status_code, 404)
+            self.assertEqual(client.get(f"/api/v1/badges/{self.ref.organization_slug}/{self.ref.repository_slug}.svg").status_code, 404)
             self.assertEqual(client.get(f"/api/v1/analyses/{run.id}/report.md").status_code, 404)
 
     def test_oauth_pkce_cookie_state_session_and_logout(self):

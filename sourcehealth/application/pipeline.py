@@ -30,7 +30,11 @@ def analyze_context(context: AnalysisContext, *, include_code: bool = False,
     if with_mvp:
         doc = report.checks.get("documentation")
         sha = doc.metadata.get("head_sha") if doc else None
-        context = replace(context, metadata={**context.metadata, "ci_configured": doc.metadata.get("ci_configured") if doc else None})
+        context = replace(context, metadata={**context.metadata,
+                          "ci_configured": doc.metadata.get("ci_configured") if doc else None,
+                          "ci_config_path": doc.metadata.get("ci_config_path") if doc else None,
+                          "ci_config_legacy": doc.metadata.get("ci_config_legacy", False) if doc else False,
+                          "ci_config_complete": doc.metadata.get("ci_config_complete", False) if doc else False})
         report.checks.update(AnalysisRunner([IssuesAnalyzer(), CIAnalyzer(), PlatformActivityAnalyzer()]).analyze_context(context).checks)
         for name in ("git_activity", "sast"):
             check = report.checks.get(name)
@@ -43,7 +47,7 @@ def analyze_context(context: AnalysisContext, *, include_code: bool = False,
             ci = report.checks["cicd"]
             if ci.metrics.get("configured") is not None:
                 ci.evidence.append(Evidence(id="cicd:snapshot", source="git_snapshot", type="ci_configuration",
-                                            reference=sha, summary="Проверено наличие .sourcecraft/ci.yaml в snapshot.",
-                                            location=".sourcecraft/ci.yaml"))
+                                            reference=sha, summary="Проверено наличие нативной CI-конфигурации в snapshot.",
+                                            location=context.metadata.get("ci_config_path")))
     report.completed_at = datetime.now(UTC)
     return report

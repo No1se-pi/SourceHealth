@@ -12,6 +12,14 @@
 
 ## Итог и coverage
 
+### Предварительный preview (Source Soul в UI)
+
+Backend также вычисляет неперсистентный `score_preview` по тем же номинальным весам:
+`Σ(score × weight) / Σ(weight числовых категорий)`. Число показывается только при
+минимум двух категориях и 30% веса; при одной категории возвращается состояние
+«формируется», без вводящего в заблуждение числа. Preview не заменяет `health_score`,
+не меняет gate `≥3` категорий и `≥50%` веса и не участвует в рейтинге.
+
 | Категория | Номинальный вес |
 |---|---:|
 | documentation | 15 |
@@ -105,7 +113,8 @@ Duration/recent failures/latest status информативны, не меняю
 ## Security boundary
 
 В production остаётся `score=null, availability=no_data,
-error=appsec_interface_unconfirmed`. Local SAST никогда не входит в Security.
+error=appsec_credential_unavailable`. Manual run с user PAT получает official AppSec aggregate.
+Local SAST никогда не входит в Security.
 
 Зарезервирован **внутренний нормализованный**, а не внешний wire DTO:
 source=sourcecraft_appsec, complete=true, open_by_severity с неотрицательными

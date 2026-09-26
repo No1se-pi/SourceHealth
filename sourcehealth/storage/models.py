@@ -3,7 +3,18 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -19,6 +30,32 @@ class User(Base):
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     yandex_id: Mapped[str] = mapped_column(String(128), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    sourcecraft_retention_seconds: Mapped[int] = mapped_column(Integer, default=1800, server_default="1800")
+
+
+class UserRepository(Base):
+    __tablename__ = "user_repositories"
+    __table_args__ = (
+        CheckConstraint("refresh_preference IN ('adaptive','1h','6h','24h','7d','off')",
+                        name="ck_user_repository_refresh"),
+        Index("ix_user_repository_repository", "repository_id"),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    repository_id: Mapped[UUID] = mapped_column(ForeignKey("repositories.id", ondelete="CASCADE"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    refresh_preference: Mapped[str] = mapped_column(String(16), default="adaptive", server_default="adaptive")
+    use_pat_for_scheduled_analysis: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+
+
+class CatalogSyncState(Base):
+    __tablename__ = "catalog_sync_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    page_token: Mapped[str | None] = mapped_column(String(1024))
+    cycle_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
 
 
 class Repository(Base):
