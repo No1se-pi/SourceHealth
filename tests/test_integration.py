@@ -24,7 +24,7 @@ if ENABLED:
     from rq import Queue, SimpleWorker
     from rq.job import Job
     from rq.timeouts import TimerDeathPenalty
-    from sqlalchemy import delete, select, text, update
+    from sqlalchemy import delete, func, select, text, update
     from sqlalchemy.engine import make_url
     from sqlalchemy.exc import IntegrityError
 
@@ -68,6 +68,88 @@ class PersistenceTests(unittest.TestCase):
         self.service = AnalysisService(self.sessions, self.settings)
         self.ref = RepositoryRef.from_url(f"https://sourcecraft.dev/test/repo-{uuid4().hex}", visibility="public")
         self.repository_id = self.service.register_repository(self.ref)
+
+    def test_bonus_compare_reads_two_public_repositories_without_writes(self):
+        other = RepositoryRef.from_url(f"https://sourcecraft.dev/test/compare-{uuid4().hex}", visibility="public")
+        other_id = self.service.register_repository(other)
+        before = None
+        canonical = {}
+        with self.sessions.begin() as db:
+            for repository_id, score in ((self.repository_id, 70), (other_id, 80)):
+                run = AnalysisRun(repository_id=repository_id, status="completed", trigger="manual",
+                                  profile="mvp-v1", fingerprint=uuid4().hex,
+                                  completed_at=datetime.now(UTC) - timedelta(minutes=1), health_score=score,
+                                  scoring_policy_version="mvp-score-v1.2", category_scores={})
+                db.add(run)
+                db.flush()
+                canonical[repository_id] = str(run.id)
+                db.add(AnalysisRun(repository_id=repository_id, status="completed", trigger="manual",
+                                   profile="code-v1", fingerprint=uuid4().hex,
+                                   completed_at=datetime.now(UTC), health_score=99,
+                                   scoring_policy_version="code-score-v1", category_scores={}))
+            before = db.scalar(select(func.count()).select_from(AnalysisRun))
+        with TestClient(create_app(self.settings, sessions=self.sessions, redis=self.redis),
+                        base_url="https://testserver") as client:
+            response = client.get("/api/v1/compare", params=[("repository_id", str(other_id)),
+                                                              ("repository_id", str(self.repository_id))])
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual([item["repository_id"] for item in response.json()["repositories"]],
+                         [str(other_id), str(self.repository_id)])
+        self.assertEqual([item["latest_analysis_id"] for item in response.json()["repositories"]],
+                         [canonical[other_id], canonical[self.repository_id]])
+        self.assertEqual([item["health_score"] for item in response.json()["repositories"]], [80, 70])
+        with self.sessions() as db:
+            self.assertEqual(db.scalar(select(func.count()).select_from(AnalysisRun)), before)
+
+    def test_bonus_integrity_reads_bounded_history(self):
+        categories = {name: {"score": 80, "availability": "available"} for name in
+                      ("documentation", "cicd", "security", "activity", "issues", "code_health")}
+        with self.sessions.begin() as db:
+            db.add(AnalysisRun(repository_id=self.repository_id, status="completed", trigger="manual",
+                               profile="mvp-v1", fingerprint=uuid4().hex,
+                               completed_at=datetime.now(UTC) - timedelta(minutes=1), health_score=50,
+                               scoring_policy_version="mvp-score-v1.2", category_scores=categories, results={}))
+            db.add(AnalysisRun(repository_id=self.repository_id, status="completed", trigger="manual",
+                               profile="mvp-v1", fingerprint=uuid4().hex, completed_at=datetime.now(UTC),
+                               health_score=80, scoring_policy_version="mvp-score-v1.2",
+                               category_scores=categories, results={"checks": {"git_activity": {"metrics": {
+                                   "commits_last_30_days": 20, "active_days_last_30_days": 1}}}}))
+            db.add(AnalysisRun(repository_id=self.repository_id, status="completed", trigger="manual",
+                               profile="code-v1", fingerprint=uuid4().hex,
+                               completed_at=datetime.now(UTC) + timedelta(seconds=1), health_score=5,
+                               scoring_policy_version="code-score-v1", category_scores={}, results={}))
+        with TestClient(create_app(self.settings, sessions=self.sessions, redis=self.redis),
+                        base_url="https://testserver") as client:
+            response = client.get(f"/api/v1/repositories/{self.repository_id}/integrity")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual({item["id"] for item in response.json()["signals"]}, {"commit_burst", "score_jump"})
+
+    def test_bonus_publicity_hides_revoked_repository(self):
+        with self.sessions.begin() as db:
+            run = AnalysisRun(repository_id=self.repository_id, status="completed", trigger="manual",
+                              profile="mvp-v1", fingerprint=uuid4().hex,
+                              completed_at=datetime.now(UTC) - timedelta(minutes=1), health_score=72,
+                              scoring_policy_version="mvp-score-v1.2")
+            db.add(run)
+            db.flush()
+            canonical_id = str(run.id)
+            db.add(AnalysisRun(repository_id=self.repository_id, status="completed", trigger="manual",
+                               profile="code-v1", fingerprint=uuid4().hex,
+                               completed_at=datetime.now(UTC), health_score=99,
+                               scoring_policy_version="code-score-v1"))
+        with TestClient(create_app(self.settings, sessions=self.sessions, redis=self.redis),
+                        base_url="https://attacker.invalid") as client:
+            response = client.get(f"/api/v1/publicity/repositories/{self.repository_id}",
+                                  headers={"host": "attacker.invalid", "x-forwarded-host": "attacker.invalid"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertTrue(response.json()["repository_url"].startswith("https://testserver/"))
+        self.assertEqual(response.json()["latest_analysis_id"], canonical_id)
+        self.assertEqual(response.json()["health_score"], 72)
+        with self.sessions.begin() as db:
+            db.get(Repository, self.repository_id).visibility = "unknown"
+        with TestClient(create_app(self.settings, sessions=self.sessions, redis=self.redis),
+                        base_url="https://testserver") as client:
+            self.assertEqual(client.get(f"/api/v1/publicity/repositories/{self.repository_id}").status_code, 404)
 
     def test_sourcecraft_connection_lifecycle(self):
         import base64
