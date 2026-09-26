@@ -1,16 +1,16 @@
 """Bounded, resumable public catalog synchronization."""
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import func, or_, select, text
 
 from sourcehealth.integrations.sourcecraft.analytics import identifier
 from sourcehealth.integrations.sourcecraft.client import SourceCraftClient, SourceCraftError
 from sourcehealth.storage.models import AnalysisRun, CatalogSyncState, Repository
 
 LOG = logging.getLogger(__name__)
+CATALOG_SYNC_LOCK_KEY = 0x534F555243454843
 
 
 class CatalogSync:
@@ -19,11 +19,31 @@ class CatalogSync:
 
     def run(self) -> dict:
         """Process a bounded number of pages, committing the token only after each page."""
+        # Lightweight unit fakes expose only begin(); real sessionmakers always
+        # take the PostgreSQL session-scoped lock below.
+        if not callable(self.sessions):
+            return self._run_locked()
+        with self.sessions() as guard:
+            acquired = guard.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": CATALOG_SYNC_LOCK_KEY})
+            guard.commit()
+            if not acquired:
+                return {"skipped": True, "reason": "catalog_sync_already_running"}
+            try:
+                return self._run_locked()
+            finally:
+                guard.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": CATALOG_SYNC_LOCK_KEY})
+                guard.commit()
+
+    def _run_locked(self) -> dict:
         with self.sessions.begin() as db:
             state = db.get(CatalogSyncState, 1, with_for_update=True)
             if state is None:
                 state = CatalogSyncState(id=1, cycle_started_at=datetime.now(UTC))
                 db.add(state)
+            elif (state.page_token is None and state.cycle_started_at is None and state.last_completed_at
+                  and state.last_completed_at > datetime.now(UTC) - timedelta(
+                      seconds=self.settings.catalog_cycle_interval_seconds)):
+                return {"skipped": True, "reason": "catalog_cycle_not_due"}
             token = state.page_token
             if state.cycle_started_at is None:
                 state.cycle_started_at = datetime.now(UTC)
@@ -51,10 +71,7 @@ class CatalogSync:
                     raise SourceCraftError("invalid_pagination")
                 with self.sessions.begin() as db:
                     for values in safe:
-                        db.execute(insert(Repository).values(**values).on_conflict_do_update(
-                            constraint="uq_repository_slug",
-                            set_={key: values[key] for key in
-                                  ("sourcecraft_id", "canonical_url", "default_branch", "language", "likes")}))
+                        self._upsert(db, values)
                     state = db.get(CatalogSyncState, 1, with_for_update=True)
                     state.page_token = next_token or None
                     state.updated_at = datetime.now(UTC)
@@ -86,10 +103,38 @@ class CatalogSync:
         language = language.get("name") if isinstance(language, dict) else None
         if language is not None and (not isinstance(language, str) or len(language) > 64):
             language = None
-        return {"sourcecraft_id": sourcecraft_id, "organization_slug": organization_slug,
+        values = {"sourcecraft_id": sourcecraft_id, "organization_slug": organization_slug,
                 "repository_slug": slug, "canonical_url": f"https://sourcecraft.dev/{organization_slug}/{slug}",
-                "visibility": "public", "default_branch": branch, "language": language, "likes": None,
-                "next_analysis_at": datetime.now(UTC)}
+                "visibility": "public", "next_analysis_at": datetime.now(UTC)}
+        if branch is not None:
+            values["default_branch"] = branch
+        if language is not None:
+            values["language"] = language
+        return values
+
+    @staticmethod
+    def _upsert(db, values):
+        row = db.scalar(select(Repository).where(
+            Repository.sourcecraft_id == values["sourcecraft_id"]).with_for_update())
+        collision = db.scalar(select(Repository).where(or_(
+            Repository.canonical_url == values["canonical_url"],
+            (Repository.organization_slug == values["organization_slug"])
+            & (Repository.repository_slug == values["repository_slug"])
+        )).with_for_update())
+        if row is not None and collision is not None and collision.id != row.id:
+            raise SourceCraftError("repository_identity_conflict")
+        if row is None and collision is not None:
+            if collision.sourcecraft_id not in {None, values["sourcecraft_id"]}:
+                raise SourceCraftError("repository_identity_conflict")
+            row = collision
+        if row is None:
+            db.add(Repository(**values))
+            return
+        row.sourcecraft_id = values["sourcecraft_id"]
+        for key in ("organization_slug", "repository_slug", "canonical_url", "visibility",
+                    "default_branch", "language"):
+            if key in values:
+                setattr(row, key, values[key])
 
 
 def queue_backlog(sessions) -> int:

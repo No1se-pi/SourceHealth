@@ -7,7 +7,9 @@ python -m sourcehealth.application catalog-sync
 python -m sourcehealth.application maintain
 ```
 
-`maintain` сначала обновляет каталог, затем ставит due-репозитории в очередь только при допустимом backlog. `enqueue-due` может включать sync через `CATALOG_SYNC_ENABLED=true`; по умолчанию интеграция выключена. Основные пределы: `CATALOG_SYNC_PAGE_SIZE`, `CATALOG_SYNC_MAX_PAGES`, `CATALOG_SYNC_QUEUE_LIMIT`, `SCHEDULER_BATCH_SIZE`.
+`maintain` сначала обновляет каталог, затем ставит due-репозитории в очередь. Ограничение backlog применяется внутри сервиса планировщика и одинаково защищает `maintain` и `enqueue-due`: число новых запусков не превышает свободную ёмкость `CATALOG_SYNC_QUEUE_LIMIT`. `enqueue-due` может включать sync через `CATALOG_SYNC_ENABLED=true`; по умолчанию интеграция выключена. Основные пределы: `CATALOG_SYNC_PAGE_SIZE`, `CATALOG_SYNC_MAX_PAGES`, `CATALOG_SYNC_QUEUE_LIMIT`, `SCHEDULER_BATCH_SIZE`, `CATALOG_CYCLE_INTERVAL_SECONDS` (по умолчанию 6 часов, минимум 1 час).
+
+Один проход каталога защищён PostgreSQL advisory lock: второй процесс завершается с `catalog_sync_already_running`, не ожидая и не меняя checkpoint. После полного цикла новый обход начинается не раньше `CATALOG_CYCLE_INTERVAL_SECONDS`. Каталог связывает переименования по стабильному `sourcecraft_id` и не стирает известные `likes`, язык или default branch отсутствующими значениями.
 
 Планировщик использует активность: до суток — 1 час, до 7 дней — 6 часов, до 30 дней — сутки, до 180 дней — 72 часа, старше — 7 дней, неизвестная активность — сутки. Пользовательская настройка может запросить более частое обновление, но не чаще одного часа. `off` выключает только пользовательский спрос; публичный каталог продолжает адаптивный цикл. Ошибка анализа резервирует повтор минимум на 30 минут.
 
