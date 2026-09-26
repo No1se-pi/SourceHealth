@@ -8,6 +8,8 @@ import { AuthCallbackPage } from '../pages/AuthCallbackPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { SourceCraftPage } from '../pages/SourceCraftPage';
 import { DemoPage } from '../pages/DemoPage';
+import { ProfilePage } from '../pages/ProfilePage';
+import { DevelopersPage } from '../pages/DevelopersPage';
 
 export const AppRouter: React.FC = () => {
   return (
@@ -20,6 +22,8 @@ export const AppRouter: React.FC = () => {
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/sourcecraft" element={<SourceCraftPage />} />
           <Route path="/demo" element={<DemoPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/developers" element={<DevelopersPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

@@ -18,7 +18,7 @@ from sourcehealth.logging_config import configure_logging
 from sourcehealth.settings import Settings
 from sourcehealth.storage.database import create_database
 
-from .routers import analyses, health, repositories, sourcecraft
+from .routers import analyses, badges, health, profile, repositories, sourcecraft
 from .routers import auth as auth_routes
 from .schemas import ErrorResponse
 
@@ -61,7 +61,8 @@ def create_app(settings: Settings | None = None, *, sessions=None, redis=None) -
                                                                        "component": "api", "event": "request_failed"})
             response = error(request, "internal_error", 500)
         response.headers["X-Request-ID"] = request.state.request_id
-        response.headers["Cache-Control"] = "no-store"
+        if "Cache-Control" not in response.headers:
+            response.headers["Cache-Control"] = "no-store"
         logging.getLogger(__name__).info("request_completed", extra={"request_id": request.state.request_id,
                                                                     "component": "api", "event": "request_completed"})
         return response
@@ -92,4 +93,6 @@ def create_app(settings: Settings | None = None, *, sessions=None, redis=None) -
     app.include_router(analyses.router)
     app.include_router(auth_routes.router)
     app.include_router(sourcecraft.router)
+    app.include_router(profile.router)
+    app.include_router(badges.router)
     return app

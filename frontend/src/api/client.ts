@@ -15,6 +15,9 @@ export type AnalyzerResult = components['schemas']['AnalyzerResultDTO'];
 export type Evidence = components['schemas']['EvidenceDTO'];
 export type User = components['schemas']['UserDTO'];
 export type ErrorResponse = components['schemas']['ErrorResponse'];
+export type Profile = components['schemas']['ProfileDTO'];
+export type ProfileRepository = components['schemas']['ProfileRepositoryDTO'];
+export type ConnectedRepositories = components['schemas']['ConnectedRepositoriesDTO'];
 
 export class ApiError extends Error {
   constructor(
@@ -48,12 +51,28 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export const api = {
   sourcecraftStatus: () => request<components['schemas']['SourceCraftConnectionDTO']>('/sourcecraft/connection'),
-  connectSourcecraft: (pat: string) => request<components['schemas']['SourceCraftConnectionDTO']>('/sourcecraft/connection', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pat }),
+  connectSourcecraft: (pat: string, retentionSeconds = 1800) => request<components['schemas']['SourceCraftConnectionDTO']>('/sourcecraft/connection', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pat, retention_seconds: retentionSeconds }),
   }),
   disconnectSourcecraft: () => request<void>('/sourcecraft/connection', { method: 'DELETE' }),
+  updateSourcecraftRetention: (retentionSeconds: number) => request<components['schemas']['SourceCraftConnectionDTO']>('/sourcecraft/connection', {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ retention_seconds: retentionSeconds }),
+  }),
   connectedRepositories: (organization: string) => request<components['schemas']['ConnectedRepositoriesDTO']>(
     `/sourcecraft/repositories?${new URLSearchParams({ organization })}`),
+  mySourcecraftRepositories: (pageToken = '') => request<ConnectedRepositories>(
+    `/sourcecraft/me/repositories?${new URLSearchParams(pageToken ? { page_token: pageToken } : {})}`),
+  profile: () => request<Profile>('/profile'),
+  trackRepository: (repositoryId: string) => request<ProfileRepository>('/profile/repositories', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository_id: repositoryId }),
+  }),
+  updateTrackedRepository: (repositoryId: string, refreshPreference: string, usePat: boolean) =>
+    request<ProfileRepository>(`/profile/repositories/${encodeURIComponent(repositoryId)}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_preference: refreshPreference, use_pat_for_scheduled_analysis: usePat }),
+    }),
+  untrackRepository: (repositoryId: string) => request<void>(
+    `/profile/repositories/${encodeURIComponent(repositoryId)}`, { method: 'DELETE' }),
   importRepository: (url: string) => request<RepositoryDetails>('/repositories', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }),
   }),

@@ -26,4 +26,3 @@ def effective_interval(last_activity_at: datetime | None, preferences: list[str]
     seconds = [int(adaptive_interval(last_activity_at, now=now).total_seconds())]
     seconds.extend(PREFERENCE_SECONDS[p] for p in preferences if p in PREFERENCE_SECONDS)
     return timedelta(seconds=max(MINIMUM_INTERVAL_SECONDS, min(seconds)))
-

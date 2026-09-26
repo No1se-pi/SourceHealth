@@ -1,5 +1,9 @@
 # Документация SourceHealth
 
+- [Синхронизация каталога и адаптивный планировщик](CATALOG_SYNC.md)
+- [Профиль, отслеживание и хранение PAT](PROFILE.md)
+- [Публичный API и README badge](DEVELOPERS_API.md)
+
 SourceHealth — сервис здоровья репозиториев SourceCraft для ЛЦТ 2026.
 Текущий этап: **MVP analytics** — official AppSec для ручного запуска с пользовательским PAT;
 численный scoring, рекомендации, public import и существующий React интерфейс.
