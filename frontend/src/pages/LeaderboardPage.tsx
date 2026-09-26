@@ -2,13 +2,15 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type RepositoryPage } from '../api/client';
 import { Card } from '../components/common/Card';
-import { Button } from '../components/common/Button';
+import { Button, getButtonStyles } from '../components/common/Button';
 import { ScoreDisplay } from '../components/common/ScoreDisplay';
 import { LoadingState } from '../components/common/LoadingState';
 import { EmptyState } from '../components/common/EmptyState';
 import { ErrorState } from '../components/common/ErrorState';
 import { RepositoryImport } from '../components/common/RepositoryImport';
 import { SourceSoul } from '../components/common/SourceSoul';
+import { usePageTitle } from '../utils/usePageTitle';
+import { formatLikes } from '../utils/formatters';
 
 const POPULAR_LANGUAGES = [
   'TypeScript',
@@ -46,6 +48,8 @@ function formatLastActivity(timestamp: string | null | undefined): string {
 }
 
 export const LeaderboardPage: React.FC = () => {
+  usePageTitle('Рейтинг проектов');
+
   const [page, setPage] = useState<RepositoryPage>();
   const [error, setError] = useState<unknown>();
   const [offset, setOffset] = useState(0);
@@ -109,7 +113,7 @@ export const LeaderboardPage: React.FC = () => {
 
       <Card
         title="Лидерборд проектов"
-        subtitle="Сравнение показателей качества, покрытия тестами, документации и безопасности"
+        subtitle={page ? `Показано ${page.items.length} репозиториев · Сравнение показателей качества и надёжности` : "Сравнение показателей качества, покрытия тестами, документации и безопасности"}
         headerAction={
           <div
             style={{
@@ -162,11 +166,25 @@ export const LeaderboardPage: React.FC = () => {
                 onChange={handleSortChange}
                 aria-label="Сортировка репозиториев"
               >
-                <option value="health_score">По здоровью проекта</option>
-                <option value="likes">По лайкам</option>
-                <option value="last_activity">По последней активности</option>
+                <option value="health_score">По здоровью проекта ↓</option>
+                <option value="likes">По лайкам ↓</option>
+                <option value="last_activity">По последней активности ↓</option>
               </select>
             </div>
+
+            {(language !== '' || sort !== 'health_score') && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setLanguage('');
+                  setSort('health_score');
+                  setOffset(0);
+                }}
+              >
+                Сбросить фильтры
+              </Button>
+            )}
           </div>
         }
         footer={
@@ -217,7 +235,26 @@ export const LeaderboardPage: React.FC = () => {
         ) : !page || page.items.length === 0 ? (
           <EmptyState
             title="Репозитории не найдены"
-            description="По выбранным фильтрам в системе не найдено репозиториев."
+            description={language ? `По фильтру языка «${language}» репозиториев не найдено.` : "По выбранным критериям в системе не найдено репозиториев."}
+            action={
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                {(language !== '' || sort !== 'health_score') && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setLanguage('');
+                      setSort('health_score');
+                      setOffset(0);
+                    }}
+                  >
+                    Сбросить фильтры
+                  </Button>
+                )}
+                <Link to="/demo" className="btn-link" style={getButtonStyles('secondary', 'md')}>
+                  Посмотреть демо
+                </Link>
+              </div>
+            }
           />
         ) : (
           <div>
@@ -259,10 +296,16 @@ export const LeaderboardPage: React.FC = () => {
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                             <Link
                               to={`/repositories/${repo.id}`}
+                              title={`${repo.organization_slug}/${repo.repository_slug}`}
                               style={{
                                 fontWeight: 600,
                                 fontSize: '0.92rem',
                                 color: 'var(--sh-text-primary)',
+                                textOverflow: 'ellipsis',
+                                overflow: 'hidden',
+                                whiteSpace: 'nowrap',
+                                maxWidth: '320px',
+                                display: 'inline-block',
                               }}
                             >
                               {repo.organization_slug}/{repo.repository_slug}
@@ -295,8 +338,8 @@ export const LeaderboardPage: React.FC = () => {
                         <td style={{ color: 'var(--sh-text-secondary)', fontSize: '0.88rem' }}>
                           {repo.likes !== null && repo.likes !== undefined ? (
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                              <span>★</span>
-                              <span>{repo.likes}</span>
+                              <span aria-hidden="true">★</span>
+                              <span>{formatLikes(repo.likes)}</span>
                             </span>
                           ) : (
                             '—'
@@ -354,6 +397,7 @@ export const LeaderboardPage: React.FC = () => {
                         </span>
                         <Link
                           to={`/repositories/${repo.id}`}
+                          title={`${repo.organization_slug}/${repo.repository_slug}`}
                           style={{
                             fontWeight: 600,
                             fontSize: '0.92rem',
@@ -379,7 +423,7 @@ export const LeaderboardPage: React.FC = () => {
                     >
                       <span>Язык: {repo.language || '—'}</span>
                       <span>
-                        Лайки: {repo.likes !== null && repo.likes !== undefined ? `★ ${repo.likes}` : '—'}
+                        Лайки: {repo.likes !== null && repo.likes !== undefined ? `★ ${formatLikes(repo.likes)}` : '—'}
                       </span>
                       <span>Активность: {formatLastActivity(repo.last_activity_at)}</span>
                     </div>

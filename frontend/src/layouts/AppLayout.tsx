@@ -22,6 +22,11 @@ export const AppLayout: React.FC = () => {
 
   return (
     <div className="sc-app-shell">
+      {/* Skip to Content Link (A11y J01) */}
+      <a href="#main-content" className="sc-skip-to-content">
+        Перейти к основному содержимому
+      </a>
+
       {/* SourceCraft Left Application Sidebar */}
       <Sidebar
         mobileOpen={mobileOpen}
@@ -44,7 +49,7 @@ export const AppLayout: React.FC = () => {
           onToggleMobile={() => setMobileOpen((prev) => !prev)}
           onOpenAppearance={() => setAppearanceOpen(true)}
         />
-        <main className="sc-workspace-main">
+        <main className="sc-workspace-main" id="main-content" tabIndex={-1}>
           <Outlet />
         </main>
         <Footer />

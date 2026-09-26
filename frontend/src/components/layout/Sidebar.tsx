@@ -104,11 +104,34 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onClose, onOpenApp
             </svg>
             <span className="sc-nav-label">Мой SourceCraft</span>
           </NavLink>
-          {user && <NavLink to="/profile" className={({ isActive }) => `sc-nav-item ${isActive ? 'active' : ''}`}>
-            <span className="sc-nav-icon" aria-hidden="true">●</span><span className="sc-nav-label">Профиль</span>
-          </NavLink>}
-          <NavLink to="/developers" className={({ isActive }) => `sc-nav-item ${isActive ? 'active' : ''}`}>
-            <span className="sc-nav-icon" aria-hidden="true">&lt;/&gt;</span><span className="sc-nav-label">Разработчикам</span>
+          <NavLink
+            to="/profile"
+            className={({ isActive }) => `sc-nav-item ${isActive ? 'active' : ''}`}
+          >
+            <svg className="sc-nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+              <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z" />
+            </svg>
+            <span className="sc-nav-label">Профиль</span>
+          </NavLink>
+
+          <NavLink
+            to="/developers"
+            className={({ isActive }) => `sc-nav-item ${isActive ? 'active' : ''}`}
+          >
+            <svg className="sc-nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+              <path d="M4.854 4.146a.5.5 0 0 1 0 .708L1.707 8l3.147 3.146a.5.5 0 0 1-.708.708l-3.5-3.5a.5.5 0 0 1 0-.708l3.5-3.5a.5.5 0 0 1 .708 0zm6.292 0a.5.5 0 0 0 0 .708L14.293 8l-3.147 3.146a.5.5 0 0 0 .708.708l3.5-3.5a.5.5 0 0 0 0-.708l-3.5-3.5a.5.5 0 0 0-.708 0z" />
+            </svg>
+            <span className="sc-nav-label">Разработчикам</span>
+          </NavLink>
+
+          <NavLink
+            to="/demo"
+            className={({ isActive }) => `sc-nav-item ${isActive ? 'active' : ''}`}
+          >
+            <svg className="sc-nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+              <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zM1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0zm5.5-3.5a.5.5 0 0 0-.5.5v6a.5.5 0 0 0 .757.429l5-3a.5.5 0 0 0 0-.858l-5-3A.5.5 0 0 0 7 4.5z" />
+            </svg>
+            <span className="sc-nav-label">Демонстрация</span>
           </NavLink>
         </div>
 

@@ -1103,3 +1103,80 @@ select:focus-visible, input:focus-visible {
 .animate-spin {
   animation: spin 1s linear infinite;
 }
+
+/* ==========================================================================
+   Accessibility & Polish (Skip link, Focus-visible, Reduced Motion, Print)
+   ========================================================================== */
+
+.sc-skip-to-content {
+  position: absolute;
+  top: -9999px;
+  left: 1rem;
+  background: var(--sh-brand);
+  color: #ffffff;
+  padding: 0.5rem 1rem;
+  border-radius: var(--sh-radius-sm);
+  font-weight: 600;
+  z-index: 10000;
+  text-decoration: none;
+  box-shadow: var(--sh-shadow-lg);
+}
+
+.sc-skip-to-content:focus {
+  top: 1rem;
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--sh-brand);
+  outline-offset: 2px;
+}
+
+pre {
+  overflow-x: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  .sc-sidebar,
+  .sc-header,
+  .sc-workspace-footer,
+  .mobile-menu-btn,
+  .sc-skip-to-content,
+  button,
+  .btn-link {
+    display: none !important;
+  }
+
+  .sc-workspace-layout {
+    display: block !important;
+  }
+
+  .sc-workspace-main {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #111111 !important;
+  }
+
+  .sc-card {
+    border: 1px solid #cccccc !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+}

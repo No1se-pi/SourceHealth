@@ -10,10 +10,12 @@ import { SourceCraftPage } from '../pages/SourceCraftPage';
 import { DemoPage } from '../pages/DemoPage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { DevelopersPage } from '../pages/DevelopersPage';
+import { ScrollToTop } from '../components/common/ScrollToTop';
 
 export const AppRouter: React.FC = () => {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         <Route element={<AppLayout />}>
           <Route path="/" element={<LeaderboardPage />} />

@@ -10,6 +10,7 @@ interface ErrorStateProps {
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
+  sourcecraft_connection_required: 'Для доступа к этой функции необходимо подключить персональный токен SourceCraft (PAT).',
   authentication_required: 'Требуется вход через Яндекс ID для выполнения этого действия.',
   invalid_sourcecraft_url: 'Укажите корректную ссылку вида https://sourcecraft.dev/org/repo.',
   public_repository_unverified: 'Не удалось подтвердить публичный статус репозитория в SourceCraft.',
@@ -37,6 +38,12 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
     requestId = error.requestId || null;
     status = error.status;
     userMessage = ERROR_MESSAGES[error.code] || 'Не удалось выполнить запрос к платформе. Попробуйте повторить операцию.';
+  } else if (error instanceof Error) {
+    if (error.message.toLowerCase().includes('failed to fetch') || error.message.toLowerCase().includes('network')) {
+      userMessage = 'Не удалось связаться с SourceHealth. Проверьте соединение и повторите попытку.';
+    } else {
+      userMessage = error.message;
+    }
   }
 
   return (

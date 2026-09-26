@@ -6,17 +6,12 @@ import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
 import { getSafeExternalUrl } from '../utils/analysis';
-
-function formatRemainingTime(seconds: number): string {
-  if (seconds <= 0) return 'срок действия истёк';
-  const mins = Math.round(seconds / 60);
-  if (mins < 60) return `~${mins} мин`;
-  const hours = Math.floor(mins / 60);
-  const remMins = mins % 60;
-  return remMins > 0 ? `~${hours} ч ${remMins} мин` : `~${hours} ч`;
-}
+import { usePageTitle } from '../utils/usePageTitle';
+import { formatTtl } from '../utils/formatters';
 
 export const SourceCraftPage: React.FC = () => {
+  usePageTitle('Подключение SourceCraft');
+
   const navigate = useNavigate();
   const [connected, setConnected] = useState(false);
   const [expiresIn, setExpiresIn] = useState<number | null>(null);
@@ -27,6 +22,8 @@ export const SourceCraftPage: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [isError, setIsError] = useState(false);
+  const [showPat, setShowPat] = useState(false);
+  const [patLength, setPatLength] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -65,14 +62,16 @@ export const SourceCraftPage: React.FC = () => {
     event.preventDefault();
     const form = event.currentTarget;
     const field = form.elements.namedItem('pat') as HTMLInputElement;
-    const patValue = field.value;
-    const pending = api.connectSourcecraft(patValue, retention);
-    field.value = ''; // Credential never enters React state or browser storage.
+    const patValue = field?.value || '';
     setBusy(true);
     setMessage('');
     setIsError(false);
     try {
-      const conn = await pending;
+      const conn = await api.connectSourcecraft(patValue, retention);
+      if (field) {
+        field.value = '';
+      }
+      setPatLength(0);
       setConnected(conn.connected);
       if (typeof conn.expires_in === 'number') {
         setExpiresIn(conn.expires_in);
@@ -95,6 +94,13 @@ export const SourceCraftPage: React.FC = () => {
   };
 
   const handleDisconnect = async () => {
+    if (
+      !window.confirm(
+        'Удалить сохранённый PAT? Фоновый автоанализ AppSec перестанет его использовать.'
+      )
+    ) {
+      return;
+    }
     setBusy(true);
     setMessage('');
     try {
@@ -236,32 +242,60 @@ export const SourceCraftPage: React.FC = () => {
               >
                 SourceCraft Personal Access Token (PAT)
               </label>
-              <input
-                id="pat-input"
-                name="pat"
-                type="password"
-                autoComplete="off"
-                required
-                maxLength={4096}
-                disabled={busy}
-                placeholder="sc_pat_..."
-                aria-describedby="pat-help"
-                style={{
-                  width: '100%',
-                  fontFamily: 'var(--sh-font-mono)',
-                  fontSize: '0.9rem',
-                }}
-              />
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input
+                  id="pat-input"
+                  name="pat"
+                  type={showPat ? 'text' : 'password'}
+                  autoComplete="off"
+                  spellCheck={false}
+                  required
+                  maxLength={4096}
+                  disabled={busy}
+                  placeholder="sc_pat_..."
+                  onChange={(e) => setPatLength(e.target.value.length)}
+                  aria-describedby="pat-help"
+                  style={{
+                    flex: 1,
+                    fontFamily: 'var(--sh-font-mono)',
+                    fontSize: '0.9rem',
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowPat(!showPat)}
+                  style={{ padding: '0.45rem 0.75rem', fontSize: '0.82rem', whiteSpace: 'nowrap' }}
+                >
+                  {showPat ? 'Скрыть' : 'Показать'}
+                </Button>
+              </div>
+              {patLength > 0 && (
+                <div style={{ marginTop: '0.35rem', fontSize: '0.8rem', color: 'var(--sh-health-good)' }}>
+                  ✓ PAT введён ({patLength} симв.)
+                </div>
+              )}
               <div id="pat-help" style={{ marginTop: '0.5rem', fontSize: '0.82rem', color: 'var(--sh-text-muted)' }}>
                 PAT используется только сервером и хранится в зашифрованном виде ограниченное время.
               </div>
             </div>
-            <label htmlFor="pat-retention">Срок хранения для автоанализа
-              <select id="pat-retention" value={retention} onChange={(event) => setRetention(Number(event.target.value))}>
-                <option value={1800}>30 минут</option><option value={21600}>6 часов</option>
-                <option value={86400}>24 часа</option><option value={604800}>7 дней</option>
+            <label htmlFor="pat-retention">
+              Срок хранения для автоанализа
+              <select
+                id="pat-retention"
+                value={retention}
+                onChange={(event) => setRetention(Number(event.target.value))}
+                style={{ marginTop: '0.35rem', display: 'block' }}
+              >
+                <option value={1800}>30 минут — для ручной проверки</option>
+                <option value={21600}>6 часов — короткая сессия</option>
+                <option value={86400}>24 часа — на день</option>
+                <option value={604800}>7 дней — автоанализ</option>
               </select>
-              <span className="growth-muted">При сроке более 30 минут PAT останется зашифрованным после выхода из веб-сессии до истечения срока. Удалить его можно здесь в любой момент.</span>
+              <span className="growth-muted" style={{ display: 'block', marginTop: '0.35rem' }}>
+                При сроке более 30 минут PAT останется зашифрованным после выхода из веб-сессии до истечения срока. Удалить его можно здесь в любой момент.
+              </span>
             </label>
             <div>
               <Button type="submit" variant="primary" disabled={busy} loading={busy}>
@@ -288,20 +322,34 @@ export const SourceCraftPage: React.FC = () => {
             }
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <Badge variant="success">✓ Подключено к SourceCraft</Badge>
+              <Badge variant="success">● SourceCraft подключён</Badge>
               <span style={{ fontSize: '0.85rem', color: 'var(--sh-text-muted)' }}>
                 {expiresIn !== null && expiresIn > 0
-                  ? `Подключение активно ещё ${formatRemainingTime(expiresIn)}`
+                  ? `Токен действует ещё: ${formatTtl(expiresIn)}`
                   : 'Токен активен в рамках текущей сессии'}
               </span>
-              <label>Хранить PAT
-                <select value={retention} disabled={busy} onChange={async (event) => {
-                  const value = Number(event.target.value); setBusy(true);
-                  try { const updated = await api.updateSourcecraftRetention(value); setRetention(updated.retention_seconds); setExpiresIn(updated.expires_in); }
-                  finally { setBusy(false); }
-                }}>
-                  <option value={1800}>30 минут</option><option value={21600}>6 часов</option>
-                  <option value={86400}>24 часа</option><option value={604800}>7 дней</option>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+                Хранить PAT:
+                <select
+                  value={retention}
+                  disabled={busy}
+                  onChange={async (event) => {
+                    const value = Number(event.target.value);
+                    setBusy(true);
+                    try {
+                      const updated = await api.updateSourcecraftRetention(value);
+                      setRetention(updated.retention_seconds);
+                      setExpiresIn(updated.expires_in);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                  style={{ fontSize: '0.82rem' }}
+                >
+                  <option value={1800}>30 минут — для ручной проверки</option>
+                  <option value={21600}>6 часов — короткая сессия</option>
+                  <option value={86400}>24 часа — на день</option>
+                  <option value={604800}>7 дней — автоанализ</option>
                 </select>
               </label>
             </div>
@@ -397,8 +445,8 @@ export const SourceCraftPage: React.FC = () => {
                               )}
                             </td>
                             <td>
-                              <Badge variant={repo.visibility === 'public' ? 'success' : 'neutral'}>
-                                {repo.visibility === 'public' ? 'Публичный' : repo.visibility}
+                              <Badge variant={repo.visibility === 'public' ? 'success' : 'warning'}>
+                                {repo.visibility === 'public' ? 'Публичный' : 'Приватный (анализ недоступен)'}
                               </Badge>
                             </td>
                             <td style={{ textAlign: 'right' }}>
