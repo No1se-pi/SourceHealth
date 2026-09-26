@@ -1,6 +1,7 @@
 """Typed settings: создаются на границе процесса, не во время импорта core."""
 
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -61,4 +62,14 @@ class Settings(BaseSettings):
     def trusted_sourcecraft_host(cls, value: str) -> str:
         if value.rstrip("/") != "https://api.sourcecraft.tech":
             raise ValueError("only official SourceCraft API host is allowed")
+        return value.rstrip("/")
+
+    @field_validator("public_origin")
+    @classmethod
+    def trusted_public_origin(cls, value: str) -> str:
+        parsed = urlsplit(value.rstrip("/"))
+        local_http = parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+        if ((parsed.scheme != "https" and not local_http) or not parsed.netloc
+                or parsed.path or parsed.query or parsed.fragment or "@" in parsed.netloc):
+            raise ValueError("public_origin must be an HTTPS origin (HTTP is allowed only for localhost)")
         return value.rstrip("/")
