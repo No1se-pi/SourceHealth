@@ -19,6 +19,7 @@ class PublicityService:
                 raise ServiceError("repository_not_found", 404)
             run = db.scalar(select(AnalysisRun).where(
                 AnalysisRun.repository_id == repo.id,
+                AnalysisRun.profile == "mvp-v1",
                 AnalysisRun.status.in_(("completed", "partial")),
             ).order_by(AnalysisRun.completed_at.desc(), AnalysisRun.id.desc()).limit(1))
             badge = f"{self.base}/api/v1/badges/{repo.organization_slug}/{repo.repository_slug}.svg"
@@ -27,8 +28,8 @@ class PublicityService:
                 "repository_id": repo.id,
                 "organization_slug": repo.organization_slug,
                 "repository_slug": repo.repository_slug,
-                "health_score": repo.health_score,
-                "health_available": repo.health_score is not None,
+                "health_score": run.health_score if run else None,
+                "health_available": run is not None and run.health_score is not None,
                 "repository_url": f"{self.base}/repositories/{repo.id}",
                 "badge_url": badge,
                 "badge_markdown": f"![SourceHealth]({badge})",

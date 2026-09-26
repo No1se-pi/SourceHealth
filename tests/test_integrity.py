@@ -7,10 +7,11 @@ from uuid import uuid4
 from sourcehealth.integrity import derive_signals
 
 
-def run(*, health=70, commits=0, days=0, ci_score=40, ci_runs=10, coverage_names=()):
+def run(*, health=70, commits=0, days=0, ci_score=40, ci_runs=10, coverage_names=(),
+        policy="mvp-score-v1.2"):
     categories = {name: {"score": 80, "availability": "available"} for name in coverage_names}
     categories["cicd"] = {"score": ci_score, "availability": "available"}
-    return SimpleNamespace(id=uuid4(), health_score=health, scoring_policy_version="mvp-score-v1.2",
+    return SimpleNamespace(id=uuid4(), health_score=health, scoring_policy_version=policy,
                            category_scores=categories, results={"checks": {
                                "git_activity": {"metrics": {"commits_last_30_days": commits,
                                                               "active_days_last_30_days": days}},
@@ -45,3 +46,12 @@ class IntegrityTests(unittest.TestCase):
         empty.results = {"checks": {}}
         empty.category_scores = {"cicd": {"score": None, "availability": "no_data"}}
         self.assertEqual(derive_signals(empty), [])
+
+    def test_policy_change_suppresses_jumps(self):
+        previous = run(health=50, policy="mvp-score-v1.1", coverage_names=("documentation",))
+        current = run(health=90, policy="mvp-score-v1.2",
+                      coverage_names=("documentation", "security", "activity", "issues"))
+        self.assertTrue({"score_jump", "coverage_jump"}.isdisjoint(self.ids(current, previous)))
+
+        previous = run(health=50, policy="mvp-score-v1.2")
+        self.assertIn("score_jump", self.ids(current, previous))

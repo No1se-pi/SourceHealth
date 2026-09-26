@@ -25,7 +25,8 @@ class CompareService:
             if len(by_id) != len(ids):
                 raise ServiceError("repository_not_found", 404)
             runs = list(db.scalars(select(AnalysisRun).where(
-                AnalysisRun.repository_id.in_(ids), AnalysisRun.status.in_(TERMINAL)
+                AnalysisRun.repository_id.in_(ids), AnalysisRun.profile == "mvp-v1",
+                AnalysisRun.status.in_(TERMINAL)
             ).order_by(AnalysisRun.repository_id, AnalysisRun.completed_at.desc(), AnalysisRun.id.desc())))
         latest = {}
         for run in runs:

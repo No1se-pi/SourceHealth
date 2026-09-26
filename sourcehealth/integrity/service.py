@@ -37,7 +37,9 @@ def derive_signals(current, previous=None):
         signals.append({"id": "low_sample_ci", "severity": "info", "title": "Мало CI-наблюдений",
                         "description": "Высокий результат CI/CD основан на малом числе запусков.",
                         "facts": {"runs_observed": observed, "success_rate": ci.get("success_rate")}})
-    if previous and isinstance(current.health_score, (int, float)) and isinstance(previous.health_score, (int, float)):
+    if (previous and current.scoring_policy_version == previous.scoring_policy_version
+            and isinstance(current.health_score, (int, float))
+            and isinstance(previous.health_score, (int, float))):
         delta = round(current.health_score - previous.health_score, 2)
         current_coverage, previous_coverage = _coverage(current), _coverage(previous)
         coverage_delta = (current_coverage - previous_coverage
@@ -69,6 +71,7 @@ class IntegrityService:
                 raise ServiceError("repository_not_found", 404)
             runs = list(db.scalars(select(AnalysisRun).where(
                 AnalysisRun.repository_id == repo.id,
+                AnalysisRun.profile == "mvp-v1",
                 AnalysisRun.status.in_(("completed", "partial")),
             ).order_by(AnalysisRun.completed_at.desc(), AnalysisRun.id.desc()).limit(2)))
         signals = derive_signals(runs[0], runs[1] if len(runs) > 1 else None) if runs else []

@@ -23,15 +23,16 @@ class PublicityTests(unittest.TestCase):
                                visibility=visibility, health_score=health)
 
     def test_public_health_badge_and_latest_terminal_urls(self):
-        repo, run = self.repo(), SimpleNamespace(id=uuid4())
+        repo, run = self.repo(health=99), SimpleNamespace(id=uuid4(), health_score=82.4)
         result = PublicityService(Sessions([repo, run]), "https://sourcehealth.tech/").repository(repo.id)
+        self.assertEqual(result["health_score"], 82.4)
         self.assertEqual(result["repository_url"], f"https://sourcehealth.tech/repositories/{repo.id}")
         self.assertEqual(result["latest_analysis_url"], f"https://sourcehealth.tech/analyses/{run.id}")
         self.assertEqual(result["badge_markdown"],
                          "![SourceHealth](https://sourcehealth.tech/api/v1/badges/team/project.svg)")
 
     def test_health_null_is_not_replaced_and_no_analysis_has_no_report(self):
-        repo = self.repo(health=None)
+        repo = self.repo(health=99)
         result = PublicityService(Sessions([repo, None]), "https://sourcehealth.tech").repository(repo.id)
         self.assertIsNone(result["health_score"])
         self.assertFalse(result["health_available"])
