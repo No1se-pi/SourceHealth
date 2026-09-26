@@ -14,7 +14,17 @@ export function CategoryDetails({ category, checks, score }: {
     const appsec = values.find((check) => check.source === 'sourcecraft_appsec' && check.availability === 'available'
       && check.metrics.complete === true);
     const counts = appsec?.metrics.open_by_severity as Record<string, unknown> | undefined;
-    if (!counts || !SEVERITIES.every((name) => Number.isInteger(counts[name]) && Number(counts[name]) >= 0)) return null;
+    if (!counts || !SEVERITIES.every((name) => Number.isInteger(counts[name]) && Number(counts[name]) >= 0)) {
+      return (
+        <details className="score-explanation">
+          <summary>Почему нет оценки безопасности?</summary>
+          <div style={{ marginTop: '0.4rem', color: 'var(--sh-text-secondary)', fontSize: '0.84rem', lineHeight: 1.45 }}>
+            <p style={{ margin: '0 0 0.3rem 0' }}>Official SourceCraft AppSec не предоставил пригодных данных для этой оценки.</p>
+            <p style={{ margin: 0, color: 'var(--sh-text-muted)' }}>Локальная статическая проверка относится к «Состоянию кода» и не заменяет Security.</p>
+          </div>
+        </details>
+      );
+    }
     const penalty = SEVERITIES.reduce((sum, name) => sum + Number(counts[name]) * PENALTIES[name], 0);
     const total = SEVERITIES.reduce((sum, name) => sum + Number(counts[name]), 0);
     return (
@@ -35,6 +45,9 @@ export function CategoryDetails({ category, checks, score }: {
     return (
       <details className="score-explanation">
         <summary>Безопасные находки local SAST ({sast.findings.length})</summary>
+        <p style={{ margin: '0.4rem 0 0.5rem 0', fontSize: '0.8rem', color: 'var(--sh-text-muted)' }}>
+          Локальная статическая проверка влияет только на Code Health и не заменяет официальный AppSec.
+        </p>
         <ul className="safe-findings">
           {sast.findings.map((finding, index) => (
             <li key={`${String(finding.rule_id ?? 'finding')}-${index}`}>

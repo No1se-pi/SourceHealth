@@ -79,8 +79,23 @@ export const EvidenceList: React.FC<EvidenceListProps> = ({
                       gap: '0.5rem',
                     }}
                   >
-                    <span style={{ fontFamily: 'var(--sh-font-mono)', color: 'var(--sh-text-muted)' }}>
-                      {ev.id} · {ev.source}
+                    <span style={{ fontFamily: 'var(--sh-font-mono)', color: 'var(--sh-text-muted)', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                      {ev.id}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '0.72rem',
+                        padding: '0.15rem 0.4rem',
+                        borderRadius: 'var(--sh-radius-sm)',
+                        backgroundColor: 'var(--sh-bg-surface)',
+                        border: '1px solid var(--sh-border-default)',
+                        color: 'var(--sh-text-secondary)',
+                      }}
+                    >
+                      {ev.source === 'sourcecraft_api' ? 'SourceCraft API' :
+                       ev.source === 'git' ? 'Git snapshot' :
+                       ev.source === 'appsec' ? 'SourceCraft AppSec' :
+                       ev.source === 'sast' ? 'Local SAST' : ev.source}
                     </span>
                     {ev.timestamp && (
                       <span style={{ color: 'var(--sh-text-muted)' }}>

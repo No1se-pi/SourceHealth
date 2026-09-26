@@ -14,6 +14,10 @@ import { LoadingState } from '../components/common/LoadingState';
 import { EmptyState } from '../components/common/EmptyState';
 import { ErrorState } from '../components/common/ErrorState';
 import { RecommendationCard } from '../components/common/RecommendationCard';
+import { Breadcrumbs } from '../components/common/Breadcrumbs';
+import { CopyButton } from '../components/common/CopyButton';
+import { usePageTitle } from '../utils/usePageTitle';
+import { formatLikes, formatDateTime } from '../utils/formatters';
 import {
   CATEGORY_ORDER,
   CATEGORY_LABELS,
@@ -41,12 +45,6 @@ function formatLastActivity(timestamp: string | null | undefined): string {
   });
 }
 
-function formatDateTime(timestamp: string | null | undefined): string {
-  if (!timestamp) return '—';
-  const d = new Date(timestamp);
-  return isNaN(d.getTime()) ? String(timestamp) : d.toLocaleString('ru-RU');
-}
-
 export const RepositoryPage: React.FC = () => {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -57,6 +55,8 @@ export const RepositoryPage: React.FC = () => {
   const [startError, setStartError] = useState<unknown>();
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
+
+  usePageTitle(repo ? `${repo.organization_slug}/${repo.repository_slug}` : 'Репозиторий');
 
   const requestGenRef = useRef(0);
 
@@ -122,23 +122,23 @@ export const RepositoryPage: React.FC = () => {
   const safeCanonicalUrl = repo ? getSafeExternalUrl(repo.canonical_url) : null;
   const isAuthRequiredError = (startError as ApiError)?.status === 401;
 
+  const missingCategories = latestAnalysis
+    ? CATEGORY_ORDER.filter((catKey) => {
+        const scoreData = latestAnalysis.category_scores?.[catKey];
+        const availability = scoreData?.availability ?? latestAnalysis.data_coverage?.[catKey] ?? 'no_data';
+        return availability === 'no_data';
+      })
+    : [];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-6)' }}>
-      <div>
-        <Link
-          to="/"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.4rem',
-            fontSize: '0.9rem',
-            color: 'var(--sh-text-muted)',
-            marginBottom: 'var(--sh-space-3)',
-          }}
-        >
-          ← Назад к лидерборду
-        </Link>
-      </div>
+      <Breadcrumbs
+        items={[
+          { label: 'Рейтинг', href: '/' },
+          { label: repo ? `${repo.organization_slug}/${repo.repository_slug}` : 'Репозиторий' },
+        ]}
+        backLink={{ label: 'Назад к рейтингу', href: '/' }}
+      />
 
       {loadError ? (
         <ErrorState
@@ -219,7 +219,7 @@ export const RepositoryPage: React.FC = () => {
             headerAction={
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: '0.8rem', color: 'var(--sh-text-muted)', marginBottom: '0.2rem' }}>
-                  Repo Health Score
+                  Официальный Health
                 </div>
                 <ScoreDisplay score={repo.health_score} size="lg" />
                 {repo.health_score === null && <SourceSoul preview={repo.score_preview} />}
@@ -261,7 +261,7 @@ export const RepositoryPage: React.FC = () => {
                     Лайки
                   </span>
                   <span style={{ fontWeight: 600 }}>
-                    {repo.likes !== null && repo.likes !== undefined ? repo.likes : '—'}
+                    {repo.likes !== null && repo.likes !== undefined ? formatLikes(repo.likes) : '—'}
                   </span>
                 </div>
                 <div>
@@ -272,6 +272,24 @@ export const RepositoryPage: React.FC = () => {
                     {formatLastActivity(repo.last_activity_at)}
                   </span>
                 </div>
+                {latestAnalysis?.head_sha && (
+                  <div>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--sh-text-muted)', display: 'block' }}>
+                      Коммит
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <span style={{ fontFamily: 'var(--sh-font-mono)', fontWeight: 600 }}>
+                        {latestAnalysis.head_sha.substring(0, 7)}
+                      </span>
+                      <CopyButton
+                        value={latestAnalysis.head_sha}
+                        label=""
+                        title="Скопировать SHA коммита"
+                        size="sm"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Action Bar */}
@@ -303,7 +321,7 @@ export const RepositoryPage: React.FC = () => {
                       disabled={starting}
                     >
                       {starting
-                        ? 'Запускаем анализ…'
+                        ? 'Запуск анализа…'
                         : hasAnalysis
                           ? 'Повторить анализ'
                           : 'Запустить анализ'}
@@ -353,6 +371,13 @@ export const RepositoryPage: React.FC = () => {
                       <span>⬇ Скачать отчёт (Markdown)</span>
                     </a>
                   )}
+
+                  <CopyButton
+                    value={() => window.location.href}
+                    label="Скопировать ссылку"
+                    allowShare={true}
+                    shareTitle={repo ? `${repo.organization_slug}/${repo.repository_slug} · SourceHealth` : undefined}
+                  />
                 </div>
 
                 <span style={{ fontSize: '0.82rem', color: 'var(--sh-text-muted)' }}>
@@ -387,6 +412,27 @@ export const RepositoryPage: React.FC = () => {
                 {/* 6 Category Summary Cards */}
                 <div>
                   <h3 style={{ marginBottom: 'var(--sh-space-3)' }}>Оценки по категориям</h3>
+                  {missingCategories.length > 0 && (
+                    <div
+                      style={{
+                        padding: '0.6rem 0.85rem',
+                        marginBottom: 'var(--sh-space-3)',
+                        backgroundColor: 'var(--sh-bg-base)',
+                        border: '1px solid var(--sh-border-subtle)',
+                        borderRadius: 'var(--sh-radius-sm)',
+                        fontSize: '0.85rem',
+                        color: 'var(--sh-text-secondary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                      }}
+                    >
+                      <span aria-hidden="true">ℹ️</span>
+                      <span>
+                        Не хватает данных для полной оценки: {missingCategories.map((c) => CATEGORY_LABELS[c]).join(', ')}. Официальный Health рассчитан по доступным категориям.
+                      </span>
+                    </div>
+                  )}
                   <div
                     style={{
                       display: 'grid',

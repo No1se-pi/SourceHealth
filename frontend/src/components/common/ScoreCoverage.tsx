@@ -36,7 +36,7 @@ export function ScoreCoverage({ analysis }: { analysis?: Analysis }) {
           fontWeight: 600,
           color: 'var(--sh-text-primary)',
         }}
-        title="Процент номинального веса категорий с доступными данными"
+        title="Покрытие показывает, какая доля весов категорий подтверждена данными."
       >
         <span>Охват оценки:</span>
         <span style={{ color: 'var(--sh-brand)' }}>{coverage.nominal_weight_percent}%</span>

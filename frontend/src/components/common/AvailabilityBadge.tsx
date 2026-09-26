@@ -17,12 +17,12 @@ const AVAILABILITY_CONFIG: Record<DataAvailability, AvailabilityConfig> = {
   partial: {
     label: 'Частично',
     variant: 'warning',
-    description: 'Получена только часть необходимых данных',
+    description: 'Часть данных получена, но их недостаточно для полной оценки.',
   },
   no_data: {
     label: 'Недостаточно данных',
     variant: 'neutral',
-    description: 'Недостаточно доступных данных от источника для этой проверки',
+    description: 'Источник не предоставил достаточно данных. Это не ноль и не штраф.',
   },
   source_unavailable: {
     label: 'Источник недоступен',
