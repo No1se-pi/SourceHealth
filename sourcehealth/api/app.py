@@ -18,7 +18,7 @@ from sourcehealth.logging_config import configure_logging
 from sourcehealth.settings import Settings
 from sourcehealth.storage.database import create_database
 
-from .routers import analyses, badges, health, profile, repositories, sourcecraft
+from .routers import analyses, badges, compare, health, integrity, profile, publicity, repositories, sourcecraft
 from .routers import auth as auth_routes
 from .schemas import ErrorResponse
 
@@ -96,4 +96,7 @@ def create_app(settings: Settings | None = None, *, sessions=None, redis=None) -
     app.include_router(sourcecraft.router)
     app.include_router(profile.router)
     app.include_router(badges.router)
+    app.include_router(publicity.router)
+    app.include_router(compare.router)
+    app.include_router(integrity.router)
     return app
