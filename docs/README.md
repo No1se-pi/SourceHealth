@@ -1,6 +1,7 @@
 # Документация SourceHealth
 
 - [Синхронизация каталога и адаптивный планировщик](CATALOG_SYNC.md)
+- [Publicity, Compare и Integrity](BONUS_STARS_CORE.md)
 - [Профиль, отслеживание и хранение PAT](PROFILE.md)
 - [Публичный API и README badge](DEVELOPERS_API.md)
 

@@ -320,6 +320,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/publicity/repositories/{repository_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Share Repository */
+        get: operations["share_repository_api_v1_publicity_repositories__repository_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Compare */
+        get: operations["compare_api_v1_compare_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/repositories/{repository_id}/integrity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Integrity */
+        get: operations["integrity_api_v1_repositories__repository_id__integrity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -504,6 +555,58 @@ export interface components {
             /** Evidence Refs */
             evidence_refs: string[];
         };
+        /** ComparableInfo */
+        ComparableInfo: {
+            /** Health */
+            health: boolean;
+            /** Policy Versions Match */
+            policy_versions_match: boolean;
+        };
+        /** CompareResponse */
+        CompareResponse: {
+            /** Repositories */
+            repositories: components["schemas"]["ComparedRepository"][];
+            comparable: components["schemas"]["ComparableInfo"];
+        };
+        /** ComparedCategory */
+        ComparedCategory: {
+            /** Score */
+            score?: number | null;
+            /** Availability */
+            availability: string;
+        };
+        /** ComparedRepository */
+        ComparedRepository: {
+            /**
+             * Repository Id
+             * Format: uuid
+             */
+            repository_id: string;
+            /** Organization Slug */
+            organization_slug: string;
+            /** Repository Slug */
+            repository_slug: string;
+            /** Canonical Url */
+            canonical_url: string;
+            /** Health Score */
+            health_score: number | null;
+            /** Data Coverage Percent */
+            data_coverage_percent?: number | null;
+            /** Language */
+            language: string | null;
+            /** Likes */
+            likes: number | null;
+            /** Last Activity At */
+            last_activity_at: string | null;
+            /** Categories */
+            categories: {
+                [key: string]: components["schemas"]["ComparedCategory"];
+            };
+            /** Latest Analysis Id */
+            latest_analysis_id: string | null;
+            /** Scoring Policy Version */
+            scoring_policy_version: string | null;
+        };
         /** ConnectedRepositoriesDTO */
         ConnectedRepositoriesDTO: {
             /** Items */
@@ -583,6 +686,44 @@ export interface components {
              * @constant
              */
             service: "sourcehealth";
+        };
+        /** IntegrityResponse */
+        IntegrityResponse: {
+            /**
+             * Repository Id
+             * Format: uuid
+             */
+            repository_id: string;
+            /** Analysis Id */
+            analysis_id: string | null;
+            /** Has Signals */
+            has_signals: boolean;
+            /** Signal Count */
+            signal_count: number;
+            /** Warning Count */
+            warning_count: number;
+            /** Info Count */
+            info_count: number;
+            /** Signals */
+            signals: components["schemas"]["IntegritySignal"][];
+        };
+        /** IntegritySignal */
+        IntegritySignal: {
+            /** Id */
+            id: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "info" | "warning";
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Facts */
+            facts: {
+                [key: string]: unknown;
+            };
         };
         /** ProfileDTO */
         ProfileDTO: {
@@ -771,6 +912,34 @@ export interface components {
             scored_categories: number;
             /** Numeric */
             numeric: boolean;
+        };
+        /** ShareInfo */
+        ShareInfo: {
+            /**
+             * Repository Id
+             * Format: uuid
+             */
+            repository_id: string;
+            /** Organization Slug */
+            organization_slug: string;
+            /** Repository Slug */
+            repository_slug: string;
+            /** Health Score */
+            health_score: number | null;
+            /** Health Available */
+            health_available: boolean;
+            /** Repository Url */
+            repository_url: string;
+            /** Badge Url */
+            badge_url: string;
+            /** Badge Markdown */
+            badge_markdown: string;
+            /** Latest Analysis Id */
+            latest_analysis_id: string | null;
+            /** Latest Analysis Url */
+            latest_analysis_url: string | null;
+            /** Markdown Report Url */
+            markdown_report_url: string | null;
         };
         /** SourceCraftConnect */
         SourceCraftConnect: {
@@ -2880,6 +3049,261 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    share_repository_api_v1_publicity_repositories__repository_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repository_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareInfo"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    compare_api_v1_compare_get: {
+        parameters: {
+            query: {
+                repository_id: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompareResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    integrity_api_v1_repositories__repository_id__integrity_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                repository_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrityResponse"];
                 };
             };
             /** @description Bad Request */
