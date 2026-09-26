@@ -5,6 +5,7 @@ python -m scripts.large_repository_benchmark
 """
 
 import json
+import sys
 import tempfile
 import time
 from dataclasses import replace
@@ -68,6 +69,8 @@ def measure(path):
 
 
 def main():
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     results = []
     with tempfile.TemporaryDirectory(prefix="sourcehealth-large-benchmark-") as directory:
         for count in (120, 10_000, 10_001):

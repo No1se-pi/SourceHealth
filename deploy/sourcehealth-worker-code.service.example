@@ -7,7 +7,6 @@ Requires=docker.service
 Type=simple
 WorkingDirectory=/opt/sourcehealth
 EnvironmentFile=/opt/sourcehealth/.env.production
-Environment=DATABASE_URL=postgresql+psycopg://sourcehealth:<url-encoded-password>@127.0.0.1:5432/sourcehealth
 Environment=REDIS_URL=redis://127.0.0.1:6379/0
 Environment=ANALYSIS_PROFILE=mvp-v1
 Environment=CODE_RUNTIME_ENABLED=true
