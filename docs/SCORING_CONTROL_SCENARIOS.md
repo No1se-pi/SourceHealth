@@ -28,7 +28,7 @@ Security рассчитывается **исключительно** на осн
 |---|---|---|---|
 | **CI-1: Зелёный пайплайн** | `ci_configured = true`, `success_rate = 1.0` (все недавние запуски успешны) | `score = 100.0`, `availability = available` | `tests/test_mvp_analytics.py::MVPAnalyticsTests::test_ci_stable_failing_absent_unknown_and_partial` |
 | **CI-2: Падающий пайплайн** | `ci_configured = true`, `success_rate = 0.0` (все недавние запуски упали) | `score = 0.0`, `availability = available` | `tests/test_mvp_analytics.py::MVPAnalyticsTests::test_ci_stable_failing_absent_unknown_and_partial` |
-| **CI-3: Сконфигурирован без запусков** | `ci_configured = true`, запусков нет (`items = []`) | `score = 50.0`, `availability = available` (отличается от NO_DATA и сбоев) | `tests/test_mvp_analytics.py::MVPAnalyticsTests::test_ci_stable_failing_absent_unknown_and_partial` |
+| **CI-3: Сконфигурирован без запусков** | `ci_configured = true`, запусков нет (`items = []`) | `score = 40.0`, `availability = available` (отличается от NO_DATA и сбоев) | `tests/test_mvp_analytics.py::MVPAnalyticsTests::test_ci_stable_failing_absent_unknown_and_partial` |
 | **CI-4: Не настроен** | `.sourcecraft/ci.yaml` отсутствует, `ci_configured = false` | `score = 0.0`, `availability = not_configured` | `tests/test_mvp_analytics.py::MVPAnalyticsTests::test_ci_stable_failing_absent_unknown_and_partial` |
 | **CI-5: Сбой API / таймаут** | Ошибка сбора данных SourceCraft API | `score = null`, `availability = no_data` (**НЕ превращается в 0**) | `tests/test_mvp_analytics.py::MVPAnalyticsTests::test_ci_stable_failing_absent_unknown_and_partial` |
 
