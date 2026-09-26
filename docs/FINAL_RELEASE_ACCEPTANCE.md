@@ -13,7 +13,7 @@
 | **Production Caddy routing** | PASS | Взаимоисключающие `handle /api/*` (reverse_proxy) и `handle` (SPA `try_files` + static files) в `deploy/Caddyfile` |
 | **Caddy syntax validation** | PASS | Реально выполнено `caddy validate --config deploy/Caddyfile` (exit code 0, `Valid configuration`) |
 | **Caddy behavioral test** | PASS | Реально выполнено: `/api/v1/health` $\to$ 200 backend JSON, `/some/spa/path` $\to$ 200 SPA `index.html`, `/api/not-real` $\to$ 404 backend JSON (не SPA index.html) |
-| **SourceCraft API + CLI (M-15)** | PASS / EVIDENCED INTERPRETATION | Официальный REST API (`https://api.sourcecraft.tech`) + Git endpoint; бинарник `src` для разработчиков не вызывается сервером; собственный `probe-sourcecraft` CLI протестирован |
+| **SourceCraft API + CLI (M-15)** | PASS / EVIDENCED INTERPRETATION | Публичный [REST API](https://sourcecraft.dev/portal/docs/ru/sourcecraft/operations/api-start) (`api.sourcecraft.tech`) + AppSec API + Git-over-HTTPS/PAT; официальный CLI [`src`](https://sourcecraft.dev/portal/docs/ru/cli-ref/src) существует (`src api`, `src clone`, `src appsec`), но отдельный executable на сервере не вызывается; собственный `probe-sourcecraft` CLI протестирован |
 | **Systemd Service Environment** | PASS | Устранены плейсхолдерные overrides `DATABASE_URL` в `sourcehealth-scheduler` и `sourcehealth-worker-code` |
 | **Password Safety** | PASS | В `.env.production.example` задокументирована генерация URL-safe паролей без спецсимволов |
 | **Explicit `/demo` fallback** | PASS | Маршрут `/demo`, баннер `DEMO DATASET / OFFLINE DEMO` |
