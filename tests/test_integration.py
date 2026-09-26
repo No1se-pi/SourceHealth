@@ -30,13 +30,14 @@ if ENABLED:
 
     from sourcehealth.api.app import create_app
     from sourcehealth.application.jobs import dispatch_pending, execute_analysis, lock_key, recover_abandoned
-    from sourcehealth.application.services import AnalysisService
+    from sourcehealth.application.services import AnalysisService, ServiceError
     from sourcehealth.auth.service import AuthService
     from sourcehealth.core import AnalysisContext
     from sourcehealth.core.domain import DataAvailability, RepositoryRef
+    from sourcehealth.profile.service import ProfileService
     from sourcehealth.settings import Settings
     from sourcehealth.storage.database import create_database
-    from sourcehealth.storage.models import AnalysisRun, Repository, User
+    from sourcehealth.storage.models import AnalysisRun, Repository, User, UserRepository
 
 
 @unittest.skipUnless(ENABLED, "set TEST_DATABASE_URL and TEST_REDIS_URL for PostgreSQL/Redis integration")
@@ -55,7 +56,7 @@ class PersistenceTests(unittest.TestCase):
         cls.redis = Redis.from_url(redis_url)
         cls.redis.ping()
         with cls.engine.connect() as db:
-            if db.scalar(text("select version_num from alembic_version")) != "0001":
+            if db.scalar(text("select version_num from alembic_version")) != "0002_product_growth":
                 raise RuntimeError("apply Alembic before integration tests")
 
     @classmethod
@@ -81,8 +82,10 @@ class PersistenceTests(unittest.TestCase):
         auth = AuthService(settings, self.redis, self.sessions)
         token, other = uuid4().hex, uuid4().hex
         credential = "unit-" + uuid4().hex
+        user_ids = {}
         for session in (token, other):
-            self.redis.set(auth._key("session", session), json.dumps({"id": str(uuid4())}), ex=120)
+            user_ids[session] = str(uuid4())
+            self.redis.set(auth._key("session", session), json.dumps({"id": user_ids[session]}), ex=120)
 
         def respond(request):
             self.assertEqual(request.headers["authorization"], "Bearer " + credential)
@@ -98,10 +101,12 @@ class PersistenceTests(unittest.TestCase):
             self.assertFalse(service.lease_for_analysis(None, uuid4()))
             result = service.connect(token, credential)
             self.assertTrue(result["connected"])
-            self.assertLessEqual(result["expires_in"], 120)
-            self.assertNotIn(credential.encode(), self.redis.get(auth._key("sourcecraft", token)))
+            self.assertEqual(result["expires_in"], 1800)
+            credential_key = auth._key("user-sourcecraft", user_ids[token])
+            self.assertNotIn(credential.encode(), self.redis.get(credential_key))
             analysis_id = uuid4()
             self.assertTrue(service.lease_for_analysis(token, analysis_id))
+            self.assertFalse(service.lease_for_analysis(token, analysis_id))
             run_key = service._analysis_key(analysis_id)
             ciphertext = self.redis.get(run_key)
             self.assertNotIn(credential.encode(), ciphertext)
@@ -117,7 +122,7 @@ class PersistenceTests(unittest.TestCase):
             self.assertFalse(service.status(other)["connected"])
             repos = service.repositories(token, "test")
             self.assertEqual([r["can_analyze"] for r in repos["items"]], [True, False])
-            cipher_key = auth._key("sourcecraft", token)
+            cipher_key = credential_key
             self.redis.set(cipher_key, b"invalid-ciphertext", ex=30)
             with self.assertRaises(ServiceError):
                 service.repositories(token, "test")
@@ -129,12 +134,45 @@ class PersistenceTests(unittest.TestCase):
             self.assertFalse(service.status(token)["connected"])
             service.connect(token, credential)
             auth.logout(token)
-            self.assertIsNone(self.redis.get(auth._key("sourcecraft", token)))
+            self.assertIsNotNone(self.redis.get(credential_key))
             with self.assertRaises(ServiceError):
                 service.connect(token, credential)
         finally:
             auth.logout(token)
             auth.logout(other)
+
+    def test_profile_tracking_is_idempotent_and_user_scoped(self):
+        first, second = User(id=uuid4(), yandex_id="profile-" + uuid4().hex), User(
+            id=uuid4(), yandex_id="profile-" + uuid4().hex)
+        with self.sessions.begin() as db:
+            db.add_all((first, second))
+        profile = ProfileService(self.sessions)
+        profile.track(first.id, self.repository_id)
+        profile.track(first.id, self.repository_id)
+        with self.sessions() as db:
+            self.assertEqual(len(list(db.scalars(select(UserRepository).where(
+                UserRepository.user_id == first.id, UserRepository.repository_id == self.repository_id)))), 1)
+        with self.assertRaises(ServiceError):
+            profile.update(second.id, self.repository_id, refresh_preference="1h", use_pat=True)
+        updated = profile.update(first.id, self.repository_id, refresh_preference="6h", use_pat=True)
+        self.assertEqual(updated["refresh_preference"], "6h")
+        self.assertTrue(updated["use_pat_for_scheduled_analysis"])
+        profile.untrack(first.id, self.repository_id)
+        with self.sessions() as db:
+            self.assertIsNotNone(db.get(Repository, self.repository_id))
+
+    def test_public_badge_is_health_only_and_cached(self):
+        with self.sessions.begin() as db:
+            db.get(Repository, self.repository_id, with_for_update=True).health_score = 82.4
+        with TestClient(create_app(self.settings, sessions=self.sessions, redis=self.redis),
+                        base_url="https://testserver") as client:
+            response = client.get(f"/api/v1/badges/{self.ref.organization_slug}/{self.ref.repository_slug}.svg")
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(response.headers["content-type"].startswith("image/svg+xml"))
+            self.assertEqual(response.headers["cache-control"], "public, max-age=300")
+            self.assertIn("82", response.text)
+            self.assertNotIn("script", response.text.lower())
+            self.assertNotIn("foreignobject", response.text.lower())
 
     def test_connection_http_guards(self):
         import json
@@ -739,6 +777,11 @@ class PersistenceTests(unittest.TestCase):
                     with self.assertRaises(ServiceError) as error:
                         self.service.import_public_repository(self.ref.canonical_url, client=source)
                     self.assertEqual(error.exception.code, "public_repository_unverified")
+                with self.sessions() as db:
+                    expected = "unknown" if status in {200, 404} else "public"
+                    self.assertEqual(db.get(Repository, self.repository_id).visibility, expected)
+                with self.sessions.begin() as db:
+                    db.get(Repository, self.repository_id).visibility = "public"
         with self.sessions() as db:
             self.assertIsNone(db.get(Repository, self.repository_id).sourcecraft_id)
 
@@ -771,6 +814,7 @@ class PersistenceTests(unittest.TestCase):
             with self.sessions.begin() as db:
                 db.get(Repository, self.repository_id).visibility = "private"
             self.assertEqual(client.get(f"/api/v1/analyses/{run.id}").status_code, 404)
+            self.assertEqual(client.get(f"/api/v1/badges/{self.ref.organization_slug}/{self.ref.repository_slug}.svg").status_code, 404)
             self.assertEqual(client.get(f"/api/v1/analyses/{run.id}/report.md").status_code, 404)
 
     def test_oauth_pkce_cookie_state_session_and_logout(self):

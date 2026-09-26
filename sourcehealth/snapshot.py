@@ -51,6 +51,8 @@ class SnapshotCollector:
         debt = {"todo_count": 0, "fixme_count": 0, "files_with_debt": 0, "code_files": 0,
                 "large_files": 0, "oldest_marker_age_days": None, "age_complete": True}
         ci_configured = False
+        ci_config_path = None
+        ci_config_legacy = False
         age_targets = []
         # Each analysis owns its byte budget; code cannot consume documentation's allowance.
         documentation_bytes = debt_bytes = 0
@@ -92,8 +94,10 @@ class SnapshotCollector:
                 if path.parts[0].lower() == "docs":
                     docs["docs_directory"] = True
                     locations.setdefault("docs_directory", relative)
-                if lower == ".sourcecraft/ci.yaml":
+                if lower in {".sourcecraft/ci.yaml", ".src.ci.yaml"}:
                     ci_configured = True
+                    ci_config_path = relative
+                    ci_config_legacy = lower == ".src.ci.yaml"
                 if kind:
                     docs[kind] = True
                     locations[kind] = relative
@@ -148,7 +152,7 @@ class SnapshotCollector:
                     documentation_complete = False
                 if is_code:
                     debt_complete = False
-                if lower == ".sourcecraft/ci.yaml":
+                if lower in {".sourcecraft/ci.yaml", ".src.ci.yaml"}:
                     ci_complete = False
         ages = []
         debt["age_complete"] = debt_complete and len(age_targets) <= self.age_files
@@ -185,6 +189,8 @@ class SnapshotCollector:
                 "documentation_complete": documentation_complete, "debt_complete": debt_complete,
                 "documentation": docs, "locations": locations,
                 "technical_debt": debt, "ci_configured": ci_configured if ci_complete or ci_configured else None,
+                "ci_config_path": ci_config_path, "ci_config_legacy": ci_config_legacy,
+                "ci_config_complete": ci_complete,
                 "scope": "tracked_default_branch_excluding_generated",
                 "documentation_bytes": documentation_bytes, "debt_bytes": debt_bytes,
                 "bytes_read": documentation_bytes + debt_bytes}

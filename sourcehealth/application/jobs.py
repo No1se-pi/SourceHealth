@@ -117,7 +117,8 @@ def collect_platform(repository, settings, redis, *, user_pat=None):
         appsec = AppSecCollector(None).collect(repository, metadata.facts.get("id"))
     return AnalysisContext(repository=repository,
                            metadata={"collection": {"repository_metadata": {"collected_at": metadata.collected_at,
-                                                                              "schema_version": metadata.schema_version},
+                                                                              "schema_version": metadata.schema_version,
+                                                                              "error": metadata.error},
                                                     "appsec": {"collected_at": appsec.collected_at,
                                                                "schema_version": appsec.schema_version,
                                                                "error": appsec.error}}},
@@ -156,8 +157,14 @@ def execute_analysis(analysis_id: str) -> None:
                     with sessions.begin() as db:
                         row = db.get(Repository, run.repository_id)
                         metadata = context.sourcecraft_facts["repository_metadata"]
-                        row.likes = metadata.get("likes")
-                        row.language = metadata.get("language")
+                        if metadata.get("likes") is not None:
+                            row.likes = metadata["likes"]
+                        if metadata.get("language") is not None:
+                            row.language = metadata["language"]
+                elif context.metadata.get("collection", {}).get("repository_metadata", {}).get("error") in {
+                        "public_repository_required", "not_found", "access_denied"}:
+                    with sessions.begin() as db:
+                        db.get(Repository, run.repository_id, with_for_update=True).visibility = "unknown"
                 if profile == "mvp-v1":
                     context = collect_mvp(context, settings, pat=user_pat)
                 service.transition(run_id, "analyzing")

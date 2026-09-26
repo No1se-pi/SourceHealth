@@ -104,6 +104,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onClose, onOpenApp
             </svg>
             <span className="sc-nav-label">Мой SourceCraft</span>
           </NavLink>
+          {user && <NavLink to="/profile" className={({ isActive }) => `sc-nav-item ${isActive ? 'active' : ''}`}>
+            <span className="sc-nav-icon" aria-hidden="true">●</span><span className="sc-nav-label">Профиль</span>
+          </NavLink>}
+          <NavLink to="/developers" className={({ isActive }) => `sc-nav-item ${isActive ? 'active' : ''}`}>
+            <span className="sc-nav-icon" aria-hidden="true">&lt;/&gt;</span><span className="sc-nav-label">Разработчикам</span>
+          </NavLink>
         </div>
 
 

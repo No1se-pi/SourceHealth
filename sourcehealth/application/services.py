@@ -1,16 +1,20 @@
 """Транзакционные операции запуска и чтения. Никаких расчётов внутри HTTP router."""
 
+import logging
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 
+from sourcehealth.catalog.scheduler import effective_interval
 from sourcehealth.core.domain import ACTIVE_STATUSES, RepositoryRef, validate_transition
 from sourcehealth.scoring.mvp import MVPPolicy
-from sourcehealth.storage.models import AnalysisRun, Repository
+from sourcehealth.storage.models import AnalysisRun, Repository, UserRepository
 
 from .cache import fingerprint
+
+LOG = logging.getLogger(__name__)
 
 
 class ServiceError(RuntimeError):
@@ -59,6 +63,11 @@ class AnalysisService:
         with manager as source:
             collected = RepositoryCollector(source).collect(ref)
         if collected.availability != "available":
+            if collected.error in {"public_repository_required", "not_found", "access_denied"}:
+                with self.sessions.begin() as db:
+                    known = db.scalar(select(Repository).where(Repository.canonical_url == ref.canonical_url))
+                    if known is not None:
+                        known.visibility = "unknown"
             status = 404 if collected.error in {"public_repository_required", "not_found", "access_denied"} else 503
             raise ServiceError("public_repository_unverified", status)
         ref = RepositoryRef.from_url(ref.canonical_url, sourcecraft_id=collected.facts["id"],
@@ -130,6 +139,9 @@ class AnalysisService:
             if target in ("completed", "partial", "failed"):
                 run.completed_at = now
                 run.error_code = error_code
+                if target == "failed":
+                    repo = db.get(Repository, run.repository_id, with_for_update=True)
+                    repo.next_analysis_at = now + timedelta(seconds=self.settings.scheduler_failed_retry_seconds)
 
     def finish(self, analysis_id: UUID, report) -> None:
         payload = report.to_public_dict()
@@ -156,19 +168,62 @@ class AnalysisService:
                 git = report.checks.get("git_activity")
                 if git and git.metrics.get("last_commit_date"):
                     repo.last_activity_at = datetime.fromisoformat(git.metrics["last_commit_date"])
-            repo.next_analysis_at = run.completed_at + timedelta(seconds=self.settings.refresh_interval)
+            preferences = list(db.scalars(select(UserRepository.refresh_preference).where(
+                UserRepository.repository_id == repo.id, UserRepository.refresh_preference != "off")))
+            repo.next_analysis_at = run.completed_at + effective_interval(repo.last_activity_at, preferences,
+                                                                           now=run.completed_at)
 
-    def enqueue_due(self) -> list[UUID]:
+    def enqueue_due(self, connection=None) -> list[UUID]:
         """Scheduler планирует задания. Он никогда не запускает анализ сам."""
         with self.sessions() as db:
+            backlog = db.scalar(select(func.count()).select_from(AnalysisRun).where(
+                AnalysisRun.status.in_(ACTIVE_STATUSES))) or 0
+            capacity = max(0, self.settings.catalog_sync_queue_limit - backlog)
+            limit = min(self.settings.scheduler_batch_size, capacity)
             ids = list(db.scalars(select(Repository.id).where(Repository.visibility == "public",
                                   Repository.next_analysis_at <= datetime.now(UTC)).order_by(
-                                      Repository.next_analysis_at, Repository.id).limit(100)))
+                                      Repository.next_analysis_at, Repository.id).limit(
+                                          limit))) if limit else []
         runs = []
         for repository_id in ids:
-            run = self.request_analysis(repository_id, trigger="scheduled")
-            runs.append(run.id)
+            candidate = uuid4()
+            leased = lease_scheduled_credential(self.sessions, connection, repository_id, candidate) if connection else False
+            try:
+                run = self.request_analysis(repository_id, trigger="scheduled", preallocated_id=candidate)
+            except Exception:
+                if leased:
+                    connection.delete_analysis_credential(candidate)
+                raise
+            if run.id != candidate:
+                if leased:
+                    connection.delete_analysis_credential(candidate)
+            else:
+                runs.append(run.id)
             with self.sessions.begin() as db:
                 repo = db.get(Repository, repository_id, with_for_update=True)
-                repo.next_analysis_at = datetime.now(UTC) + timedelta(seconds=self.settings.refresh_interval)
+                # Reservation prevents repeated enqueue attempts while the durable run is active.
+                repo.next_analysis_at = datetime.now(UTC) + timedelta(
+                    seconds=max(300, self.settings.scheduler_failed_retry_seconds))
+        LOG.info("scheduler_backpressure", extra={"component": "scheduler", "event": "scheduler_backpressure",
+                                                   "backlog": backlog, "capacity": capacity,
+                                                   "scheduled_count": len(runs)})
         return runs
+
+
+def lease_scheduled_credential(sessions, connection, repository_id, analysis_id):
+    """Lease the first usable consenting credential without mutating another run."""
+    if connection is None:
+        return False
+    with sessions() as db:
+        trackers = list(db.scalars(select(UserRepository.user_id).where(
+            UserRepository.repository_id == repository_id,
+            UserRepository.use_pat_for_scheduled_analysis.is_(True),
+        ).order_by(UserRepository.created_at, UserRepository.user_id).limit(100)))
+    for user_id in trackers:
+        try:
+            if connection.lease_user_for_analysis(user_id, analysis_id):
+                return True
+        except ServiceError as exc:
+            if exc.code in {"sourcecraft_connection_not_configured", "sourcecraft_connection_key_invalid"}:
+                raise
+    return False

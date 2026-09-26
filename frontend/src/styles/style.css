@@ -4,6 +4,18 @@
   box-sizing: border-box;
 }
 
+.growth-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: var(--sh-space-4); }
+.growth-list { line-height: 1.8; padding-left: 1.25rem; }
+.growth-field { display: grid; gap: var(--sh-space-2); }
+.growth-field input, .growth-repository select { max-width: 100%; padding: .55rem; color: var(--sh-text-primary); background: var(--sh-bg-surface); border: 1px solid var(--sh-border-default); border-radius: var(--sh-radius-sm); }
+.growth-grid pre { max-width: 100%; overflow-x: auto; padding: var(--sh-space-3); background: var(--sh-bg-surface-elevated); border-radius: var(--sh-radius-sm); }
+.growth-muted { color: var(--sh-text-muted); font-size: .875rem; line-height: 1.5; }
+.growth-repository { display: grid; gap: var(--sh-space-2); padding: var(--sh-space-3) 0; border-bottom: 1px solid var(--sh-border-subtle); }
+.achievement-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--sh-space-3); }
+.achievement-card { padding: var(--sh-space-4); border: 1px solid var(--sh-border-default); border-radius: var(--sh-radius-md); background: var(--sh-bg-surface); }
+.achievement-card.locked { opacity: .62; }
+.achievement-card strong { margin-left: var(--sh-space-2); }
+
 html, body {
   margin: 0;
   padding: 0;

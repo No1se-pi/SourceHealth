@@ -20,6 +20,7 @@ export const SourceCraftPage: React.FC = () => {
   const navigate = useNavigate();
   const [connected, setConnected] = useState(false);
   const [expiresIn, setExpiresIn] = useState<number | null>(null);
+  const [retention, setRetention] = useState(1800);
   const [organization, setOrganization] = useState('');
   const [items, setItems] = useState<components['schemas']['ConnectedRepositoryDTO'][]>([]);
   const [more, setMore] = useState(false);
@@ -37,6 +38,7 @@ export const SourceCraftPage: React.FC = () => {
           if (typeof s.expires_in === 'number') {
             setExpiresIn(s.expires_in);
           }
+          setRetention(s.retention_seconds);
         }
       })
       .catch((err: unknown) => {
@@ -64,7 +66,7 @@ export const SourceCraftPage: React.FC = () => {
     const form = event.currentTarget;
     const field = form.elements.namedItem('pat') as HTMLInputElement;
     const patValue = field.value;
-    const pending = api.connectSourcecraft(patValue);
+    const pending = api.connectSourcecraft(patValue, retention);
     field.value = ''; // Credential never enters React state or browser storage.
     setBusy(true);
     setMessage('');
@@ -146,6 +148,7 @@ export const SourceCraftPage: React.FC = () => {
     setIsError(false);
     try {
       const repo = await api.importRepository(url);
+      await api.trackRepository(repo.id);
       const run = await api.start(repo.id);
       navigate(`/analyses/${run.id}`);
     } catch (err: unknown) {
@@ -186,8 +189,8 @@ export const SourceCraftPage: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
           <strong style={{ color: 'var(--sh-text-primary)' }}>Безопасность подключения:</strong>
           <span style={{ color: 'var(--sh-text-secondary)' }}>
-            Токен не сохраняется в браузере. SourceHealth хранит его на сервере в зашифрованном виде
-            только на время текущего подключения.
+            PAT не сохраняется в браузере. На сервере он хранится только в зашифрованном виде до выбранного срока
+            и может использоваться для разрешённого автоанализа.
           </span>
         </div>
       </div>
@@ -253,6 +256,13 @@ export const SourceCraftPage: React.FC = () => {
                 PAT используется только сервером и хранится в зашифрованном виде ограниченное время.
               </div>
             </div>
+            <label htmlFor="pat-retention">Срок хранения для автоанализа
+              <select id="pat-retention" value={retention} onChange={(event) => setRetention(Number(event.target.value))}>
+                <option value={1800}>30 минут</option><option value={21600}>6 часов</option>
+                <option value={86400}>24 часа</option><option value={604800}>7 дней</option>
+              </select>
+              <span className="growth-muted">При сроке более 30 минут PAT останется зашифрованным после выхода из веб-сессии до истечения срока. Удалить его можно здесь в любой момент.</span>
+            </label>
             <div>
               <Button type="submit" variant="primary" disabled={busy} loading={busy}>
                 {busy ? 'Подключение…' : 'Подключить SourceCraft'}
@@ -273,7 +283,7 @@ export const SourceCraftPage: React.FC = () => {
                 onClick={handleDisconnect}
                 style={{ color: 'var(--sh-health-danger)', borderColor: 'var(--sh-health-danger-border)' }}
               >
-                {busy ? 'Отключение…' : 'Отключить SourceCraft'}
+                {busy ? 'Удаление…' : 'Удалить PAT сейчас'}
               </Button>
             }
           >
@@ -284,6 +294,16 @@ export const SourceCraftPage: React.FC = () => {
                   ? `Подключение активно ещё ${formatRemainingTime(expiresIn)}`
                   : 'Токен активен в рамках текущей сессии'}
               </span>
+              <label>Хранить PAT
+                <select value={retention} disabled={busy} onChange={async (event) => {
+                  const value = Number(event.target.value); setBusy(true);
+                  try { const updated = await api.updateSourcecraftRetention(value); setRetention(updated.retention_seconds); setExpiresIn(updated.expires_in); }
+                  finally { setBusy(false); }
+                }}>
+                  <option value={1800}>30 минут</option><option value={21600}>6 часов</option>
+                  <option value={86400}>24 часа</option><option value={604800}>7 дней</option>
+                </select>
+              </label>
             </div>
           </Card>
 

@@ -1,15 +1,18 @@
 """User PAT connection: encrypted Redis, bound to one existing Я ID session."""
 
 import base64
+import re
 import secrets
 from uuid import UUID
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from sqlalchemy import select
 
 from sourcehealth.application.services import ServiceError
 from sourcehealth.integrations.sourcecraft.analytics import identifier
 from sourcehealth.integrations.sourcecraft.client import SourceCraftClient, SourceCraftError
+from sourcehealth.storage.models import User
 
 
 class SourceCraftConnection:
@@ -34,13 +37,18 @@ class SourceCraftConnection:
         except (ValueError, TypeError):
             raise ServiceError("sourcecraft_connection_key_invalid", 503) from None
 
-    def _keys(self, token):
-        if not token or not self.auth.current_user(token):
-            raise ServiceError("authentication_required", 401)
-        return self.auth._key("session", token), self.auth._key("sourcecraft", token)
+    RETENTIONS = {1800, 21600, 86400, 604800}
 
-    def connect(self, token, pat):
-        session_key, key = self._keys(token)
+    def _keys(self, token):
+        user = self.auth.current_user(token) if token else None
+        if not user:
+            raise ServiceError("authentication_required", 401)
+        return self.auth._key("session", token), self.auth._key("user-sourcecraft", str(user["id"])), UUID(user["id"])
+
+    def connect(self, token, pat, retention_seconds=1800):
+        if retention_seconds not in self.RETENTIONS:
+            raise ServiceError("invalid_sourcecraft_retention", 422)
+        session_key, key, user_id = self._keys(token)
         cipher = self._cipher()
         try:
             with self.client_factory(pat=pat, deadline_seconds=20) as client:
@@ -52,22 +60,43 @@ class SourceCraftConnection:
         # Atomic session existence/TTL check avoids reconnect racing with logout.
         ttl = self.redis.eval(
             "local t=redis.call('TTL',KEYS[1]); if t<=0 then return 0 end; "
-            "local n=math.min(t,tonumber(ARGV[2])); redis.call('SET',KEYS[2],ARGV[1],'EX',n); return n",
-            2, session_key, key, encrypted, self.settings.sourcecraft_connection_ttl)
+            "local n=tonumber(ARGV[2]); redis.call('SET',KEYS[2],ARGV[1],'EX',n); return n",
+            2, session_key, key, encrypted, retention_seconds)
         if not ttl:
             raise ServiceError("authentication_required", 401)
-        return {"connected": True, "expires_in": ttl}
+        with self.auth.sessions.begin() as db:
+            user = db.get(User, user_id, with_for_update=True)
+            if user is not None:
+                user.sourcecraft_retention_seconds = retention_seconds
+        return {"connected": True, "expires_in": ttl, "retention_seconds": retention_seconds}
 
     def status(self, token):
         if not token:
             return {"connected": False, "expires_in": 0}
-        _, key = self._keys(token)
+        _, key, user_id = self._keys(token)
         ttl = self.redis.ttl(key)
-        return {"connected": ttl > 0, "expires_in": max(0, ttl)}
+        with self.auth.sessions() as db:
+            retention = db.scalar(select(User.sourcecraft_retention_seconds).where(User.id == user_id)) or 1800
+        return {"connected": ttl > 0, "expires_in": max(0, ttl), "retention_seconds": retention}
 
     def disconnect(self, token):
-        _, key = self._keys(token)
+        _, key, _ = self._keys(token)
         self.redis.delete(key)
+
+    def update_retention(self, token, retention_seconds):
+        if retention_seconds not in self.RETENTIONS:
+            raise ServiceError("invalid_sourcecraft_retention", 422)
+        _, key, user_id = self._keys(token)
+        if not self._decrypt(key):
+            raise ServiceError("sourcecraft_connection_required", 409)
+        if not self.redis.expire(key, retention_seconds):
+            raise ServiceError("sourcecraft_connection_required", 409)
+        with self.auth.sessions.begin() as db:
+            user = db.get(User, user_id, with_for_update=True)
+            if user is not None:
+                user.sourcecraft_retention_seconds = retention_seconds
+        return {"connected": True, "expires_in": retention_seconds,
+                "retention_seconds": retention_seconds}
 
     def _decrypt(self, key):
         encrypted = self.redis.get(key)
@@ -87,17 +116,29 @@ class SourceCraftConnection:
     def lease_for_analysis(self, token, analysis_id):
         if not token:
             return False
-        _, session_key = self._keys(token)
-        pat = self._decrypt(session_key)
-        ttl = self.redis.ttl(session_key)
+        _, credential_key, _ = self._keys(token)
+        pat = self._decrypt(credential_key)
+        ttl = self.redis.ttl(credential_key)
         if not pat or ttl <= 0:
             return False
         run_key = self._analysis_key(analysis_id)
         nonce = secrets.token_bytes(12)
         encrypted = nonce + self._cipher().encrypt(nonce, pat.encode(), run_key.encode())
-        self.redis.set(run_key, encrypted, ex=min(ttl, self.settings.sourcecraft_connection_ttl,
-                                                  self.settings.analysis_timeout + 300))
-        return True
+        return bool(self.redis.set(run_key, encrypted, ex=min(
+            ttl, self.settings.sourcecraft_connection_ttl, self.settings.analysis_timeout + 300), nx=True))
+
+    def lease_user_for_analysis(self, user_id, analysis_id):
+        """Create a short run lease from an explicitly retained user credential."""
+        credential_key = self.auth._key("user-sourcecraft", str(UUID(str(user_id))))
+        pat = self._decrypt(credential_key)
+        ttl = self.redis.ttl(credential_key)
+        if not pat or ttl <= 0:
+            return False
+        run_key = self._analysis_key(analysis_id)
+        nonce = secrets.token_bytes(12)
+        encrypted = nonce + self._cipher().encrypt(nonce, pat.encode(), run_key.encode())
+        return bool(self.redis.set(
+            run_key, encrypted, ex=min(ttl, self.settings.analysis_timeout + 300), nx=True))
 
     def analysis_credential(self, analysis_id):
         return self._decrypt(self._analysis_key(analysis_id))
@@ -106,7 +147,7 @@ class SourceCraftConnection:
         self.redis.delete(self._analysis_key(analysis_id))
 
     def repositories(self, token, organization):
-        _, key = self._keys(token)
+        _, key, _ = self._keys(token)
         pat = self._decrypt(key)
         if not pat:
             raise ServiceError("sourcecraft_connection_required", 409)
@@ -131,5 +172,45 @@ class SourceCraftConnection:
                 items.append({"url": f"https://sourcecraft.dev/{organization}/{slug}",
                               "visibility": visibility, "can_analyze": visibility == "public"})
             return {"items": items, "has_more": bool(payload.get("next_page_token"))}
+        except (SourceCraftError, AttributeError, TypeError):
+            raise ServiceError("sourcecraft_repositories_unavailable", 503) from None
+
+    def my_repositories(self, token, page_token=None):
+        _, key, _ = self._keys(token)
+        pat = self._decrypt(key)
+        if not pat:
+            raise ServiceError("sourcecraft_connection_required", 409)
+        params = {"page_size": 100}
+        if page_token:
+            params["page_token"] = page_token
+        try:
+            with self.client_factory(pat=pat, deadline_seconds=20, max_pages=1) as client:
+                payload = client.get("/me/repos", params=params)
+            rows = payload.get("repositories")
+            if not isinstance(rows, list) or len(rows) > 100:
+                raise SourceCraftError("invalid_response")
+            items = []
+            for row in rows:
+                repo_id, slug = identifier(row.get("id")), identifier(row.get("slug"))
+                organization = row.get("organization")
+                org = identifier(organization.get("slug") if isinstance(organization, dict) else None)
+                visibility = row.get("visibility")
+                if visibility not in {"public", "private", "internal"}:
+                    raise SourceCraftError("invalid_response")
+                branch = row.get("default_branch")
+                if branch is not None and (not isinstance(branch, str) or
+                                           not re.fullmatch(r"[A-Za-z0-9_./-]{1,255}", branch)):
+                    raise SourceCraftError("invalid_response")
+                is_empty = row.get("is_empty")
+                if is_empty is not None and type(is_empty) is not bool:
+                    raise SourceCraftError("invalid_response")
+                items.append({"id": repo_id, "organization_slug": org, "repository_slug": slug,
+                              "url": f"https://sourcecraft.dev/{org}/{slug}", "visibility": visibility,
+                              "default_branch": branch, "is_empty": is_empty,
+                              "can_analyze": visibility == "public"})
+            next_token = payload.get("next_page_token")
+            if next_token not in (None, "") and not isinstance(next_token, str):
+                raise SourceCraftError("invalid_pagination")
+            return {"items": items, "next_page_token": next_token or None, "has_more": bool(next_token)}
         except (SourceCraftError, AttributeError, TypeError):
             raise ServiceError("sourcecraft_repositories_unavailable", 503) from None
