@@ -1,0 +1,2 @@
+"""Authenticated profile application boundary."""
+
