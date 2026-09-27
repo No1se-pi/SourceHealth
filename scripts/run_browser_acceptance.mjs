@@ -1466,6 +1466,20 @@ const tasks = [
     width: 1440,
     height: 900,
     action: 'open-keyboard-help'
+  },
+  {
+    name: '62-ai-power-selector-dark-1440.png',
+    url: 'http://127.0.0.1:5173/analyses/b0000001-0000-0000-0000-000000000001?theme=dark',
+    width: 1440,
+    height: 1100,
+    action: 'ai-power-selector'
+  },
+  {
+    name: '63-ai-power-selector-light-390.png',
+    url: 'http://127.0.0.1:5173/analyses/b0000001-0000-0000-0000-000000000001?theme=light',
+    width: 390,
+    height: 844,
+    action: 'ai-power-selector'
   }
 ];
 
@@ -1669,6 +1683,28 @@ for (const task of selectedTasks) {
       await new Promise((r) => setTimeout(r, 450));
       await assertDom(task.name, "document.body.innerText.includes('Горячие клавиши')", 'Keyboard help modal opened');
       await assertDom(task.name, "document.body.innerText.includes('Ctrl') || document.body.innerText.includes('⌘')", 'Shortcuts listed');
+    } else if (task.action === 'ai-power-selector') {
+      console.log('  -> Verifying AI power selector clicks and keyboard semantics...');
+      const radios = "[...document.querySelectorAll('.ai-power__stop[role=radio]')]";
+      await assertDom(task.name, `${radios}.length === 3`, 'Selector has exactly three stops');
+      await assertDom(task.name, `${radios}[0].getAttribute('aria-checked') === 'true'`, 'Flash is selected by default');
+      await assertDom(task.name, `${radios}.every((node, _, all) => Math.abs(node.getBoundingClientRect().top - all[0].getBoundingClientRect().top) < 2)`, 'All stops remain horizontal');
+      await evalCdp(`(function(){ const r=${radios}; r[1].click(); return true; })()`);
+      await assertDom(task.name, `${radios}[1].getAttribute('aria-checked') === 'true' && ${radios}[1].textContent.includes('YandexGPT 5 Lite')`, 'Lite click updates selected model');
+      await evalCdp(`(function(){ const r=${radios}; r[2].click(); return true; })()`);
+      await assertDom(task.name, `${radios}[2].getAttribute('aria-checked') === 'true' && ${radios}[2].textContent.includes('YandexGPT 5.1 Pro')`, 'Pro click updates selected model');
+      await evalCdp(`(function(){ const r=${radios}; r[2].focus(); r[2].dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true})); return true; })()`);
+      await assertDom(task.name, `${radios}[2].getAttribute('aria-checked') === 'true'`, 'Right on Pro does not wrap');
+      await evalCdp(`(function(){ const r=${radios}; r[2].dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true})); return true; })()`);
+      await assertDom(task.name, `${radios}[0].getAttribute('aria-checked') === 'true'`, 'Home selects Flash');
+      await evalCdp(`(function(){ const r=${radios}; r[0].dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true})); return true; })()`);
+      await assertDom(task.name, `${radios}[0].getAttribute('aria-checked') === 'true'`, 'Left on Flash does not wrap');
+      await evalCdp(`(function(){ const r=${radios}; r[0].dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true})); return true; })()`);
+      await assertDom(task.name, `${radios}[2].getAttribute('aria-checked') === 'true'`, 'End selects Pro');
+      await evalCdp(`(function(){ const r=${radios}; r[2].dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true})); return true; })()`);
+      await assertDom(task.name, `${radios}[1].getAttribute('aria-checked') === 'true'`, 'ArrowLeft selects previous stop');
+      await evalCdp(`(function(){ const r=${radios}; r[1].dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true})); return true; })()`);
+      await assertDom(task.name, `${radios}[2].getAttribute('aria-checked') === 'true'`, 'ArrowRight selects next stop');
     }
 
 

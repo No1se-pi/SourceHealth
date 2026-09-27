@@ -26,6 +26,18 @@ export type Achievement = components['schemas']['AchievementDTO'];
 export type ProfileSummary = components['schemas']['ProfileSummaryDTO'];
 export type ShareInfo = components['schemas']['ShareInfo'];
 export type IntegrityResponse = components['schemas']['IntegrityResponse'];
+export type AISummaryMode = 'flash' | 'lite' | 'pro';
+export interface AISummaryResult {
+  schema_version: 'ai-summary-v1'; executive_summary: string;
+  strengths: Array<{ text: string; evidence_refs: string[] }>;
+  risks: Array<{ text: string; evidence_refs: string[] }>;
+  actions: Array<{ text: string; recommendation_ids: string[]; evidence_refs: string[] }>;
+  limitations: Array<{ text: string; evidence_refs: string[] }>;
+}
+export interface AISummaryResponse {
+  provider: 'yandex-ai-studio'; mode: AISummaryMode; model_name: string;
+  grounding_validated: true; cached: boolean; summary: AISummaryResult;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -127,6 +139,10 @@ export const api = {
     request<AnalysisPage>(`/repositories/${encodeURIComponent(repositoryId)}/analyses?limit=${limit}&offset=${offset}`),
   analysis: (id: string) =>
     request<Analysis>(`/analyses/${encodeURIComponent(id)}`),
+  aiSummary: (id: string, model: AISummaryMode) =>
+    request<AISummaryResponse>(`/analyses/${encodeURIComponent(id)}/ai-summary`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model }),
+    }),
   publicity: (repositoryId: string) =>
     request<ShareInfo>(`/publicity/repositories/${encodeURIComponent(repositoryId)}`),
   integrity: (repositoryId: string) =>
