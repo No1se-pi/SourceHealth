@@ -1,5 +1,6 @@
 """Deterministic contracts for product growth batch one."""
 
+import json
 import unittest
 from contextlib import contextmanager
 from copy import deepcopy
@@ -16,6 +17,7 @@ from sourcehealth.catalog.scheduler import adaptive_interval, effective_interval
 from sourcehealth.catalog.sync import CatalogSync
 from sourcehealth.core.domain import DataAvailability as A
 from sourcehealth.integrations.sourcecraft.client import SourceCraftError
+from sourcehealth.logging_config import EventFormatter
 from tests.mvp_fixtures import mvp_context
 
 
@@ -30,7 +32,7 @@ class ProfileSourceCraftTests(unittest.TestCase):
 
     def test_my_repositories_success(self):
         payload = {"repositories": [{"id": "repo-1", "slug": "project", "visibility": "public",
-                                      "organization": {"slug": "team"}}]}
+                                      "organization": {"slug": "team"}, "default_branch": "разработка"}]}
 
         class Client:
             def __enter__(self): return self
@@ -41,6 +43,7 @@ class ProfileSourceCraftTests(unittest.TestCase):
 
         result = self.service(lambda **kwargs: Client()).my_repositories("session")
         self.assertEqual(result["items"][0]["url"], "https://sourcecraft.dev/team/project")
+        self.assertEqual(result["items"][0]["default_branch"], "разработка")
         self.assertFalse(result["has_more"])
 
     def test_my_repositories_requires_connection(self):
@@ -70,6 +73,9 @@ class ProfileSourceCraftTests(unittest.TestCase):
         self.assertEqual(record.endpoint, "me/repos")
         self.assertEqual(record.sourcecraft_error_code, "authentication_required")
         self.assertNotIn(secret, logs.output[0])
+        rendered = EventFormatter().format(record)
+        self.assertEqual(json.loads(rendered)["sourcecraft_error_code"], "authentication_required")
+        self.assertNotIn(secret, rendered)
 
     def test_profile_frontend_separates_loading_error_and_retry(self):
         source = (Path(__file__).parents[1] / "frontend/src/pages/ProfilePage.tsx").read_text(encoding="utf-8")
