@@ -10,6 +10,7 @@ import { LoadingState } from '../components/common/LoadingState';
 import { ErrorState } from '../components/common/ErrorState';
 import { RecommendationCard } from '../components/common/RecommendationCard';
 import { DeepAnalytics } from '../components/analysis/DeepAnalytics';
+import { AISummaryPanel } from '../components/analysis/AISummaryPanel';
 import { EvidenceList } from '../components/common/EvidenceList';
 import { SourceSoul } from '../components/common/SourceSoul';
 import { CategoryDetails } from '../components/common/CategoryDetails';
@@ -524,6 +525,7 @@ export const AnalysisPage: React.FC = () => {
           </div>
         </Card>
       )}
+      {run && ['completed', 'partial'].includes(run.status) && <AISummaryPanel analysisId={run.id} />}
     </div>
   );
 };

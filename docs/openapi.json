@@ -3845,10 +3845,236 @@
           }
         }
       }
+    },
+    "/api/v1/analyses/{analysis_id}/ai-summary": {
+      "post": {
+        "summary": "Ai Summary",
+        "operationId": "ai_summary_api_v1_analyses__analysis_id__ai_summary_post",
+        "parameters": [
+          {
+            "name": "analysis_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Analysis Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AISummaryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AISummaryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AISummaryRequest": {
+        "properties": {
+          "model": {
+            "type": "string",
+            "enum": [
+              "flash",
+              "lite",
+              "pro"
+            ],
+            "title": "Model"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "model"
+        ],
+        "title": "AISummaryRequest"
+      },
+      "AISummaryResponse": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "yandex-ai-studio",
+            "title": "Provider",
+            "default": "yandex-ai-studio"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "flash",
+              "lite",
+              "pro"
+            ],
+            "title": "Mode"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
+          "grounding_validated": {
+            "type": "boolean",
+            "const": true,
+            "title": "Grounding Validated",
+            "default": true
+          },
+          "cached": {
+            "type": "boolean",
+            "title": "Cached"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/AISummaryResult"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "model_name",
+          "cached",
+          "summary"
+        ],
+        "title": "AISummaryResponse"
+      },
+      "AISummaryResult": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "ai-summary-v1",
+            "title": "Schema Version",
+            "default": "ai-summary-v1"
+          },
+          "executive_summary": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Executive Summary"
+          },
+          "strengths": {
+            "items": {
+              "$ref": "#/components/schemas/GroundedStatement"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Strengths"
+          },
+          "risks": {
+            "items": {
+              "$ref": "#/components/schemas/GroundedStatement"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Risks"
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/GroundedAction"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Actions"
+          },
+          "limitations": {
+            "items": {
+              "$ref": "#/components/schemas/GroundedStatement"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Limitations"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "executive_summary"
+        ],
+        "title": "AISummaryResult"
+      },
       "AchievementDTO": {
         "properties": {
           "id": {
@@ -4987,6 +5213,57 @@
           "summary"
         ],
         "title": "EvidenceDTO"
+      },
+      "GroundedAction": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Text"
+          },
+          "recommendation_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Recommendation Ids"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence Refs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "GroundedAction"
+      },
+      "GroundedStatement": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Text"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence Refs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "GroundedStatement"
       },
       "HealthHistogramBucket": {
         "properties": {

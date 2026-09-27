@@ -19,6 +19,7 @@ from sourcehealth.settings import Settings
 from sourcehealth.storage.database import create_database
 
 from .routers import (
+    ai_summary,
     analyses,
     badges,
     catalog,
@@ -111,4 +112,5 @@ def create_app(settings: Settings | None = None, *, sessions=None, redis=None) -
     app.include_router(publicity.router)
     app.include_router(compare.router)
     app.include_router(integrity.router)
+    app.include_router(ai_summary.router)
     return app

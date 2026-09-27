@@ -388,10 +388,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/analyses/{analysis_id}/ai-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ai Summary */
+        post: operations["ai_summary_api_v1_analyses__analysis_id__ai_summary_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AISummaryRequest */
+        AISummaryRequest: {
+            /**
+             * Model
+             * @enum {string}
+             */
+            model: "flash" | "lite" | "pro";
+        };
+        /** AISummaryResponse */
+        AISummaryResponse: {
+            /**
+             * Provider
+             * @default yandex-ai-studio
+             * @constant
+             */
+            provider: "yandex-ai-studio";
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "flash" | "lite" | "pro";
+            /** Model Name */
+            model_name: string;
+            /**
+             * Grounding Validated
+             * @default true
+             * @constant
+             */
+            grounding_validated: true;
+            /** Cached */
+            cached: boolean;
+            summary: components["schemas"]["AISummaryResult"];
+        };
+        /** AISummaryResult */
+        AISummaryResult: {
+            /**
+             * Schema Version
+             * @default ai-summary-v1
+             * @constant
+             */
+            schema_version: "ai-summary-v1";
+            /** Executive Summary */
+            executive_summary: string;
+            /** Strengths */
+            strengths?: components["schemas"]["GroundedStatement"][];
+            /** Risks */
+            risks?: components["schemas"]["GroundedStatement"][];
+            /** Actions */
+            actions?: components["schemas"]["GroundedAction"][];
+            /** Limitations */
+            limitations?: components["schemas"]["GroundedStatement"][];
+        };
         /** AchievementDTO */
         AchievementDTO: {
             /** Id */
@@ -760,6 +829,22 @@ export interface components {
             location?: string | null;
             /** Timestamp */
             timestamp?: string | null;
+        };
+        /** GroundedAction */
+        GroundedAction: {
+            /** Text */
+            text: string;
+            /** Recommendation Ids */
+            recommendation_ids?: string[];
+            /** Evidence Refs */
+            evidence_refs?: string[];
+        };
+        /** GroundedStatement */
+        GroundedStatement: {
+            /** Text */
+            text: string;
+            /** Evidence Refs */
+            evidence_refs?: string[];
         };
         /** HealthHistogramBucket */
         HealthHistogramBucket: {
@@ -3642,6 +3727,95 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntegrityResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ai_summary_api_v1_analyses__analysis_id__ai_summary_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                analysis_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AISummaryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AISummaryResponse"];
                 };
             };
             /** @description Bad Request */

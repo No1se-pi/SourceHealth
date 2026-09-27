@@ -5,6 +5,7 @@
 - [Углублённая аналитика репозитория](DEEP_ANALYTICS.md)
 - [Publicity, Compare и Integrity](BONUS_STARS_CORE.md)
 - [Профиль, отслеживание и хранение PAT](PROFILE.md)
+- [Yandex AI: grounded-отчёты](YANDEX_AI.md)
 - [Публичный API и README badge](DEVELOPERS_API.md)
 
 SourceHealth — сервис здоровья репозиториев SourceCraft для ЛЦТ 2026.
