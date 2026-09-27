@@ -76,7 +76,7 @@ When executing code analysis on untrusted repositories, the worker guarantees to
   - Workspaces are mounted read-only (`:ro`) into the scanner container.
   - Job cleanup only removes its own designated workspace; other concurrent workspaces remain untouched.
 - **Resource Constraints:**
-  - Analyzer containers enforce strict memory limits (`--memory=1g`), CPU limits (`--cpus=2`), and process limits (`--pids-limit=256`).
+  - Analyzer and clone containers enforce strict memory limits (`--memory=512m`, `--memory-swap=512m`), CPU limits (`--cpus=1`), process limits (`--pids-limit=128`), and temporary storage limits (`--tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m`).
   - No network egress is permitted in the scanner container (`--network=none`).
 - **Target Code Execution:**
   - Target code is NEVER executed, compiled, or evaluated. Only verified static analyzers inspect file trees.
@@ -100,25 +100,53 @@ When executing code analysis on untrusted repositories, the worker guarantees to
 
 ---
 
-## 5. Capacity Planning & Measured Benchmark Metrics
+## 5. Capacity Planning & Synthetic Concurrency Benchmark
 
-Measurements taken with the automated benchmark harness (`scripts/benchmark_workers.py`) on dev environment (Windows 11, 16 vCPUs, Docker Desktop, local PostgreSQL & Redis):
+### Synthetic Concurrency / Queue-Drain Benchmark
 
-| Scenario | Workers | Repositories | Queue Drain Time | Avg Run Duration | Max Simultaneous Active | Effective Speedup |
+To verify concurrency guarantees without hitting live network services, an automated harness is provided in `scripts/benchmark_workers.py`.
+
+> [!NOTE] Benchmark Scope & Methodology
+> This is a **synthetic concurrency / queue-drain benchmark** using mocked external collectors and simulated stage latencies (50 ms per stage), executed with concurrent `SimpleWorker` consumers in threads.
+> It does **not** benchmark:
+> - Real Docker cloning;
+> - Real SAST scanning;
+> - Real SourceCraft HTTP latency;
+> - Real worker-code OS processes.
+>
+> Its purpose is strictly to verify that:
+> 1. There is no global serialization or lock bottleneck in database outbox dispatch or analysis lifecycle;
+> 2. Multiple worker consumers process independent jobs concurrently without contention;
+> 3. Queue drain throughput scales as consumer capacity increases under controlled workloads.
+
+#### Example Synthetic Run (Simulated Stage Latency: 50 ms/stage)
+
+Below is an example synthetic run conducted on a local development environment (16 vCPUs, local PostgreSQL & Redis):
+
+| Scenario | Worker Consumers | Repositories | Queue Drain Time | Avg Run Duration | Max Simultaneous Active | Drain Speedup (Example Run) |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|
-| **A** | 1 | 2 | 3.52 s | 1.63 s | 1 | Baseline (1w) |
-| **B** | 1 | 4 | 7.02 s | 1.64 s | 1 | Baseline (1w) |
-| **C** | 2 | 2 | 1.83 s | 1.65 s | 2 | **1.92x** |
-| **D** | 2 | 4 | 2.94 s | 1.34 s | 2 | **2.39x** |
+| **A** | 1 | 2 | ~3.5 s | ~1.6 s | 1 | Baseline (1w) |
+| **B** | 1 | 4 | ~7.0 s | ~1.6 s | 1 | Baseline (1w) |
+| **C** | 2 | 2 | ~1.8 s | ~1.6 s | 2 | ~1.9x |
+| **D** | 2 | 4 | ~2.9 s | ~1.3 s | 2 | ~2.4x |
 
-### Host Resource Planning Guidelines
+*Note: The figures above reflect one synthetic test run under simulated delays. They must not be interpreted as universal production speedup.*
 
-When sizing hosts for `N` concurrent `worker-code` processes:
-- **CPU:** Reserve 1.5–2 cores per worker process (e.g. 4 worker instances -> 8 cores recommended).
-- **RAM:** Baseline host OS + Postgres + Redis requires ~2 GB. Each active `worker-code` process requires ~500 MB RAM, and each active scanner container requires up to 1 GB RAM limit.
-  - For $N=2$: Minimum 6 GB RAM.
-  - For $N=4$: Minimum 10 GB RAM.
-- **Disk I/O:** Fast NVMe storage is strongly recommended for concurrent git clones.
+### Host Capacity Sizing (Planning Guidance / Estimates)
+
+The following sizing recommendations represent **planning guidance and estimates**, not measured production maximums:
+
+- **Per-Container Footprint:**
+  - Memory: 512 MB RAM + 512 MB swap (`--memory=512m --memory-swap=512m`).
+  - CPU: 1 CPU limit (`--cpus=1`).
+  - Processes: 128 PIDs (`--pids-limit=128`).
+  - Tmpfs: 64 MB (`--tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m`).
+- **Worker Process Footprint:**
+  - Each `python -m sourcehealth.application worker-code` process typically consumes ~150–300 MB RSS base memory.
+- **Estimated Host Allocation per Worker Instance ($N$):**
+  - **CPU:** Allocate approximately 1 to 1.5 CPU cores per concurrent worker-code instance to prevent CPU throttling during static analysis.
+  - **RAM (Planning Estimate):** Sizing should account for baseline host OS and shared infrastructure (PostgreSQL + Redis, ~1.5–2 GB) plus roughly 0.8–1 GB per active worker slot (covering worker process RSS and the 512 MB container ceiling). Actual RAM consumption depends on repository tree sizes and AST complexity.
+- **Disk I/O:** Fast SSD/NVMe storage is recommended for concurrent ephemeral workspace volumes and git operations.
 
 ---
 

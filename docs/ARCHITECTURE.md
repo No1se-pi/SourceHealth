@@ -113,7 +113,8 @@ POST создаёт/reuses run в транзакции. PostgreSQL row lock + pa
 
 ## Ограничения
 
-Не подключены private permissions, полный live каталог SourceCraft repo, ML/LLM и PDF.
+Не подключены private permissions, полный live каталог SourceCraft repo и PDF.
+Grounded Yandex AI подключен для генерации резюме и рекомендаций (см. [YANDEX_AI](YANDEX_AI.md)).
 Official AppSec клиент и authorization bridge Я ID → SourceCraft подключены (сбор при
 наличии валидного PAT; nullable baseline при отсутствии). Масштабирование worker-code
 подтверждено на уровне нескольких процессов с systemd unit templates (`deploy/sourcehealth-worker-code@.service.example`),

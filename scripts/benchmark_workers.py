@@ -1,18 +1,20 @@
-"""Reproducible benchmark harness for SourceHealth queue and multi-worker concurrency.
+"""Synthetic concurrency and queue-drain benchmark harness for SourceHealth.
 
-Measures:
-- queued -> started latency
-- total run duration
-- queue drain time
-- completed / failed job counts
-- maximum simultaneous active jobs
-- per-stage timings
+NOTE: This is a synthetic harness using mocked collectors and simulated
+stage latencies (default 50ms/stage) with concurrent SimpleWorker consumers
+in threads. It does NOT benchmark real Docker cloning, real SAST scanning,
+real SourceCraft HTTP latency, or real OS worker-code processes.
+
+Its purpose is to verify:
+- No global serialization in outbox dispatch and execution lifecycle
+- Concurrent processing of independent repositories
+- Queue drain throughput scaling under controlled workload
 
 Scenarios:
-A: 1 worker-code, 2 different repositories
-B: 1 worker-code, 4 different repositories
-C: 2 worker-code processes, 2 different repositories
-D: 2 worker-code processes, 4 different repositories
+A: 1 worker consumer, 2 different repositories
+B: 1 worker consumer, 4 different repositories
+C: 2 worker consumers, 2 different repositories
+D: 2 worker consumers, 4 different repositories
 """
 
 import argparse
@@ -283,7 +285,7 @@ class BenchmarkRunner:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="SourceHealth Safe Multi-Worker Benchmark Harness")
+    parser = argparse.ArgumentParser(description="SourceHealth Synthetic Multi-Worker Concurrency Benchmark")
     parser.add_argument("--database-url", default=os.environ.get("TEST_DATABASE_URL") or os.environ.get("DATABASE_URL") or "postgresql+psycopg://sourcehealth:sourcehealth@127.0.0.1:15432/sourcehealth_test")
     parser.add_argument("--redis-url", default=os.environ.get("TEST_REDIS_URL") or os.environ.get("REDIS_URL") or "redis://127.0.0.1:6379/15")
     parser.add_argument("--json", action="store_true", help="Output raw JSON result")
@@ -296,7 +298,7 @@ def main():
             print(json.dumps(report, indent=2))
         else:
             print("=" * 70)
-            print("SOURCEHEALTH MULTI-WORKER CONCURRENCY BENCHMARK")
+            print("SOURCEHEALTH SYNTHETIC MULTI-WORKER CONCURRENCY BENCHMARK")
             print("=" * 70)
             print(f"OS: {report['environment']['platform']} | Python: {report['environment']['python_version']} | CPUs: {report['environment']['cpu_count']}")
             print("-" * 70)

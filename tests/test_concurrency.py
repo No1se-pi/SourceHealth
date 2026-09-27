@@ -19,6 +19,11 @@ Tests all 18 requirements from Part 19 of the specification:
 16. canonical mvp Health not overwritten by other profile
 17. logs contain no credential markers
 18. benchmark harness produces structured result
+19. canonical projection regression A (newer mvp advances latest and health)
+20. canonical projection regression B (fallback when no mvp exists)
+21. canonical projection regression C (API prefers canonical mvp over newer non-mvp)
+22. canonical projection regression D (API latest returns newer mvp after it completes)
+23. queue_status reports null on Redis read failure
 """
 
 import base64
@@ -662,6 +667,225 @@ class SafeConcurrencyTests(unittest.TestCase):
             self.assertTrue(res["all_completed_cleanly"])
         finally:
             runner.close()
+
+    # 19. Canonical projection regression A:
+    # mvp-v1 run A completed, then newer mvp-v1 run B completes
+    # -> repository.latest_analysis_id == B
+    # -> health_score == B Health
+    def test_19_canonical_projection_regression_a_newer_mvp_advances_canonical(self):
+        with self.sessions.begin() as db:
+            run_a = AnalysisRun(
+                repository_id=self.repository_id,
+                status="completed",
+                trigger="manual",
+                profile="mvp-v1",
+                fingerprint=uuid4().hex,
+                completed_at=datetime.now(UTC) - timedelta(minutes=10),
+                health_score=70.0,
+                scoring_policy_version="mvp-score-v1.2",
+                category_scores={},
+            )
+            db.add(run_a)
+            db.flush()
+            repo = db.get(Repository, self.repository_id)
+            repo.latest_analysis_id = run_a.id
+            repo.health_score = 70.0
+
+        run_b = AnalysisRun(
+            repository_id=self.repository_id,
+            status="scoring",
+            trigger="manual",
+            profile="mvp-v1",
+            fingerprint=uuid4().hex,
+            queued_at=datetime.now(UTC),
+            started_at=datetime.now(UTC),
+        )
+        with self.sessions.begin() as db:
+            db.add(run_b)
+
+        report_b = make_report(repo_ref=self.ref, complete=True, health_score=85.0)
+        self.service.finish(run_b.id, report_b)
+
+        with self.sessions() as db:
+            repo = db.get(Repository, self.repository_id)
+            self.assertEqual(repo.latest_analysis_id, run_b.id, "repository.latest_analysis_id must update to newer mvp run B")
+            self.assertEqual(repo.health_score, 85.0, "repository.health_score must update to newer mvp run B health")
+
+    # 20. Canonical projection regression B:
+    # no mvp-v1 exists, platform/code terminal result
+    # -> repository still exposes a usable latest analysis according to current fallback contract
+    def test_20_canonical_projection_regression_b_fallback_when_no_mvp(self):
+        repo_id = uuid4()
+        ref = RepositoryRef(
+            id=str(repo_id),
+            canonical_url=f"https://sourcecraft.dev/testorg/repo-{repo_id.hex[:6]}",
+            organization_slug="testorg",
+            repository_slug=f"repo-{repo_id.hex[:6]}",
+            visibility="public",
+        )
+        with self.sessions.begin() as db:
+            db.add(Repository(
+                id=repo_id,
+                canonical_url=ref.canonical_url,
+                organization_slug=ref.organization_slug,
+                repository_slug=ref.repository_slug,
+                visibility="public",
+                sourcecraft_id=secrets.randbelow(1000000) + 1000,
+            ))
+
+        try:
+            code_run = AnalysisRun(
+                repository_id=repo_id,
+                status="scoring",
+                trigger="manual",
+                profile="code-v1",
+                fingerprint=uuid4().hex,
+                queued_at=datetime.now(UTC),
+                started_at=datetime.now(UTC),
+            )
+            with self.sessions.begin() as db:
+                db.add(code_run)
+
+            code_rep = make_report(repo_ref=ref, complete=True, scoring_policy_version="code-score-v1", health_score=92.0)
+            self.service.finish(code_run.id, code_rep)
+
+            with self.sessions() as db:
+                repo = db.get(Repository, repo_id)
+                self.assertEqual(repo.latest_analysis_id, code_run.id, "Repository must expose terminal fallback latest_analysis_id")
+
+            app = create_app(self.settings, sessions=self.sessions, redis=self.redis)
+            with TestClient(app, base_url="https://testserver") as client:
+                res_repo = client.get(f"/api/v1/repositories/{repo_id}")
+                self.assertEqual(res_repo.status_code, 200)
+                self.assertEqual(res_repo.json()["latest_analysis_id"], str(code_run.id))
+
+                res_latest = client.get(f"/api/v1/repositories/{repo_id}/analyses/latest")
+                self.assertEqual(res_latest.status_code, 200)
+                self.assertEqual(res_latest.json()["id"], str(code_run.id))
+                self.assertEqual(res_latest.json()["profile"], "code-v1")
+        finally:
+            with self.sessions.begin() as db:
+                db.execute(delete(AnalysisRun).where(AnalysisRun.repository_id == repo_id))
+                db.execute(delete(Repository).where(Repository.id == repo_id))
+
+    # 21. Canonical projection regression C:
+    # GET /api/v1/repositories/{id}/analyses/latest with canonical mvp + newer non-mvp
+    # -> returns intended canonical mvp
+    def test_21_canonical_projection_regression_c_api_prefers_canonical_mvp_over_newer_non_mvp(self):
+        with self.sessions.begin() as db:
+            mvp_run = AnalysisRun(
+                repository_id=self.repository_id,
+                status="completed",
+                trigger="manual",
+                profile="mvp-v1",
+                fingerprint=uuid4().hex,
+                completed_at=datetime.now(UTC) - timedelta(minutes=10),
+                health_score=78.0,
+                scoring_policy_version="mvp-score-v1.2",
+                category_scores={},
+            )
+            db.add(mvp_run)
+            db.flush()
+            repo = db.get(Repository, self.repository_id)
+            repo.latest_analysis_id = mvp_run.id
+            repo.health_score = 78.0
+
+        non_mvp_run = AnalysisRun(
+            repository_id=self.repository_id,
+            status="scoring",
+            trigger="manual",
+            profile="platform-v1",
+            fingerprint=uuid4().hex,
+            queued_at=datetime.now(UTC),
+            started_at=datetime.now(UTC),
+        )
+        with self.sessions.begin() as db:
+            db.add(non_mvp_run)
+
+        platform_rep = make_report(repo_ref=self.ref, complete=True, scoring_policy_version="platform-v1", health_score=60.0)
+        self.service.finish(non_mvp_run.id, platform_rep)
+
+        app = create_app(self.settings, sessions=self.sessions, redis=self.redis)
+        with TestClient(app, base_url="https://testserver") as client:
+            res = client.get(f"/api/v1/repositories/{self.repository_id}/analyses/latest")
+            self.assertEqual(res.status_code, 200)
+            data = res.json()
+            self.assertEqual(data["id"], str(mvp_run.id), "API latest endpoint must return canonical mvp run, not newer non-mvp")
+            self.assertEqual(data["profile"], "mvp-v1")
+
+    # 22. Canonical projection regression D:
+    # GET latest after newer mvp completes
+    # -> returns newer mvp
+    def test_22_canonical_projection_regression_d_api_latest_after_newer_mvp_completes(self):
+        with self.sessions.begin() as db:
+            mvp_run_old = AnalysisRun(
+                repository_id=self.repository_id,
+                status="completed",
+                trigger="manual",
+                profile="mvp-v1",
+                fingerprint=uuid4().hex,
+                completed_at=datetime.now(UTC) - timedelta(minutes=15),
+                health_score=65.0,
+                scoring_policy_version="mvp-score-v1.2",
+                category_scores={},
+            )
+            db.add(mvp_run_old)
+            db.flush()
+            repo = db.get(Repository, self.repository_id)
+            repo.latest_analysis_id = mvp_run_old.id
+            repo.health_score = 65.0
+
+        code_run = AnalysisRun(
+            repository_id=self.repository_id,
+            status="completed",
+            trigger="manual",
+            profile="code-v1",
+            fingerprint=uuid4().hex,
+            completed_at=datetime.now(UTC) - timedelta(minutes=10),
+            health_score=90.0,
+            scoring_policy_version="code-score-v1",
+            category_scores={},
+        )
+        with self.sessions.begin() as db:
+            db.add(code_run)
+
+        mvp_run_new = AnalysisRun(
+            repository_id=self.repository_id,
+            status="scoring",
+            trigger="manual",
+            profile="mvp-v1",
+            fingerprint=uuid4().hex,
+            queued_at=datetime.now(UTC),
+            started_at=datetime.now(UTC),
+        )
+        with self.sessions.begin() as db:
+            db.add(mvp_run_new)
+
+        new_rep = make_report(repo_ref=self.ref, complete=True, health_score=94.0)
+        self.service.finish(mvp_run_new.id, new_rep)
+
+        app = create_app(self.settings, sessions=self.sessions, redis=self.redis)
+        with TestClient(app, base_url="https://testserver") as client:
+            res = client.get(f"/api/v1/repositories/{self.repository_id}/analyses/latest")
+            self.assertEqual(res.status_code, 200)
+            data = res.json()
+            self.assertEqual(data["id"], str(mvp_run_new.id), "API latest endpoint must return the newly completed MVP run")
+            self.assertEqual(data["profile"], "mvp-v1")
+            self.assertEqual(data["health_score"], 94.0)
+
+    # 23. queue_status reports null instead of false zero on Redis failure
+    def test_23_queue_status_redis_failure_reports_null(self):
+        from sourcehealth.application.jobs import queue_status
+
+        mock_redis = Mock(spec=Redis)
+        with patch("sourcehealth.application.jobs.Queue", side_effect=Exception("Redis connection refused")):
+            status = queue_status(self.sessions, mock_redis)
+            self.assertIsNone(status["analysis_queue_length"], "analysis_queue_length must be None (null) on failure")
+            self.assertIsNone(status["analysis_code_queue_length"], "analysis_code_queue_length must be None (null) on failure")
+            dumped = json.dumps(status)
+            parsed = json.loads(dumped)
+            self.assertIsNone(parsed["analysis_queue_length"])
+            self.assertIsNone(parsed["analysis_code_queue_length"])
 
 
 if __name__ == "__main__":

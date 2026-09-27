@@ -309,16 +309,16 @@ def queue_status(sessions, redis: Redis) -> dict:
 
     from sqlalchemy import func
 
-    q_analysis = Queue("analysis", connection=redis)
-    q_code = Queue("analysis-code", connection=redis)
     try:
+        q_analysis = Queue("analysis", connection=redis)
         analysis_len = len(q_analysis)
     except Exception:
-        analysis_len = 0
+        analysis_len = None
     try:
+        q_code = Queue("analysis-code", connection=redis)
         code_len = len(q_code)
     except Exception:
-        code_len = 0
+        code_len = None
     with sessions() as db:
         counts = dict(db.execute(select(AnalysisRun.status, func.count()).group_by(AnalysisRun.status)).all())
         oldest_queued = db.scalar(select(func.min(AnalysisRun.queued_at)).where(AnalysisRun.status == "queued"))
