@@ -279,6 +279,38 @@ class CatalogValidationTests(unittest.TestCase):
             CatalogSync(Sessions(), settings, client_factory=lambda **kwargs: Client()).run()
         self.assertEqual(state.page_token, "page-2")
 
+    def test_malformed_catalog_row_does_not_pin_page_checkpoint(self):
+        state = SimpleNamespace(page_token=None, cycle_started_at=datetime.now(UTC),
+                                last_completed_at=None, updated_at=datetime.now(UTC))
+        stored = []
+
+        class DB:
+            def get(self, model, key, **kwargs): return state
+            def execute(self, statement): return None
+            def scalar(self, statement): return None
+            def add(self, row): stored.append(row)
+
+        class Sessions:
+            @contextmanager
+            def begin(self): yield DB()
+
+        class Client:
+            def __enter__(self): return self
+            def __exit__(self, *args): return None
+            def get(self, path, params=None):
+                return {"repositories": [
+                    {"id": "broken", "slug": None, "visibility": "public",
+                     "organization": {"slug": "team"}},
+                    {"id": "repo-1", "slug": "project", "visibility": "public",
+                     "organization": {"slug": "team"}},
+                ], "next_page_token": "page-2"}
+
+        settings = SimpleNamespace(sourcecraft_pat=None, catalog_sync_max_pages=1,
+                                   catalog_sync_page_size=100)
+        result = CatalogSync(Sessions(), settings, client_factory=lambda **kwargs: Client()).run()
+        self.assertEqual(result, {"pages": 1, "repositories": 1, "cycle_complete": False})
+        self.assertEqual(state.page_token, "page-2")
+
     def test_complete_page_closes_cycle(self):
         state = SimpleNamespace(page_token="last", cycle_started_at=datetime.now(UTC),
                                 last_completed_at=None, updated_at=datetime.now(UTC))
