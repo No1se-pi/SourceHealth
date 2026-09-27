@@ -3,7 +3,9 @@ Description=Run SourceHealth scheduler periodically
 
 [Timer]
 OnBootSec=2min
-OnUnitActiveSec=5min
+OnUnitActiveSec=60s
+AccuracySec=5s
+Persistent=true
 Unit=sourcehealth-scheduler.service
 
 [Install]

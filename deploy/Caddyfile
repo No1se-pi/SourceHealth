@@ -2,11 +2,11 @@ sourcehealth.tech {
     encode gzip
 
     handle /api/* {
-        reverse_proxy backend:8000
+        reverse_proxy 127.0.0.1:8000
     }
 
     handle {
-        root * /srv/frontend
+        root * /opt/sourcehealth/frontend/dist
         try_files {path} /index.html
         file_server
     }

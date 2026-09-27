@@ -1,18 +1,19 @@
-name: sourcehealth-prod
+name: sourcehealth
 
 x-app: &app
   build:
     context: ..
     dockerfile: Dockerfile
   env_file:
-    - path: ../.env.production
-      required: false
+    - path: ${SOURCEHEALTH_ENV_FILE:-../.env.production}
+      required: true
   environment:
     DATABASE_URL: postgresql+psycopg://sourcehealth:${POSTGRES_PASSWORD}@postgres:5432/sourcehealth
     REDIS_URL: redis://redis:6379/0
   restart: unless-stopped
   read_only: true
-  tmpfs: [/tmp:rw,noexec,nosuid,size=64m]
+  tmpfs:
+    - "/tmp:rw,noexec,nosuid,size=64m"
   cap_drop: [ALL]
   security_opt: [no-new-privileges:true]
 
@@ -24,10 +25,13 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: sourcehealth
     volumes: [postgres-data:/var/lib/postgresql/data]
-    ports: ["127.0.0.1:5432:5432"]
+    ports: ["127.0.0.1:15432:5432"]
     restart: unless-stopped
     healthcheck:
       test: [CMD-SHELL, "pg_isready -U sourcehealth -d sourcehealth"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
   redis:
     image: redis:7-alpine
     command: [redis-server, --appendonly, "yes"]
@@ -36,6 +40,9 @@ services:
     restart: unless-stopped
     healthcheck:
       test: [CMD, redis-cli, ping]
+      interval: 3s
+      timeout: 3s
+      retries: 20
   migrate:
     <<: *app
     restart: "no"
@@ -45,28 +52,26 @@ services:
   backend:
     <<: *app
     command: [python, -m, uvicorn, sourcehealth.api.app:create_app, --factory, --host, 0.0.0.0, --port, "8000", --no-access-log]
+    ports: ["127.0.0.1:8000:8000"]
     depends_on:
       migrate: {condition: service_completed_successfully}
       redis: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
   worker:
     <<: *app
     command: [python, -m, sourcehealth.application, worker]
     depends_on:
       migrate: {condition: service_completed_successfully}
       redis: {condition: service_healthy}
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports: ["80:80", "443:443"]
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ../frontend/dist:/srv/frontend:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    depends_on: [backend]
 
 volumes:
   postgres-data:
+    external: true
+    name: sourcehealth_postgres-data
   redis-data:
-  caddy-data:
-  caddy-config:
+    external: true
+    name: sourcehealth_redis-data
