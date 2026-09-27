@@ -92,6 +92,17 @@ class AnalysisService:
             if "language" in collected.facts:
                 row.language = collected.facts["language"]
             row.likes = collected.facts.get("likes")
+            if "description" in collected.facts:
+                row.description = collected.facts["description"]
+            if "logo_url" in collected.facts:
+                row.logo_url = collected.facts["logo_url"]
+            if "origin" in collected.facts:
+                row.origin = collected.facts["origin"]
+            if "project_slug" in collected.facts:
+                row.project_slug = collected.facts["project_slug"]
+            if "topics" in collected.facts:
+                row.topics = collected.facts["topics"]
+                row.topic_classifier_version = collected.facts.get("topic_classifier_version")
         return repository_id
 
     def request_analysis(self, repository_id: UUID, *, trigger: str = "manual", force: bool = False,

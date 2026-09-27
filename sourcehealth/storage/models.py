@@ -67,6 +67,12 @@ class Repository(Base):
         Index("ix_repository_leaderboard", "visibility", text("health_score DESC NULLS LAST"), "id"),
         Index("ix_repository_due", "next_analysis_at"),
         Index("ix_repository_language", "language"),
+        Index("ix_repository_lower_org", text("lower(organization_slug)")),
+        Index("ix_repository_lower_repo", text("lower(repository_slug)")),
+        Index("ix_repository_likes", text("likes DESC NULLS LAST"), "id"),
+        Index("ix_repository_last_activity", text("last_activity_at DESC NULLS LAST"), "id"),
+        Index("ix_repository_origin", "origin"),
+        Index("ix_repository_topics", "topics", postgresql_using="gin"),
     )
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -81,6 +87,12 @@ class Repository(Base):
     likes: Mapped[int | None] = mapped_column(Integer)
     last_activity_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     health_score: Mapped[float | None] = mapped_column(Float)
+    description: Mapped[str | None] = mapped_column(String(512))
+    logo_url: Mapped[str | None] = mapped_column(String(512))
+    origin: Mapped[str | None] = mapped_column(String(32), default="unknown", server_default="unknown")
+    project_slug: Mapped[str | None] = mapped_column(String(100))
+    topics: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+    topic_classifier_version: Mapped[str | None] = mapped_column(String(32))
     latest_analysis_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey(
         "analysis_runs.id", name="fk_repository_latest_analysis", use_alter=True, ondelete="SET NULL"))
     next_analysis_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))

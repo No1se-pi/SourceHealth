@@ -20,6 +20,11 @@ class HealthResponse(BaseModel):
     service: Literal["sourcehealth"] = "sourcehealth"
 
 
+class CategoryScoreMiniDTO(BaseModel):
+    score: float | None = None
+    availability: str
+
+
 class RepositorySummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
@@ -33,6 +38,14 @@ class RepositorySummary(BaseModel):
     last_activity_at: datetime | None
     latest_analysis_id: UUID | None
     score_preview: "ScorePreviewDTO | None" = None
+    description: str | None = None
+    logo_url: str | None = None
+    origin: str | None = "unknown"
+    project_slug: str | None = None
+    topics: list[str] = Field(default_factory=list)
+    category_scores: dict[str, CategoryScoreMiniDTO] = Field(default_factory=dict)
+    data_coverage_percent: int | None = None
+    health_rank: int | None = None
 
 
 class RepositoryDetails(RepositorySummary):
@@ -45,7 +58,34 @@ class RepositoryPage(BaseModel):
     items: list[RepositorySummary]
     limit: int
     offset: int
+    total: int
     has_more: bool
+    applied_sort: str | None = None
+    applied_order: str | None = None
+
+
+class HealthHistogramBucket(BaseModel):
+    range_label: str
+    min_score: float
+    max_score: float
+    count: int
+
+
+class CatalogStatsDTO(BaseModel):
+    catalog_total_public: int
+    matched_total: int
+    analyzed_count: int
+    health_available_count: int
+    health_forming_count: int
+    health_no_data_count: int
+    health_median: float | None = None
+    health_q1: float | None = None
+    health_q3: float | None = None
+    health_histogram: list[HealthHistogramBucket]
+    histogram_no_data_count: int
+    languages: dict[str, int]
+    topics: dict[str, int]
+    origins: dict[str, int]
 
 
 class EvidenceDTO(BaseModel):

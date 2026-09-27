@@ -20,12 +20,25 @@ function makeRepositorySummary(overrides = {}) {
     repository_slug: 'fast-service',
     canonical_url: 'https://sourcecraft.dev/demo-org/fast-service',
     visibility: 'public',
+    origin: 'native',
+    topics: ['web'],
+    topic_classifier_version: 'catalog-topic-v1',
+    description: 'High performance demo service',
+    logo_url: null,
     health_score: 70.5,
     language: 'TypeScript',
     likes: 42,
     last_activity_at: '2026-09-20T14:30:00Z',
     latest_analysis_id: 'b0000001-0000-0000-0000-000000000001',
     score_preview: null,
+    category_scores: {
+      documentation: { score: 85, availability: 'available' },
+      cicd: { score: 90, availability: 'available' },
+      security: { score: 80, availability: 'available' },
+      activity: { score: 75, availability: 'available' },
+      issues: { score: 70, availability: 'available' },
+      code_health: { score: 82, availability: 'available' },
+    },
     ...overrides
   };
 }
@@ -37,6 +50,11 @@ function makeRepositoryDetails(overrides = {}) {
     repository_slug: 'fast-service',
     canonical_url: 'https://sourcecraft.dev/demo-org/fast-service',
     visibility: 'public',
+    origin: 'native',
+    topics: ['web'],
+    topic_classifier_version: 'catalog-topic-v1',
+    description: 'High performance demo service',
+    logo_url: null,
     health_score: 70.5,
     language: 'TypeScript',
     likes: 42,
@@ -224,14 +242,14 @@ function validateScorePreview(preview, context) {
 }
 
 function validateRepositorySummary(repo, context) {
-  assertRequiredKeys(repo, ['id', 'organization_slug', 'repository_slug', 'canonical_url', 'visibility', 'health_score', 'language', 'likes', 'last_activity_at', 'latest_analysis_id', 'score_preview'], context);
+  assertRequiredKeys(repo, ['id', 'organization_slug', 'repository_slug', 'canonical_url', 'visibility', 'health_score', 'language', 'likes', 'last_activity_at', 'latest_analysis_id', 'origin', 'score_preview'], context);
   assertNoKeys(repo, ['created_at', 'updated_at', 'score', 'default_branch', 'head_sha'], context);
   assert(!repo.canonical_url.includes('sourcecraft.tech'), `${context}.canonical_url must not use sourcecraft.tech (use sourcecraft.dev)`);
   if (repo.score_preview != null) validateScorePreview(repo.score_preview, `${context}.score_preview`);
 }
 
 function validateRepositoryDetails(repo, context) {
-  assertRequiredKeys(repo, ['id', 'organization_slug', 'repository_slug', 'canonical_url', 'visibility', 'health_score', 'language', 'likes', 'last_activity_at', 'latest_analysis_id', 'sourcecraft_id', 'default_branch', 'head_sha', 'score_preview'], context);
+  assertRequiredKeys(repo, ['id', 'organization_slug', 'repository_slug', 'canonical_url', 'visibility', 'health_score', 'language', 'likes', 'last_activity_at', 'latest_analysis_id', 'sourcecraft_id', 'default_branch', 'head_sha', 'origin', 'score_preview'], context);
   assertNoKeys(repo, ['created_at', 'updated_at', 'score'], context);
   assert(!repo.canonical_url.includes('sourcecraft.tech'), `${context}.canonical_url must not use sourcecraft.tech (use sourcecraft.dev)`);
   if (repo.score_preview != null) validateScorePreview(repo.score_preview, `${context}.score_preview`);
@@ -744,11 +762,11 @@ const mockServer = http.createServer((req, res) => {
     return res.end(JSON.stringify({ id: 'sc-user-demo-42' }));
   }
 
-  // 1. Leaderboard
+  // 1. Leaderboard / Catalog
   if (url.pathname === '/api/v1/repositories') {
     if (url.searchParams.get('language') === 'EmptyLang') {
       res.writeHead(200);
-      return res.end(JSON.stringify({ items: [], limit: 20, offset: 0, has_more: false }));
+      return res.end(JSON.stringify({ items: [], limit: 20, offset: 0, total: 0, has_more: false }));
     }
     if (url.searchParams.get('sort') === 'error_trigger') {
       res.writeHead(500);
@@ -760,7 +778,98 @@ const mockServer = http.createServer((req, res) => {
       items: fixtureLeaderboardItems,
       limit: 20,
       offset: 0,
+      total: fixtureLeaderboardItems.length,
       has_more: false
+    }));
+  }
+
+  // 1b. Catalog Stats
+  if (url.pathname === '/api/v1/catalog/stats') {
+    res.writeHead(200);
+    return res.end(JSON.stringify({
+      catalog_total_public: 30000,
+      matched_total: fixtureLeaderboardItems.length,
+      analyzed_count: 24000,
+      health_available_count: 22000,
+      health_forming_count: 2000,
+      health_no_data_count: 8000,
+      health_median: 74.2,
+      health_q1: 61.0,
+      health_q3: 86.4,
+      health_histogram: [
+        { range_label: '0-9', min_score: 0.0, max_score: 9.9, count: 500 },
+        { range_label: '10-19', min_score: 10.0, max_score: 19.9, count: 800 },
+        { range_label: '20-29', min_score: 20.0, max_score: 29.9, count: 1200 },
+        { range_label: '30-39', min_score: 30.0, max_score: 39.9, count: 1500 },
+        { range_label: '40-49', min_score: 40.0, max_score: 49.9, count: 2000 },
+        { range_label: '50-59', min_score: 50.0, max_score: 59.9, count: 3500 },
+        { range_label: '60-69', min_score: 60.0, max_score: 69.9, count: 4200 },
+        { range_label: '70-79', min_score: 70.0, max_score: 79.9, count: 4800 },
+        { range_label: '80-89', min_score: 80.0, max_score: 89.9, count: 3000 },
+        { range_label: '90-100', min_score: 90.0, max_score: 100.0, count: 500 },
+      ],
+      histogram_no_data_count: 8000,
+      languages: { TypeScript: 12000, Python: 9000, Go: 5000, Rust: 4000 },
+      topics: {
+        web: 8000,
+        bots: 3500,
+        ml_data: 2500,
+        security: 2000,
+        devops: 2200,
+        tools: 1800,
+        education: 1200,
+        games: 800,
+        mobile: 1000,
+        libraries: 900,
+        other: 100,
+      },
+      origins: { native: 18000, fork: 8000, migrated: 3000, unknown: 1000 },
+    }));
+  }
+
+  // 1c. Compare
+  if (url.pathname === '/api/v1/compare') {
+    res.writeHead(200);
+    return res.end(JSON.stringify({
+      comparable: { policy_versions_match: true },
+      repositories: [
+        {
+          repository_id: 'a0000001-0000-0000-0000-000000000001',
+          organization_slug: 'demo-org',
+          repository_slug: 'fast-service',
+          health_score: 88,
+          data_coverage_percent: 100,
+          language: 'TypeScript',
+          likes: 42,
+          last_activity_at: '2026-09-20T14:30:00Z',
+          categories: {
+            documentation: { score: 85, availability: 'available' },
+            cicd: { score: 90, availability: 'available' },
+            security: { score: 80, availability: 'available' },
+            activity: { score: 75, availability: 'available' },
+            issues: { score: 70, availability: 'available' },
+            code_health: { score: 82, availability: 'available' },
+          },
+        },
+        {
+          repository_id: 'a0000003-0000-0000-0000-000000000003',
+          organization_slug: 'yandex-cloud',
+          repository_slug: 'serverless-gate',
+          health_score: 94,
+          data_coverage_percent: 95,
+          language: 'Go',
+          likes: 87,
+          last_activity_at: '2026-09-19T18:00:00Z',
+          categories: {
+            documentation: { score: 90, availability: 'available' },
+            cicd: { score: 95, availability: 'available' },
+            security: { score: 92, availability: 'available' },
+            activity: { score: 88, availability: 'available' },
+            issues: { score: 85, availability: 'available' },
+            code_health: { score: 94, availability: 'available' },
+          },
+        },
+      ],
     }));
   }
 
@@ -1105,6 +1214,37 @@ const tasks = [
     width: 1440,
     height: 900,
     action: 'click-appearance'
+  },
+  // 8. Catalog / Search v2 Acceptance
+  {
+    name: '47-catalog-search-desktop-1440.png',
+    url: 'http://127.0.0.1:5173/?q=fast&theme=dark',
+    width: 1440,
+    height: 900
+  },
+  {
+    name: '48-catalog-histogram-click-1440.png',
+    url: 'http://127.0.0.1:5173/?health_min=80&health_max=89.9&theme=dark',
+    width: 1440,
+    height: 900
+  },
+  {
+    name: '49-catalog-topic-filter-1440.png',
+    url: 'http://127.0.0.1:5173/?topic=web&theme=dark',
+    width: 1440,
+    height: 900
+  },
+  {
+    name: '50-catalog-compare-page-1440.png',
+    url: 'http://127.0.0.1:5173/compare?repository_id=a0000001-0000-0000-0000-000000000001&repository_id=a0000003-0000-0000-0000-000000000003&theme=dark',
+    width: 1440,
+    height: 900
+  },
+  {
+    name: '51-catalog-mobile-390.png',
+    url: 'http://127.0.0.1:5173/?theme=dark',
+    width: 390,
+    height: 844
   }
 ];
 

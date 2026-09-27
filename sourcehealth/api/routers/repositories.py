@@ -17,6 +17,7 @@ from ..schemas import (
     AnalysisPage,
     AnalysisRequest,
     AnalysisSummary,
+    CategoryScoreMiniDTO,
     ErrorResponse,
     RepositoryDetails,
     RepositoryImport,
@@ -27,10 +28,39 @@ from ..schemas import (
 router = APIRouter()
 
 
-def _repository_dto(repository: Repository, run: AnalysisRun | None, *, details: bool = False):
+def _repository_dto(repository: Repository, run: AnalysisRun | None, *, details: bool = False, rank: int | None = None):
     schema = RepositoryDetails if details else RepositorySummary
     preview = score_preview(run.scoring_policy_version, run.category_scores) if run is not None else None
-    return schema(**schema.model_validate(repository).model_dump(exclude={"score_preview"}), score_preview=preview)
+
+    cat_scores = {}
+    coverage_pct = None
+    if run is not None and isinstance(run.category_scores, dict):
+        for cat_name in ("documentation", "cicd", "security", "activity", "issues", "code_health"):
+            data = run.category_scores.get(cat_name)
+            if isinstance(data, dict):
+                cat_scores[cat_name] = CategoryScoreMiniDTO(
+                    score=data.get("score"),
+                    availability=data.get("availability", "no_data"),
+                )
+            else:
+                cat_scores[cat_name] = CategoryScoreMiniDTO(score=None, availability="no_data")
+        if isinstance(run.data_coverage, dict):
+            coverage_val = run.data_coverage.get("nominal_weight_percent")
+            if coverage_val is not None:
+                try:
+                    coverage_pct = int(coverage_val)
+                except Exception:
+                    coverage_pct = None
+
+    return schema(
+        **schema.model_validate(repository).model_dump(
+            exclude={"score_preview", "category_scores", "data_coverage_percent", "health_rank"}
+        ),
+        score_preview=preview,
+        category_scores=cat_scores,
+        data_coverage_percent=coverage_pct,
+        health_rank=rank,
+    )
 
 
 @router.post("/api/v1/repositories", response_model=RepositoryDetails, status_code=201,
@@ -54,21 +84,93 @@ def import_repository(body: RepositoryImport, request: Request):
 
 
 @router.get("/api/v1/repositories", response_model=RepositoryPage)
-def repositories(request: Request, limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0, le=100000),
-                 sort: str = Query("health_score", pattern="^(health_score|likes|last_activity)$"),
-                 language: str | None = Query(None, max_length=64)):
-    column = {"health_score": Repository.health_score, "likes": Repository.likes,
-              "last_activity": Repository.last_activity_at}[sort]
-    query = (select(Repository, AnalysisRun)
-             .outerjoin(AnalysisRun, AnalysisRun.id == Repository.latest_analysis_id)
-             .where(Repository.visibility == "public"))
-    if language:
-        query = query.where(Repository.language == language)
+def repositories(
+    request: Request,
+    q: str | None = Query(None, max_length=256),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0, le=100000),
+    sort: str = Query("health_score", pattern="^(relevance|health_score|likes|last_activity|name|security|cicd|activity|documentation|issues|code_health|coverage)$"),
+    order: str = Query("desc", pattern="^(asc|desc)$"),
+    language: str | None = Query(None, max_length=64),
+    topic: str | None = Query(None, max_length=64),
+    origin: str | None = Query(None, pattern="^(native|fork|migrated|unknown)$"),
+    health_min: float | None = Query(None, ge=0, le=100),
+    health_max: float | None = Query(None, ge=0, le=100),
+    health_status: str | None = Query(None, pattern="^(available|forming|no_data|all)$"),
+    security_status: str | None = Query(None, pattern="^(available|no_data|any)$"),
+    security_min: float | None = Query(None, ge=0, le=100),
+    security_max: float | None = Query(None, ge=0, le=100),
+    cicd_status: str | None = Query(None, pattern="^(available|no_data|any)$"),
+    cicd_min: float | None = Query(None, ge=0, le=100),
+    cicd_max: float | None = Query(None, ge=0, le=100),
+    activity_status: str | None = Query(None, pattern="^(available|no_data|any)$"),
+    activity_min: float | None = Query(None, ge=0, le=100),
+    activity_max: float | None = Query(None, ge=0, le=100),
+    documentation_status: str | None = Query(None, pattern="^(available|no_data|any)$"),
+    documentation_min: float | None = Query(None, ge=0, le=100),
+    documentation_max: float | None = Query(None, ge=0, le=100),
+    issues_status: str | None = Query(None, pattern="^(available|no_data|any)$"),
+    issues_min: float | None = Query(None, ge=0, le=100),
+    issues_max: float | None = Query(None, ge=0, le=100),
+    code_health_status: str | None = Query(None, pattern="^(available|no_data|any)$"),
+    code_health_min: float | None = Query(None, ge=0, le=100),
+    code_health_max: float | None = Query(None, ge=0, le=100),
+    coverage_min: int | None = Query(None, ge=0, le=100),
+    activity_days: int | None = Query(None, ge=1, le=3650),
+):
+    from sourcehealth.catalog.query import CatalogFilters, get_catalog_repositories
+
+    filters = CatalogFilters(
+        q=q,
+        limit=limit,
+        offset=offset,
+        sort=sort,
+        order=order,
+        language=language,
+        topic=topic,
+        origin=origin,
+        health_min=health_min,
+        health_max=health_max,
+        health_status=health_status,
+        security_status=security_status,
+        security_min=security_min,
+        security_max=security_max,
+        cicd_status=cicd_status,
+        cicd_min=cicd_min,
+        cicd_max=cicd_max,
+        activity_status=activity_status,
+        activity_min=activity_min,
+        activity_max=activity_max,
+        documentation_status=documentation_status,
+        documentation_min=documentation_min,
+        documentation_max=documentation_max,
+        issues_status=issues_status,
+        issues_min=issues_min,
+        issues_max=issues_max,
+        code_health_status=code_health_status,
+        code_health_min=code_health_min,
+        code_health_max=code_health_max,
+        coverage_min=coverage_min,
+        activity_days=activity_days,
+    )
     with request.app.state.sessions() as db:
-        rows = list(db.execute(query.order_by(column.desc().nulls_last(), Repository.id)
-                               .offset(offset).limit(limit + 1)).all())
-        return RepositoryPage(items=[_repository_dto(repository, run) for repository, run in rows[:limit]],
-                              limit=limit, offset=offset, has_more=len(rows) > limit)
+        rows, total = get_catalog_repositories(db, filters)
+        items = []
+        for idx, (repo_row, run_row) in enumerate(rows):
+            rank = None
+            if sort == "health_score" and order == "desc" and repo_row.health_score is not None:
+                rank = offset + idx + 1
+            items.append(_repository_dto(repo_row, run_row, rank=rank))
+
+        return RepositoryPage(
+            items=items,
+            limit=limit,
+            offset=offset,
+            total=total,
+            has_more=(offset + len(rows)) < total,
+            applied_sort=sort,
+            applied_order=order,
+        )
 
 
 @router.get("/api/v1/repositories/{repository_id}", response_model=RepositoryDetails)

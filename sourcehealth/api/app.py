@@ -18,7 +18,18 @@ from sourcehealth.logging_config import configure_logging
 from sourcehealth.settings import Settings
 from sourcehealth.storage.database import create_database
 
-from .routers import analyses, badges, compare, health, integrity, profile, publicity, repositories, sourcecraft
+from .routers import (
+    analyses,
+    badges,
+    catalog,
+    compare,
+    health,
+    integrity,
+    profile,
+    publicity,
+    repositories,
+    sourcecraft,
+)
 from .routers import auth as auth_routes
 from .schemas import ErrorResponse
 
@@ -90,6 +101,7 @@ def create_app(settings: Settings | None = None, *, sessions=None, redis=None) -
         return error(request, "service_unavailable", 503)
 
     app.include_router(health.router)
+    app.include_router(catalog.router)
     app.include_router(repositories.router)
     app.include_router(analyses.router)
     app.include_router(auth_routes.router)

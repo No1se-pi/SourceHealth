@@ -10,6 +10,7 @@ import { SourceCraftPage } from '../pages/SourceCraftPage';
 import { DemoPage } from '../pages/DemoPage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { DevelopersPage } from '../pages/DevelopersPage';
+import { ComparePage } from '../pages/ComparePage';
 import { ScrollToTop } from '../components/common/ScrollToTop';
 
 export const AppRouter: React.FC = () => {
@@ -26,6 +27,7 @@ export const AppRouter: React.FC = () => {
           <Route path="/demo" element={<DemoPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/developers" element={<DevelopersPage />} />
+          <Route path="/compare" element={<ComparePage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

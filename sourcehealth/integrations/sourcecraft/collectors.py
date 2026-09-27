@@ -40,9 +40,25 @@ class RepositoryCollector:
             metadata = normalize_repository_metadata(
                 raw, expected_org=repository.organization_slug,
                 expected_slug=repository.repository_slug, require_public=True)
-            facts = {"id": metadata.sourcecraft_id, "slug": metadata.repository_slug,
-                     "visibility": metadata.visibility, "default_branch": metadata.default_branch,
-                     "is_empty": metadata.is_empty, "likes": metadata.likes}
+            from sourcehealth.catalog.topics import TOPIC_CLASSIFIER_VERSION, classify_topics
+
+            topics = classify_topics(
+                metadata.repository_slug, metadata.description, metadata.project_slug, metadata.language
+            )
+            facts = {
+                "id": metadata.sourcecraft_id,
+                "slug": metadata.repository_slug,
+                "visibility": metadata.visibility,
+                "default_branch": metadata.default_branch,
+                "is_empty": metadata.is_empty,
+                "likes": metadata.likes,
+                "description": metadata.description,
+                "logo_url": metadata.logo_url,
+                "origin": metadata.origin,
+                "project_slug": metadata.project_slug,
+                "topics": topics,
+                "topic_classifier_version": TOPIC_CLASSIFIER_VERSION,
+            }
             if metadata.language is not None:
                 facts["language"] = metadata.language
             return CollectedFacts("sourcecraft", DataAvailability.AVAILABLE, facts)
