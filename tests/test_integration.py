@@ -760,6 +760,37 @@ class PersistenceTests(unittest.TestCase):
         finally:
             auth.logout(token)
 
+    def test_analysis_exception_deletes_connected_pat_lease(self):
+        import base64
+        import json
+
+        from sourcehealth.auth.sourcecraft import SourceCraftConnection
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        settings = self.settings.model_copy(update={
+            "analysis_profile": "mvp-v1",
+            "sourcecraft_credential_key": SecretStr(base64.urlsafe_b64encode(os.urandom(32)).decode()),
+        })
+        auth = AuthService(settings, self.redis, self.sessions)
+        token = uuid4().hex
+        self.redis.set(auth._key("session", token), json.dumps({"id": str(uuid4())}), ex=120)
+        connection = SourceCraftConnection(auth, client_factory=lambda **kw: SourceCraftClient(
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"id": "user-1"})), **kw))
+        connection.connect(token, "unit-" + uuid4().hex)
+        run = AnalysisService(self.sessions, settings).request_analysis(self.repository_id, force=True)
+        self.assertTrue(connection.lease_for_analysis(token, run.id))
+        self.assertIsNotNone(connection.analysis_credential(run.id))
+        try:
+            with (patch("sourcehealth.application.jobs.Settings", return_value=settings),
+                  patch("sourcehealth.application.jobs.collect_platform", side_effect=RuntimeError("private marker"))):
+                execute_analysis(str(run.id))
+            self.assertIsNone(connection.analysis_credential(run.id))
+            with self.sessions() as db:
+                stored = db.get(AnalysisRun, run.id)
+                self.assertEqual((stored.status, stored.error_code), ("failed", "analysis_failed"))
+        finally:
+            auth.logout(token)
+
     def test_public_analysis_history_is_stable_paginated_and_private_safe(self):
         queued_at = datetime(2026, 9, 20, 12, tzinfo=UTC)
         ids = [UUID("10000000-0000-0000-0000-000000000001"),
