@@ -1,6 +1,7 @@
 """User PAT connection: encrypted Redis, bound to one existing Я ID session."""
 
 import base64
+import logging
 import re
 import secrets
 from uuid import UUID
@@ -13,6 +14,8 @@ from sourcehealth.application.services import ServiceError
 from sourcehealth.integrations.sourcecraft.analytics import identifier
 from sourcehealth.integrations.sourcecraft.client import SourceCraftClient, SourceCraftError
 from sourcehealth.storage.models import User
+
+LOG = logging.getLogger(__name__)
 
 
 class SourceCraftConnection:
@@ -212,5 +215,12 @@ class SourceCraftConnection:
             if next_token not in (None, "") and not isinstance(next_token, str):
                 raise SourceCraftError("invalid_pagination")
             return {"items": items, "next_page_token": next_token or None, "has_more": bool(next_token)}
-        except (SourceCraftError, AttributeError, TypeError):
+        except SourceCraftError as exc:
+            # Only the stable integration code and logical endpoint are safe for operator logs.
+            LOG.warning("sourcecraft_request_failed", extra={"endpoint": "me/repos",
+                                                               "sourcecraft_error_code": exc.code})
+            raise ServiceError("sourcecraft_repositories_unavailable", 503) from None
+        except (AttributeError, TypeError):
+            LOG.warning("sourcecraft_request_failed", extra={"endpoint": "me/repos",
+                                                               "sourcecraft_error_code": "invalid_response"})
             raise ServiceError("sourcecraft_repositories_unavailable", 503) from None
