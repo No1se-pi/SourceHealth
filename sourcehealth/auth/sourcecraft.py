@@ -200,6 +200,8 @@ class SourceCraftConnection:
                 if visibility not in {"public", "private", "internal"}:
                     raise SourceCraftError("invalid_response")
                 branch = row.get("default_branch")
+                if branch == "":
+                    branch = None
                 # Git refs may contain Unicode. Keep a bounded display value and reject
                 # control characters; this field is never used to construct a URL or command.
                 if branch is not None and (not isinstance(branch, str) or not 1 <= len(branch) <= 255
