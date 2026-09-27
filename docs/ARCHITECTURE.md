@@ -1,6 +1,6 @@
-# Архитектура SourceHealth
+﻿# Архитектура SourceHealth
 
-Модульный монолит для трёх разработчиков. Один Python package, один HTTP API,
+Модульный монолит SourceHealth. Один Python package, один HTTP API,
 одна PostgreSQL БД. API и worker — разные процессы одного приложения. Frontend
 общается только по HTTP. Анализаторы не знают о БД и UI.
 

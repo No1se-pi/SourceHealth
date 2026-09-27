@@ -1,4 +1,4 @@
-# Финальная release-приёмка (Final Release Acceptance)
+﻿# Финальная release-приёмка (Final Release Acceptance)
 
 Этот документ содержит сводный статус release gates проекта SourceHealth.
 Полная матрица обязательных требований M-01 — M-18 и ворот A — W зафиксирована в [MANDATORY_ACCEPTANCE_MATRIX](MANDATORY_ACCEPTANCE_MATRIX.md).
@@ -19,7 +19,7 @@
 | **Explicit `/demo` fallback** | PASS | Маршрут `/demo`, баннер `DEMO DATASET / OFFLINE DEMO` |
 | **Production deployment** | PASS / LIVE | <https://sourcehealth.tech> (live проверен 2026-09-23); воспроизводимый bundle в `deploy/` проверен скриптом `scripts/production_bundle_smoke.py` |
 | **Docker socket invariant** | PASS | backend, worker, scheduler не имеют доступа к сокету Docker; изоляция через non-root/read-only |
-| **Unit tests** | PASS | `python -B -m unittest discover -s tests`: **209 tests PASS** (skipped=25 в Linux CI, skipped=28 на Windows) |
+| **Unit & Integration tests** | PASS | `python -B -m unittest discover -s tests`: **360 tests PASS** (skipped=64) |
 | **Whitespace / Diff check** | PASS | `git diff --check` чист |
 | **Frontend build & types** | PASS | `npm run build --prefix frontend` (2.89s) & `npm run types --prefix frontend` (zero drift) |
 | **Browser mock acceptance** | PASS | `node scripts/run_browser_acceptance.mjs`: все 46 скриншотов успешно сформированы |
