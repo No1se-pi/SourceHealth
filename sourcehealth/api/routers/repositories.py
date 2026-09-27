@@ -36,6 +36,11 @@ def _repository_dto(repository: Repository, run: AnalysisRun | None, *, details:
     if run is not None and run.profile == "mvp-v1" and run.health_score is not None:
         effective_health = run.health_score
 
+    effective_latest_analysis_id = (
+        run.id if (run is not None and run.profile == "mvp-v1")
+        else repository.latest_analysis_id
+    )
+
     cat_scores = {}
     coverage_pct = None
     if run is not None and isinstance(run.category_scores, dict):
@@ -58,8 +63,9 @@ def _repository_dto(repository: Repository, run: AnalysisRun | None, *, details:
 
     return schema(
         **schema.model_validate(repository).model_dump(
-            exclude={"score_preview", "category_scores", "data_coverage_percent", "health_rank", "health_score"}
+            exclude={"score_preview", "category_scores", "data_coverage_percent", "health_rank", "health_score", "latest_analysis_id"}
         ),
+        latest_analysis_id=effective_latest_analysis_id,
         health_score=effective_health,
         score_preview=preview,
         category_scores=cat_scores,
@@ -187,7 +193,19 @@ def repositories(
 def repository(repository_id: UUID, request: Request):
     with request.app.state.sessions() as db:
         repository = public_repository(db, repository_id)
-        run = db.get(AnalysisRun, repository.latest_analysis_id) if repository.latest_analysis_id else None
+        canonical_run = db.scalars(
+            select(AnalysisRun)
+            .where(
+                AnalysisRun.repository_id == repository_id,
+                AnalysisRun.profile == "mvp-v1",
+                AnalysisRun.status.in_(["completed", "partial"]),
+            )
+            .order_by(AnalysisRun.completed_at.desc().nulls_last(), AnalysisRun.id.desc())
+            .limit(1)
+        ).first()
+        run = canonical_run if canonical_run is not None else (
+            db.get(AnalysisRun, repository.latest_analysis_id) if repository.latest_analysis_id else None
+        )
         return _repository_dto(repository, run, details=True)
 
 

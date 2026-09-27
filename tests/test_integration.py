@@ -1173,6 +1173,7 @@ class PersistenceTests(unittest.TestCase):
                 self.assertNotIn("priv-repo", str(data))
         finally:
             with self.sessions.begin() as db:
+                db.execute(update(Repository).where(Repository.id.in_(created_repo_ids)).values(latest_analysis_id=None))
                 db.execute(delete(AnalysisRun).where(AnalysisRun.repository_id.in_(created_repo_ids)))
                 db.execute(delete(Repository).where(Repository.id.in_(created_repo_ids)))
 
@@ -1254,6 +1255,7 @@ class PersistenceTests(unittest.TestCase):
                 self.assertEqual(detail_res.json()["health_score"], 72.0)
         finally:
             with self.sessions.begin() as db:
+                db.execute(update(Repository).where(Repository.id.in_(created_repo_ids)).values(latest_analysis_id=None))
                 db.execute(delete(AnalysisRun).where(AnalysisRun.repository_id.in_(created_repo_ids)))
                 db.execute(delete(Repository).where(Repository.id.in_(created_repo_ids)))
 
@@ -1371,5 +1373,6 @@ class PersistenceTests(unittest.TestCase):
                 self.assertFalse(p2.json()["has_more"])
         finally:
             with self.sessions.begin() as db:
+                db.execute(update(Repository).where(Repository.id.in_(created_repo_ids)).values(latest_analysis_id=None))
                 db.execute(delete(AnalysisRun).where(AnalysisRun.repository_id.in_(created_repo_ids)))
                 db.execute(delete(Repository).where(Repository.id.in_(created_repo_ids)))
