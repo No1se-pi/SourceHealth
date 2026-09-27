@@ -32,26 +32,41 @@ def validate_production_compose(root: Path) -> None:
             "-f", str(compose_file),
             "config", "--format", "json"
         ]
-        proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=False)
+        env = os.environ.copy()
+        env["SOURCEHEALTH_ENV_FILE"] = temp_env_path
+        proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", env=env, check=False)
         if proc.returncode != 0:
             raise RuntimeError(f"docker compose config failed (code {proc.returncode}):\n{proc.stderr}")
 
         config = json.loads(proc.stdout)
         services = config.get("services", {})
-        expected_services = {"postgres", "redis", "migrate", "backend", "worker", "caddy"}
+        expected_services = {"postgres", "redis", "migrate", "backend", "worker"}
         missing = expected_services - set(services.keys())
         if missing:
             raise AssertionError(f"Missing expected services in compose.prod.yaml: {missing}")
 
-        # 1. Postgres password interpolation & loopback bind
+        if config.get("name") != "sourcehealth":
+            raise AssertionError(f"Production project must remain sourcehealth, got {config.get('name')!r}")
+        if "caddy" in services:
+            raise AssertionError("Production compose must not start Caddy; ingress is a host service")
+
+        volumes = config.get("volumes", {})
+        expected_volumes = {
+            "postgres-data": "sourcehealth_postgres-data",
+            "redis-data": "sourcehealth_redis-data",
+        }
+        for key, expected_name in expected_volumes.items():
+            volume = volumes.get(key, {})
+            if volume.get("name") != expected_name or not volume.get("external"):
+                raise AssertionError(f"{key} must be external volume {expected_name}: {volume}")
+
+        # 1. Existing PostgreSQL loopback contract
         pg = services["postgres"]
-        pg_env = pg.get("environment", {})
-        if pg_env.get("POSTGRES_PASSWORD") != test_password:
-            raise AssertionError(f"Postgres POSTGRES_PASSWORD not interpolated: got {pg_env.get('POSTGRES_PASSWORD')!r}")
         pg_ports = pg.get("ports", [])
-        pg_loopback = any(p.get("target") == 5432 and p.get("host_ip") == "127.0.0.1" for p in pg_ports)
+        pg_loopback = any(p.get("target") == 5432 and p.get("published") == "15432"
+                          and p.get("host_ip") == "127.0.0.1" for p in pg_ports)
         if not pg_loopback:
-            raise AssertionError(f"Postgres must bind only to 127.0.0.1:5432, got {pg_ports}")
+            raise AssertionError(f"Postgres must preserve 127.0.0.1:15432, got {pg_ports}")
 
         # 2. Redis loopback bind
         redis = services["redis"]
@@ -59,6 +74,12 @@ def validate_production_compose(root: Path) -> None:
         redis_loopback = any(p.get("target") == 6379 and p.get("host_ip") == "127.0.0.1" for p in redis_ports)
         if not redis_loopback:
             raise AssertionError(f"Redis must bind only to 127.0.0.1:6379, got {redis_ports}")
+
+        backend_ports = services["backend"].get("ports", [])
+        backend_loopback = any(p.get("target") == 8000 and p.get("published") == "8000"
+                               and p.get("host_ip") == "127.0.0.1" for p in backend_ports)
+        if not backend_loopback:
+            raise AssertionError(f"Backend must preserve host Caddy upstream 127.0.0.1:8000: {backend_ports}")
 
         # 3. Internal hostnames & password propagation in app services
         for name in ("migrate", "backend", "worker"):
@@ -80,7 +101,7 @@ def validate_production_compose(root: Path) -> None:
                 if "docker.sock" in src or "docker.sock" in tgt:
                     raise AssertionError(f"Service {name} illegally mounts docker.sock: {vol}")
 
-        print("  [PASS] deploy/compose.prod.yaml: password interpolation, loopback binds, internal hostnames, no docker.sock")
+        print("  [PASS] deploy/compose.prod.yaml: existing project/volumes, host ingress, loopback binds, no docker.sock")
     finally:
         if os.path.exists(temp_env_path):
             os.unlink(temp_env_path)
@@ -100,19 +121,17 @@ def validate_systemd_units(root: Path) -> None:
             raise AssertionError(f"{svc_path.name} must not contain DATABASE_URL in Environment=")
         if "<password>" in content or "<url-encoded-password>" in content:
             raise AssertionError(f"{svc_path.name} contains password placeholder")
-        if "EnvironmentFile=/opt/sourcehealth/.env.production" not in content:
-            raise AssertionError(f"{svc_path.name} must specify EnvironmentFile=/opt/sourcehealth/.env.production")
-        if "redis://127.0.0.1:6379/0" not in content:
-            raise AssertionError(f"{svc_path.name} must use loopback Redis for host service")
+        if "/etc/sourcehealth/sourcehealth.env" not in content:
+            raise AssertionError(f"{svc_path.name} must use /etc/sourcehealth/sourcehealth.env")
 
     timer_path = deploy_dir / "sourcehealth-scheduler.timer.example"
     if not timer_path.exists():
         raise FileNotFoundError(f"Missing {timer_path}")
     timer_content = timer_path.read_text(encoding="utf-8")
-    if "OnUnitActiveSec=5min" not in timer_content:
-        raise AssertionError("sourcehealth-scheduler.timer.example must specify OnUnitActiveSec=5min")
+    if "OnUnitActiveSec=60s" not in timer_content:
+        raise AssertionError("sourcehealth-scheduler.timer.example must preserve the production 60s interval")
 
-    print("  [PASS] deploy/*.service.example & timer: no password placeholders, loopback redis, EnvironmentFile configured")
+    print("  [PASS] deploy/*.service.example & timer: existing env path and host-level process contract")
 
 
 def validate_caddyfile(root: Path) -> None:
@@ -122,13 +141,13 @@ def validate_caddyfile(root: Path) -> None:
     content = caddyfile.read_text(encoding="utf-8")
 
     # API and SPA separation check
-    api_match = re.search(r"handle\s+/api/\*\s*\{[^}]*reverse_proxy\s+backend:8000[^}]*\}", content)
+    api_match = re.search(r"handle\s+/api/\*\s*\{[^}]*reverse_proxy\s+127\.0\.0\.1:8000[^}]*\}", content)
     if not api_match:
-        raise AssertionError("Caddyfile missing mutually exclusive 'handle /api/* { reverse_proxy backend:8000 }'")
+        raise AssertionError("Caddyfile missing host upstream 'handle /api/* { reverse_proxy 127.0.0.1:8000 }'")
 
-    spa_match = re.search(r"handle\s*\{[^}]*root\s+\*\s+/srv/frontend[^}]*try_files\s+\{path\}\s+/index\.html[^}]*\}", content)
+    spa_match = re.search(r"handle\s*\{[^}]*root\s+\*\s+/opt/sourcehealth/frontend/dist[^}]*try_files\s+\{path\}\s+/index\.html[^}]*\}", content)
     if not spa_match:
-        raise AssertionError("Caddyfile missing fallback 'handle { root * /srv/frontend ... try_files {path} /index.html }'")
+        raise AssertionError("Caddyfile missing host frontend root /opt/sourcehealth/frontend/dist")
 
     if "redir https://sourcehealth.tech{uri} permanent" not in content:
         raise AssertionError("Caddyfile missing HTTP to HTTPS redirect")
