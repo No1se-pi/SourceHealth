@@ -2,6 +2,7 @@
 
 - [Синхронизация каталога и адаптивный планировщик](CATALOG_SYNC.md)
 - [Достоверность анализа: фаза 1](ANALYSIS_CORRECTNESS_PHASE1.md)
+- [Углублённая аналитика репозитория](DEEP_ANALYTICS.md)
 - [Publicity, Compare и Integrity](BONUS_STARS_CORE.md)
 - [Профиль, отслеживание и хранение PAT](PROFILE.md)
 - [Публичный API и README badge](DEVELOPERS_API.md)

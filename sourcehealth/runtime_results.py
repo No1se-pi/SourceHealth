@@ -12,7 +12,8 @@ from sourcehealth.git.activity import GitActivityMetrics
 
 CLASSIFICATION = {"git_activity": ("activity", "git"), "sast": ("code_health", "sourcehealth_local")}
 MVP_CLASSIFICATION = {**CLASSIFICATION, "documentation": ("documentation", "git_snapshot"),
-                      "technical_debt": ("code_health", "git_snapshot")}
+                      "technical_debt": ("code_health", "git_snapshot"),
+                      "repository_insights": (None, "git_snapshot")}
 RUNTIME_ERRORS = frozenset({"docker_unavailable", "container_timeout", "docker_command_failed",
                             "invalid_or_missing_report", "invalid_report", "inconsistent_report"})
 SAST_COUNTERS = ("files_scanned", "bytes_read", "entries_seen", "python_files_parsed",
@@ -159,6 +160,88 @@ def snapshot_result(name, raw):
                                     "scope": "tracked_default_branch_excluding_generated"})
 
 
+def insights_result(raw):
+    """Allow only aggregate aliases, ratios and known hygiene facts across Docker."""
+    if raw.get("availability") == "no_data":
+        return unavailable("repository_insights", "insights_unavailable")
+    metadata, metrics = raw["metadata"], raw["metrics"]
+    sha, complete = metadata.get("head_sha"), metadata.get("complete")
+    if (not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", sha)
+            or type(complete) is not bool or raw.get("status") != ("ok" if complete else "partial")):
+        raise ValueError("invalid insights coverage")
+    safe = {}
+    for key in ("sampled_commits", "contributors_count", "bus_factor_sample_commits",
+                "ownership_sample_commits", "path_touches_observed", "dependency_manifest_count",
+                "dependency_lockfile_count", "deep_analytics_ms"):
+        safe[key] = number(metrics[key], integer=True)
+    for key in ("history_complete", "bus_factor_complete", "ownership_complete", "snapshot_complete"):
+        if type(metrics.get(key)) is not bool:
+            raise ValueError("invalid insights completeness")
+        safe[key] = metrics[key]
+    for key in ("security_policy_present", "branch_policy_present", "review_policy_present",
+                "license_policy_present", "dependency_update_automation", "codeowners_present",
+                "contributing_present"):
+        if metrics.get(key) is not None and type(metrics[key]) is not bool:
+            raise ValueError("invalid hygiene flag")
+        safe[key] = metrics.get(key)
+    for key in ("top_contributor_share", "top_2_contributors_share", "top_3_contributors_share",
+                "lockfile_coverage"):
+        value = metrics.get(key)
+        if value is not None and (type(value) not in (int, float) or not 0 <= value <= 1):
+            raise ValueError("invalid insights ratio")
+        safe[key] = number(value) if value is not None else None
+    bus_factor = metrics.get("bus_factor_proxy")
+    safe["bus_factor_proxy"] = number(bus_factor, integer=True) if bus_factor is not None else None
+    if metrics.get("bus_factor_threshold") != 0.5 or metrics.get("bus_factor_basis") != "commit_concentration":
+        raise ValueError("invalid bus factor semantics")
+    reason = metrics.get("bus_factor_reason")
+    if reason not in {None, "insufficient_commit_sample"}:
+        raise ValueError("invalid bus factor reason")
+    safe.update(bus_factor_threshold=0.5, bus_factor_basis="commit_concentration", bus_factor_reason=reason)
+    ecosystems = metrics.get("ecosystems_detected")
+    allowed = {"python", "node", "rust", "go", "java", "php", "ruby", "dotnet"}
+    if not isinstance(ecosystems, list) or len(ecosystems) > len(allowed) or any(item not in allowed for item in ecosystems):
+        raise ValueError("invalid ecosystems")
+    safe["ecosystems_detected"] = sorted(set(ecosystems))
+    distribution = metrics.get("contributor_distribution")
+    if not isinstance(distribution, list) or len(distribution) > 11:
+        raise ValueError("invalid contributor distribution")
+    safe["contributor_distribution"] = []
+    for index, item in enumerate(distribution):
+        expected = "Other" if index == 10 else f"Contributor {index + 1}"
+        if item.get("alias") != expected:
+            raise ValueError("invalid contributor alias")
+        share = item.get("share")
+        if type(share) not in (int, float) or not 0 <= share <= 1:
+            raise ValueError("invalid contributor share")
+        safe["contributor_distribution"].append({"alias": expected,
+                                                  "commits": number(item.get("commits"), integer=True),
+                                                  "share": number(share)})
+    ownership = metrics.get("ownership_groups")
+    if not isinstance(ownership, list) or len(ownership) > 20:
+        raise ValueError("invalid ownership groups")
+    safe["ownership_groups"] = []
+    for item in ownership:
+        alias = item.get("dominant_alias")
+        if alias != "Other" and not re.fullmatch(r"Contributor [1-9][0-9]*", alias or ""):
+            raise ValueError("invalid ownership alias")
+        share = item.get("dominant_share")
+        if type(share) not in (int, float) or not 0 <= share <= 1:
+            raise ValueError("invalid ownership share")
+        safe["ownership_groups"].append({"path_group": relative_path(item["path_group"]),
+                                          "contributors": number(item["contributors"], integer=True),
+                                          "dominant_alias": alias, "dominant_share": number(share),
+                                          "observed_touches": number(item["observed_touches"], integer=True)})
+    evidence = [Evidence(id="insights:repository", source="git_snapshot", type="repository_insights",
+                         reference=sha, summary=("Полная Git-история и tracked snapshot проанализированы без публикации авторов."
+                                                if complete else "Углублённая аналитика основана на ограниченной выборке; авторы не публикуются."))]
+    return AnalyzerResult("repository_insights", status=raw["status"],
+                          availability=DataAvailability.AVAILABLE if complete else DataAvailability.PARTIAL,
+                          category=None, source="git_snapshot", analyzer_version="1", metrics=safe,
+                          metadata={"head_sha": sha, "complete": complete,
+                                    "scope": "tracked_default_branch_excluding_generated"}, evidence=evidence)
+
+
 def normalize_runtime_report(payload: dict, *, with_mvp=False) -> dict[str, AnalyzerResult]:
     """Изолировать невалидные checks; неполный runtime/cleanup не становятся успехом."""
     if (not isinstance(payload, dict) or payload.get("schema_version") != "1.0"
@@ -171,7 +254,8 @@ def normalize_runtime_report(payload: dict, *, with_mvp=False) -> dict[str, Anal
     converters = [("git_activity", git_result), ("sast", sast_result)]
     if with_mvp:
         converters += [("documentation", lambda raw: snapshot_result("documentation", raw)),
-                       ("technical_debt", lambda raw: snapshot_result("technical_debt", raw))]
+                       ("technical_debt", lambda raw: snapshot_result("technical_debt", raw)),
+                       ("repository_insights", insights_result)]
     for name, converter in converters:
         raw = payload["checks"].get(name)
         if raw is None:

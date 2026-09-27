@@ -73,6 +73,38 @@ def render_markdown(report) -> str:
         lines += ["", f"Итого открыто: {sum(counts.values())}.", "",
                   f"Security: max(0, 100 - {penalty}) = "
                   f'{security_score if security_score is not None else "NO_DATA"}.']
+    insights = report.get("checks", {}).get("repository_insights")
+    if insights:
+        metrics = insights.get("metrics", {})
+        def observed(value):
+            return "Есть" if value is True else "Не найдено" if value is False else "Нельзя определить"
+        bus_factor = metrics.get("bus_factor_proxy")
+        top_share = metrics.get("top_contributor_share")
+        lines += ["", "## Углублённая аналитика", "",
+                  "Bus Factor proxy — приближённая оценка концентрации изменений по Git, а не оценка знаний команды.", "",
+                  f"- Bus Factor proxy: {bus_factor if bus_factor is not None else 'NO_DATA' }.",
+                  f"- Доля ведущего участника: {round(top_share * 100, 1) if top_share is not None else 'NO_DATA'}%.",
+                  f"- Наблюдаемых участников: {metrics.get('contributors_count', 'NO_DATA')}.",
+                  f"- Коммитов в выборке: {metrics.get('sampled_commits', 'NO_DATA')}; "
+                  f"история {'полная' if metrics.get('history_complete') else 'ограничена выборкой'}.", "",
+                  "### Концентрация по областям", ""]
+        ownership = metrics.get("ownership_groups", [])
+        lines += ["| Область | Участников | Доминирующий alias | Доля |", "|---|---:|---|---:|"]
+        for item in ownership:
+            lines.append(f"| {_text(item['path_group'])} | {item['contributors']} | {_text(item['dominant_alias'])} | "
+                         f"{round(item['dominant_share'] * 100, 1)}% |")
+        if not ownership:
+            lines.append("| NO_DATA | — | — | — |")
+        lines += ["", "### Гигиена репозитория", "", "| Проверка | Статус |", "|---|---|"]
+        for label, key in (("SECURITY.md", "security_policy_present"), ("CODEOWNERS", "codeowners_present"),
+                           ("CONTRIBUTING", "contributing_present"), ("Политика веток", "branch_policy_present"),
+                           ("Политика review", "review_policy_present"),
+                           ("Автообновление зависимостей", "dependency_update_automation"),
+                           ("Политика лицензий", "license_policy_present")):
+            lines.append(f"| {_text(label)} | {_text(observed(metrics.get(key)))} |")
+        coverage_value = metrics.get("lockfile_coverage")
+        coverage_text = f"{round(coverage_value * 100, 1)}%" if coverage_value is not None else "Нельзя определить"
+        lines.append(f"| Покрытие lockfiles | {coverage_text} |")
     lines += ["", "## Рекомендации", ""]
     recommendations = sorted(report.get("recommendations", []), key=lambda r: (r["priority"], r["id"]))
     for item in recommendations:

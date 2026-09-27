@@ -13,6 +13,19 @@ CODE_SUFFIXES = frozenset({".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".go", 
 EXCLUDED = frozenset({".git", "node_modules", "vendor", ".venv", "venv", "dist", "build", "__pycache__"})
 MARKER = re.compile(r"\b(TODO|FIXME)\b")
 
+MANIFESTS = {
+    "pyproject.toml": "python", "setup.py": "python", "setup.cfg": "python",
+    "package.json": "node", "cargo.toml": "rust", "go.mod": "go",
+    "pom.xml": "java", "build.gradle": "java", "build.gradle.kts": "java",
+    "composer.json": "php", "gemfile": "ruby", "directory.packages.props": "dotnet",
+}
+LOCKFILES = {
+    "uv.lock": "python", "poetry.lock": "python", "pipfile.lock": "python",
+    "package-lock.json": "node", "pnpm-lock.yaml": "node", "yarn.lock": "node",
+    "cargo.lock": "rust", "go.sum": "go", "composer.lock": "php",
+    "gemfile.lock": "ruby", "packages.lock.json": "dotnet",
+}
+
 
 def git(root, *args, timeout=10):
     """Только доверенные Git subcommands; stderr и сообщения исходников не возвращаются."""
@@ -43,13 +56,19 @@ class SnapshotCollector:
         paths = git(root, "ls-tree", "-r", "--name-only", "-z", sha).decode("utf-8").split("\0")
         paths = [p for p in paths if p and not EXCLUDED.intersection(Path(p).parts)]
         complete = len(paths) <= self.max_files
-        documentation_complete = debt_complete = ci_complete = complete
+        documentation_complete = debt_complete = ci_complete = hygiene_complete = complete
         docs = {"readme": False, "license": False, "contributing": False, "codeowners": False,
                 "docs_directory": False, "run_instructions": False, "build_instructions": False,
                 "test_instructions": False, "readme_bytes": 0, "readme_headings": 0}
         locations = {}
         debt = {"todo_count": 0, "fixme_count": 0, "files_with_debt": 0, "code_files": 0,
                 "large_files": 0, "oldest_marker_age_days": None, "age_complete": True}
+        hygiene = {"security_policy_present": False, "branch_policy_present": False,
+                   "review_policy_present": False, "license_policy_present": False,
+                   "dependency_manifest_count": 0, "dependency_lockfile_count": 0,
+                   "ecosystems_detected": [], "lockfile_coverage": None,
+                   "dependency_update_automation": False}
+        manifest_ecosystems, lock_ecosystems = set(), set()
         ci_configured = False
         ci_config_path = None
         ci_config_legacy = False
@@ -58,11 +77,11 @@ class SnapshotCollector:
         documentation_bytes = debt_bytes = 0
         for relative in paths[:self.max_files]:
             if time.monotonic() - started > self.timeout:
-                documentation_complete = debt_complete = ci_complete = False
+                documentation_complete = debt_complete = ci_complete = hygiene_complete = False
                 break
             path = Path(relative)
             if path.is_absolute() or ".." in path.parts or "\\" in relative or ":" in relative or any(ord(c) < 32 for c in relative):
-                documentation_complete = debt_complete = ci_complete = False
+                documentation_complete = debt_complete = ci_complete = hygiene_complete = False
                 continue
             target = root / path
             lower, name = relative.lower(), path.name.lower()
@@ -79,6 +98,34 @@ class SnapshotCollector:
                 info = target.lstat()
                 if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
                     raise ValueError("unsafe_file")
+                if lower in {"security.md", ".github/security.md", "docs/security.md"}:
+                    hygiene["security_policy_present"] = True
+                if lower == ".sourcecraft/branches.yaml":
+                    hygiene["branch_policy_present"] = True
+                if lower == ".sourcecraft/review.yaml":
+                    hygiene["review_policy_present"] = True
+                if lower == ".sourcecraft/security/licenses.yaml":
+                    hygiene["license_policy_present"] = True
+                ecosystem = MANIFESTS.get(name)
+                if name.startswith("requirements") and name.endswith(".txt"):
+                    ecosystem = "python"
+                if path.suffix.lower() == ".csproj":
+                    ecosystem = "dotnet"
+                if ecosystem:
+                    hygiene["dependency_manifest_count"] += 1
+                    manifest_ecosystems.add(ecosystem)
+                lock_ecosystem = LOCKFILES.get(name)
+                if name.startswith("requirements") and name.endswith(".lock"):
+                    lock_ecosystem = "python"
+                if name.endswith(".lockfile") and "gradle" in name:
+                    lock_ecosystem = "java"
+                if lock_ecosystem:
+                    hygiene["dependency_lockfile_count"] += 1
+                    lock_ecosystems.add(lock_ecosystem)
+                if (lower in {".github/dependabot.yml", ".github/dependabot.yaml"}
+                        or name in {"renovate.json", "renovate.json5"}
+                        or lower in {".github/renovate.json", ".gitlab/renovate.json"}):
+                    hygiene["dependency_update_automation"] = True
                 lower = relative.lower()
                 name = path.name.lower()
                 kind = None
@@ -148,6 +195,7 @@ class SnapshotCollector:
                         debt["fixme_count"] += sum(values.count("FIXME") for _, values in markers)
                         age_targets.append((relative, {n for n, _ in markers}))
             except (OSError, ValueError, UnicodeError):
+                hygiene_complete = False
                 if doc_relevant:
                     documentation_complete = False
                 if is_code:
@@ -185,6 +233,15 @@ class SnapshotCollector:
             for key in docs:
                 if docs[key] is False:
                     docs[key] = None
+        hygiene_complete = hygiene_complete and complete
+        hygiene["ecosystems_detected"] = sorted(manifest_ecosystems)
+        if manifest_ecosystems:
+            hygiene["lockfile_coverage"] = len(manifest_ecosystems & lock_ecosystems) / len(manifest_ecosystems)
+        if not hygiene_complete:
+            for key in ("security_policy_present", "branch_policy_present", "review_policy_present",
+                        "license_policy_present", "dependency_update_automation"):
+                if hygiene[key] is False:
+                    hygiene[key] = None
         return {"head_sha": sha, "complete": documentation_complete and debt_complete and ci_complete,
                 "documentation_complete": documentation_complete, "debt_complete": debt_complete,
                 "documentation": docs, "locations": locations,
@@ -192,5 +249,6 @@ class SnapshotCollector:
                 "ci_config_path": ci_config_path, "ci_config_legacy": ci_config_legacy,
                 "ci_config_complete": ci_complete,
                 "scope": "tracked_default_branch_excluding_generated",
+                "hygiene_complete": hygiene_complete, "repository_hygiene": hygiene,
                 "documentation_bytes": documentation_bytes, "debt_bytes": debt_bytes,
                 "bytes_read": documentation_bytes + debt_bytes}

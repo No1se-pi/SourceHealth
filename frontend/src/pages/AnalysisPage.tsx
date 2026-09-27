@@ -9,6 +9,7 @@ import { AvailabilityBadge } from '../components/common/AvailabilityBadge';
 import { LoadingState } from '../components/common/LoadingState';
 import { ErrorState } from '../components/common/ErrorState';
 import { RecommendationCard } from '../components/common/RecommendationCard';
+import { DeepAnalytics } from '../components/analysis/DeepAnalytics';
 import { EvidenceList } from '../components/common/EvidenceList';
 import { SourceSoul } from '../components/common/SourceSoul';
 import { CategoryDetails } from '../components/common/CategoryDetails';
@@ -420,6 +421,8 @@ export const AnalysisPage: React.FC = () => {
                 })}
               </div>
             </div>
+
+            <DeepAnalytics check={run.checks?.repository_insights} />
 
             {/* Recommendations Section */}
             <div>

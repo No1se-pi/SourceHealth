@@ -1,5 +1,6 @@
 """Совместимость старого JSON 1.0 и SARIF с единым AnalysisReport 2.0."""
 
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -16,10 +17,12 @@ def analyze_repository(path: str | Path, scanner: SASTScanner, *, with_git: bool
         analyzers.append(GitActivityAnalyzerAdapter())
     factory = prepare_context if with_git else AnalysisContext
     if with_mvp:
+        from sourcehealth.analyzers.insights import RepositoryInsightsAnalyzer
         from sourcehealth.analyzers.snapshot import DocumentationAnalyzer, TechnicalDebtAnalyzer
+        from sourcehealth.insights import DeepGitCollector
         from sourcehealth.snapshot import SnapshotCollector
 
-        analyzers.extend([DocumentationAnalyzer(), TechnicalDebtAnalyzer()])
+        analyzers.extend([DocumentationAnalyzer(), TechnicalDebtAnalyzer(), RepositoryInsightsAnalyzer()])
 
         def factory(path):
             context = prepare_context(path) if with_git else AnalysisContext(path)
@@ -27,7 +30,11 @@ def analyze_repository(path: str | Path, scanner: SASTScanner, *, with_git: bool
                 snapshot = SnapshotCollector().collect(path, context.started_at)
             except Exception:
                 snapshot = None  # No Git stderr or host paths in public failure output.
-            return replace(context, metadata={"snapshot": snapshot})
+            try:
+                deep_git = DeepGitCollector().collect(path)
+            except (OSError, ValueError, subprocess.SubprocessError, UnicodeError):
+                deep_git = None
+            return replace(context, metadata={"snapshot": snapshot, "deep_git": deep_git})
     runner = AnalysisRunner(analyzers, context_factory=factory)
     return runner.analyze(path)
 
