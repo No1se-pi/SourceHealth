@@ -80,6 +80,15 @@ class SnapshotTests(unittest.TestCase):
         self.assertFalse(facts["hygiene_complete"])
         self.assertIsNone(facts["repository_hygiene"]["security_policy_present"])
 
+    def test_partial_lockfile_unknown(self):
+        self.files({"package.json": "{}", "yarn.lock": "observed only after manifest"})
+        facts = SnapshotCollector(max_files=1).collect(self.root, NOW)
+        hygiene = facts["repository_hygiene"]
+        self.assertFalse(facts["hygiene_complete"])
+        self.assertEqual(hygiene["dependency_manifest_count"], 1)
+        self.assertEqual(hygiene["dependency_lockfile_count"], 0)
+        self.assertIsNone(hygiene["lockfile_coverage"])
+
     def test_legacy_sourcecraft_ci_path_is_detected_with_provenance(self):
         self.files({"README.md": "# Project", ".src.ci.yaml": "untrusted: true"})
         docs, _ = self.analyze()

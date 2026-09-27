@@ -238,6 +238,8 @@ class SnapshotCollector:
         if manifest_ecosystems:
             hygiene["lockfile_coverage"] = len(manifest_ecosystems & lock_ecosystems) / len(manifest_ecosystems)
         if not hygiene_complete:
+            # A truncated tracked-tree walk cannot prove that a lockfile is absent.
+            hygiene["lockfile_coverage"] = None
             for key in ("security_policy_present", "branch_policy_present", "review_policy_present",
                         "license_policy_present", "dependency_update_automation"):
                 if hygiene[key] is False:

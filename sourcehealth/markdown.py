@@ -88,7 +88,7 @@ def render_markdown(report) -> str:
                   f"- Коммитов в выборке: {metrics.get('sampled_commits', 'NO_DATA')}; "
                   f"история {'полная' if metrics.get('history_complete') else 'ограничена выборкой'}.", "",
                   "### Концентрация по областям", ""]
-        ownership = metrics.get("ownership_groups", [])
+        ownership = metrics.get("ownership_groups") or []
         lines += ["| Область | Участников | Доминирующий alias | Доля |", "|---|---:|---|---:|"]
         for item in ownership:
             lines.append(f"| {_text(item['path_group'])} | {item['contributors']} | {_text(item['dominant_alias'])} | "

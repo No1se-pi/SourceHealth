@@ -60,7 +60,7 @@ def recommend(results):
                 priority, category="code_health",
                 description=f"Один участник выполнил {top_share:.0%} наблюдаемых коммитов; Bus Factor proxy основан на концентрации изменений.",
                 expected_impact="Снизится риск остановки сопровождения и потери контекста.")
-        dominant = [item for item in m.get("ownership_groups", []) if item.get("dominant_share", 0) >= 0.8]
+        dominant = [item for item in (m.get("ownership_groups") or []) if item.get("dominant_share", 0) >= 0.8]
         if dominant:
             groups = ", ".join(item["path_group"] for item in dominant[:5])
             add(insights, "insights:ownership", "Распределить владение ключевыми областями",

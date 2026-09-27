@@ -6,8 +6,9 @@ from copy import deepcopy
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from sourcehealth.analyzers.insights import RepositoryInsightsAnalyzer
 from sourcehealth.application.pipeline import analyze_context
-from sourcehealth.core import AnalyzerResult
+from sourcehealth.core import AnalysisContext, AnalyzerResult
 from sourcehealth.core.domain import DataAvailability as A
 from sourcehealth.insights import (
     MAX_HISTORY_COMMITS,
@@ -18,6 +19,7 @@ from sourcehealth.insights import (
 )
 from sourcehealth.markdown import render_markdown
 from sourcehealth.recommendations.mvp import recommend
+from sourcehealth.runtime_results import insights_result
 from sourcehealth.scoring.engine import ScoringEngine
 from sourcehealth.scoring.mvp import MVPPolicy
 from tests.mvp_fixtures import mvp_context, runtime_payload
@@ -45,6 +47,68 @@ def insights_metrics(**updates):
 
 
 class RepositoryInsightsTests(unittest.TestCase):
+    @staticmethod
+    def snapshot():
+        return {
+            "head_sha": "a" * 40, "scope": "tracked_default_branch_excluding_generated",
+            "hygiene_complete": True,
+            "documentation": {"codeowners": False, "contributing": False},
+            "repository_hygiene": {
+                "dependency_manifest_count": 1, "dependency_lockfile_count": 0,
+                "ecosystems_detected": ["python"], "lockfile_coverage": 0.0,
+                "dependency_update_automation": False, "security_policy_present": False,
+                "branch_policy_present": False, "review_policy_present": False,
+                "license_policy_present": False,
+            },
+        }
+
+    @staticmethod
+    def deep_git():
+        return {key: value for key, value in insights_metrics().items()
+                if key not in {"dependency_manifest_count", "dependency_lockfile_count",
+                               "ecosystems_detected", "lockfile_coverage", "dependency_update_automation",
+                               "security_policy_present", "branch_policy_present", "review_policy_present",
+                               "license_policy_present", "codeowners_present", "contributing_present",
+                               "snapshot_complete"}}
+
+    def analyze_sources(self, *, deep=True, snapshot=True):
+        metadata = {"deep_git": self.deep_git() if deep else None,
+                    "snapshot": self.snapshot() if snapshot else None}
+        return RepositoryInsightsAnalyzer().analyze(AnalysisContext(Path("."), metadata=metadata))
+
+    def test_sources_remain_independent(self):
+        hygiene_only = self.analyze_sources(deep=False)
+        self.assertEqual(hygiene_only.availability, A.PARTIAL)
+        self.assertEqual(hygiene_only.metrics["dependency_manifest_count"], 1)
+        self.assertIsNone(hygiene_only.metrics["contributors_count"])
+        self.assertIsNone(hygiene_only.metrics["ownership_groups"])
+
+        git_only = self.analyze_sources(snapshot=False)
+        self.assertEqual(git_only.availability, A.PARTIAL)
+        self.assertEqual(git_only.metrics["contributors_count"], 2)
+        self.assertEqual(git_only.metrics["ownership_groups"], [])
+        self.assertIsNone(git_only.metrics["dependency_manifest_count"])
+        self.assertIsNone(git_only.metrics["lockfile_coverage"])
+
+        neither = self.analyze_sources(deep=False, snapshot=False)
+        self.assertEqual(neither.availability, A.NO_DATA)
+        self.assertEqual(neither.error, "insights_unavailable")
+
+        for result in (hygiene_only, git_only, neither):
+            normalized = insights_result(result.to_dict())
+            self.assertEqual(normalized.availability, result.availability)
+
+    def test_recommendations_survive_one_missing_source(self):
+        hygiene_only = self.analyze_sources(deep=False)
+        hygiene_ids = {item.id for item in recommend({"repository_insights": hygiene_only})}
+        self.assertIn("insights:dependency-locks", hygiene_ids)
+        self.assertNotIn("insights:bus-factor", hygiene_ids)
+
+        git_only = self.analyze_sources(snapshot=False)
+        git_ids = {item.id for item in recommend({"repository_insights": git_only})}
+        self.assertIn("insights:bus-factor", git_ids)
+        self.assertNotIn("insights:dependency-locks", git_ids)
+
     def test_contributor_concentration_examples_and_small_sample(self):
         for counts, expected_factor, expected_share in (
             ([91, 9], 1, 0.91), ([45, 35, 20], 2, 0.45), ([25, 25, 25, 25], 2, 0.25),
@@ -140,6 +204,18 @@ class RepositoryInsightsTests(unittest.TestCase):
         markdown = render_markdown(report)
         self.assertNotIn(marker_name, markdown)
         self.assertNotIn(marker_email, markdown)
+
+    def test_unknown_lockfile_coverage_renders_as_indeterminate(self):
+        report = {
+            "schema_version": "3.0", "repository": {"organization_slug": "safe", "repository_slug": "repo",
+            "canonical_url": "https://sourcecraft.dev/safe/repo"}, "completed_at": "2026-01-01T00:00:00+00:00",
+            "scoring_policy_version": "mvp-score-v1.2", "health_score": None, "category_scores": {},
+            "recommendations": [], "checks": {"repository_insights": {"availability": "partial",
+            "metrics": insights_metrics(snapshot_complete=False, lockfile_coverage=None),
+            "findings": [], "evidence": []}}}
+        markdown = render_markdown(report)
+        self.assertIn("| Покрытие lockfiles | Нельзя определить |", markdown)
+        self.assertNotIn("| Покрытие lockfiles | 0.0% |", markdown)
 
 
 if __name__ == "__main__":

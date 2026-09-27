@@ -39,7 +39,8 @@ def runtime_payload():
     debt = AnalyzerResult("technical_debt", category="code_health", source="git_snapshot", metadata=metadata,
                           metrics={"code_files": 10, "todo_count": 0, "fixme_count": 0, "files_with_debt": 0,
                                    "marker_density": 0, "large_files": 0, "oldest_marker_age_days": None, "age_complete": True})
-    insights = AnalyzerResult("repository_insights", category=None, source="git_snapshot", metadata=metadata,
+    insights_metadata = {**metadata, "deep_git_available": True, "snapshot_available": True}
+    insights = AnalyzerResult("repository_insights", category=None, source="git_snapshot", metadata=insights_metadata,
                               metrics={"sampled_commits": 20, "history_complete": True,
                                        "contributors_count": 3, "top_contributor_share": 0.4,
                                        "top_2_contributors_share": 0.7, "top_3_contributors_share": 1.0,
