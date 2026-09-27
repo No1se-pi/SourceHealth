@@ -31,8 +31,12 @@ class ProfileSourceCraftTests(unittest.TestCase):
         return service
 
     def test_my_repositories_success(self):
-        payload = {"repositories": [{"id": "repo-1", "slug": "project", "visibility": "public",
-                                      "organization": {"slug": "team"}, "default_branch": "разработка"}]}
+        payload = {"repositories": [
+            {"id": "repo-1", "slug": "project", "visibility": "public",
+             "organization": {"slug": "team"}, "default_branch": "разработка"},
+            {"id": "repo-2", "slug": "empty", "visibility": "public",
+             "organization": {"slug": "team"}, "default_branch": "", "is_empty": True},
+        ]}
 
         class Client:
             def __enter__(self): return self
@@ -44,6 +48,8 @@ class ProfileSourceCraftTests(unittest.TestCase):
         result = self.service(lambda **kwargs: Client()).my_repositories("session")
         self.assertEqual(result["items"][0]["url"], "https://sourcecraft.dev/team/project")
         self.assertEqual(result["items"][0]["default_branch"], "разработка")
+        self.assertIsNone(result["items"][1]["default_branch"])
+        self.assertTrue(result["items"][1]["is_empty"])
         self.assertFalse(result["has_more"])
 
     def test_my_repositories_requires_connection(self):
