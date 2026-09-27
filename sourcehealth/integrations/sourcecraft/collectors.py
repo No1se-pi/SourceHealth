@@ -9,6 +9,7 @@ from sourcehealth.core.domain import DataAvailability, RepositoryRef
 
 from .appsec import SourceCraftAppSecClient
 from .client import SourceCraftClient, SourceCraftError
+from .validation import normalize_default_branch
 
 
 @dataclass(frozen=True)
@@ -42,13 +43,13 @@ class RepositoryCollector:
                 raise SourceCraftError("invalid_response")
             if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", raw["id"]) or raw["slug"] != repository.repository_slug:
                 raise SourceCraftError("invalid_response")
-            if "default_branch" in raw and (not isinstance(raw["default_branch"], str) or
-                    not re.fullmatch(r"[A-Za-z0-9_./-]{1,255}", raw["default_branch"])):
-                raise SourceCraftError("invalid_response")
+            branch = normalize_default_branch(raw.get("default_branch"))
             if "is_empty" in raw and type(raw["is_empty"]) is not bool:
                 raise SourceCraftError("invalid_response")
             # Allowlist: description, clone credentials and arbitrary links never reach persistence.
             facts = {k: raw[k] for k in ("id", "slug", "default_branch", "visibility", "is_empty") if k in raw}
+            if "default_branch" in raw:
+                facts["default_branch"] = branch
             language = raw.get("language")
             if isinstance(language, dict) and isinstance(language.get("name"), str):
                 if re.fullmatch(r"[A-Za-z0-9+# ._-]{1,64}", language["name"]):
