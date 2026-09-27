@@ -17,6 +17,7 @@ from sourcehealth.integrations.sourcecraft.analytics import (
     ReleasesCollector,
 )
 from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+from sourcehealth.integrations.sourcecraft.collectors import RepositoryCollector
 from tests.mvp_fixtures import platform_payloads
 
 
@@ -27,6 +28,17 @@ class CollectorTests(unittest.TestCase):
 
     def client(self, handler, **kwargs):
         return SourceCraftClient(transport=httpx.MockTransport(handler), sleep=lambda _: None, **kwargs)
+
+    def test_repository_metadata_accepts_empty_and_unicode_default_branches(self):
+        for branch, expected in (("", None), ("разработка", "разработка")):
+            with self.subTest(branch=branch):
+                payload = {"id": "repo-1", "slug": "repo", "visibility": "public",
+                           "default_branch": branch, "is_empty": branch == ""}
+                with self.client(lambda _: httpx.Response(200, json=payload)) as client:
+                    result = RepositoryCollector(client).collect(self.ref)
+                self.assertEqual(result.availability, A.AVAILABLE)
+                self.assertIsNone(result.error)
+                self.assertEqual(result.facts["default_branch"], expected)
 
     def test_all_collectors_keep_only_allowlisted_fields(self):
         for cls, key in [(IssuesCollector, "issues"), (CICollector, "runs"), (PullRequestsCollector, "pulls"),
