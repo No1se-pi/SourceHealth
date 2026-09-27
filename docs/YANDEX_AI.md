@@ -15,7 +15,7 @@ AI-разбор — отдельный пользовательский отчё
 - Точные ID: `aliceai-llm-flash`, `yandexgpt-5-lite`, `yandexgpt-5.1` для режимов `flash`, `lite`, `pro`.
 - Структурированный ответ задаётся `response_format.type=json_schema`; результат дополнительно валидируется Pydantic и
   `validate_ai_output()`.
-- Prompt version: `sourcehealth-analyst-v1`; schema version: `ai-summary-v1`.
+- Prompt version: `sourcehealth-analyst-v1.1`; schema version: `ai-summary-v1`.
 
 Контекст формирует только `build_ai_context()`: агрегированные оценки, availability, безопасные evidence и
 рекомендации. Исходники, snippets, raw payload, commit messages, имена/email, PAT, OAuth cookies и секреты в

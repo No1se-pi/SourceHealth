@@ -423,6 +423,8 @@ export const AnalysisPage: React.FC = () => {
               </div>
             </div>
 
+            {['completed', 'partial'].includes(run.status) && <AISummaryPanel analysisId={run.id} />}
+
             <DeepAnalytics check={run.checks?.repository_insights} />
 
             {/* Recommendations Section */}
@@ -525,7 +527,6 @@ export const AnalysisPage: React.FC = () => {
           </div>
         </Card>
       )}
-      {run && ['completed', 'partial'].includes(run.status) && <AISummaryPanel analysisId={run.id} />}
     </div>
   );
 };

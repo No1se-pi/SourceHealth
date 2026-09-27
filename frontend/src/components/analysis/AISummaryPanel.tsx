@@ -14,6 +14,7 @@ export const AISummaryPanel: React.FC<{ analysisId: string }> = ({ analysisId })
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<unknown>();
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
+  const selectedIndex = MODES.findIndex((item) => item.id === mode);
 
   const generate = async () => {
     setLoading(true); setError(undefined);
@@ -22,9 +23,10 @@ export const AISummaryPanel: React.FC<{ analysisId: string }> = ({ analysisId })
     finally { setLoading(false); }
   };
   const onKeyDown = (event: React.KeyboardEvent, index: number) => {
-    if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
-    const next = (index + (event.key === 'ArrowRight' ? 1 : -1) + MODES.length) % MODES.length;
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? MODES.length - 1
+      : Math.max(0, Math.min(MODES.length - 1, index + (event.key === 'ArrowRight' ? 1 : -1)));
     setMode(MODES[next].id); refs.current[next]?.focus();
   };
 
@@ -33,15 +35,19 @@ export const AISummaryPanel: React.FC<{ analysisId: string }> = ({ analysisId })
       <div><h2 id="ai-summary-title">AI-разбор результата</h2><p>Отчёт строится только по сохранённым фактам SourceHealth и не меняет Health Score.</p></div>
       <span>Yandex AI Studio</span>
     </div>
-    <div className="ai-mode-selector" role="radiogroup" aria-label="Глубина AI-разбора">
-      {MODES.map((item, index) => <button key={item.id} type="button" role="radio"
-        aria-checked={mode === item.id} tabIndex={mode === item.id ? 0 : -1}
-        ref={(node) => { refs.current[index] = node; }}
-        className={mode === item.id ? 'ai-mode ai-mode--active' : 'ai-mode'}
-        onClick={() => setMode(item.id)} onKeyDown={(event) => onKeyDown(event, index)}>
-        <img src={item.image} alt="" aria-hidden="true" />
-        <span><strong>{item.label}</strong><small>{item.description}</small><small>{item.modelName}</small></span>
-      </button>)}
+    <div className="ai-power" style={{ '--ai-stop': selectedIndex } as React.CSSProperties}>
+      <div className="ai-power__track" aria-hidden="true"><span className="ai-power__knob" /></div>
+      <div className="ai-power__stops" role="radiogroup" aria-label="Мощность AI-разбора">
+        {MODES.map((item, index) => <button key={item.id} type="button" role="radio"
+          aria-checked={mode === item.id} tabIndex={mode === item.id ? 0 : -1}
+          ref={(node) => { refs.current[index] = node; }}
+          className={mode === item.id ? 'ai-power__stop ai-power__stop--active' : 'ai-power__stop'}
+          onClick={() => setMode(item.id)} onKeyDown={(event) => onKeyDown(event, index)}>
+          <img src={item.image} alt="" aria-hidden="true" />
+          <span className="ai-power__dot" aria-hidden="true" />
+          <strong>{item.label}</strong><small>{item.modelName}</small>
+        </button>)}
+      </div>
     </div>
     <button className="ai-generate" type="button" disabled={loading} onClick={() => void generate()}>
       {loading ? 'Формируем разбор…' : 'Сформировать AI-разбор'}
