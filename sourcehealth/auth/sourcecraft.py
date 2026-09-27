@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sourcehealth.application.services import ServiceError
 from sourcehealth.integrations.sourcecraft.analytics import identifier
 from sourcehealth.integrations.sourcecraft.client import SourceCraftClient, SourceCraftError
+from sourcehealth.integrations.sourcecraft.validation import normalize_default_branch
 from sourcehealth.storage.models import User
 
 LOG = logging.getLogger(__name__)
@@ -199,14 +200,7 @@ class SourceCraftConnection:
                 visibility = row.get("visibility")
                 if visibility not in {"public", "private", "internal"}:
                     raise SourceCraftError("invalid_response")
-                branch = row.get("default_branch")
-                if branch == "":
-                    branch = None
-                # Git refs may contain Unicode. Keep a bounded display value and reject
-                # control characters; this field is never used to construct a URL or command.
-                if branch is not None and (not isinstance(branch, str) or not 1 <= len(branch) <= 255
-                                           or any(ord(char) < 32 or ord(char) == 127 for char in branch)):
-                    raise SourceCraftError("invalid_response")
+                branch = normalize_default_branch(row.get("default_branch"))
                 is_empty = row.get("is_empty")
                 if is_empty is not None and type(is_empty) is not bool:
                     raise SourceCraftError("invalid_response")
