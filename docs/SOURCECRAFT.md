@@ -1,5 +1,20 @@
 # Интеграция SourceCraft
 
+## Единый контракт repository metadata
+
+Repository metadata проходит через один allowlist-нормализатор для `/me/repos`,
+`RepositoryCollector` и catalog sync. Он одинаково обрабатывает пустой и Unicode
+`default_branch`, nullable optional fields, language и likes и не пропускает description,
+credentials или произвольные URL. Для browser import используется подключённый к текущей
+сессии PAT только на время проверки metadata; истёкший или отсутствующий credential оставляет
+прежнюю проверку с сервисным PAT или без авторизации. Public visibility всё равно обязательна.
+
+Внешняя identity определяется `sourcecraft_id`: rename обновляет slug и canonical URL той же
+строки, а конфликт двух разных SourceCraft ID возвращает
+`repository_identity_conflict`/409 без неявного объединения. Ошибка импорта логируется
+только стабильным SourceCraft code, availability, логическим endpoint, request ID и slug;
+PAT, Authorization и raw body в журнал не попадают.
+
 Проверено по официальной [Swagger](https://api.sourcecraft.tech/docs/sourcecraft.swagger.json)
 19.09.2026: info.version `0.0.1`, SHA-256 скачанного файла
 `c3b1d84647cdf553cda63ff6e6ddf59d00ee36a5aa40470ad44607320639d7c3`.

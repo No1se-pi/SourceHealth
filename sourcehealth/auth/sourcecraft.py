@@ -12,18 +12,18 @@ from sqlalchemy import select
 from sourcehealth.application.services import ServiceError
 from sourcehealth.integrations.sourcecraft.analytics import identifier
 from sourcehealth.integrations.sourcecraft.client import SourceCraftClient, SourceCraftError
-from sourcehealth.integrations.sourcecraft.validation import normalize_default_branch
+from sourcehealth.integrations.sourcecraft.validation import normalize_repository_metadata
 from sourcehealth.storage.models import User
 
 LOG = logging.getLogger(__name__)
 
 
 class SourceCraftConnection:
-    def __init__(self, auth, *, client_factory=SourceCraftClient):
+    def __init__(self, auth, *, client_factory=None):
         self.auth = auth
         self.redis = auth.redis
         self.settings = auth.settings
-        self.client_factory = client_factory
+        self.client_factory = client_factory or SourceCraftClient
 
     def _cipher(self):
         secret = self.settings.sourcecraft_credential_key
@@ -146,6 +146,16 @@ class SourceCraftConnection:
     def analysis_credential(self, analysis_id):
         return self._decrypt(self._analysis_key(analysis_id))
 
+    def client_for_repository_import(self, token):
+        """Use this session's credential for metadata only; an expired lease falls back to public access."""
+        if not token:
+            return None
+        _, credential_key, _ = self._keys(token)
+        pat = self._decrypt(credential_key)
+        if not pat:
+            return None
+        return self.client_factory(pat=pat, deadline_seconds=45)
+
     def delete_analysis_credential(self, analysis_id):
         self.redis.delete(self._analysis_key(analysis_id))
 
@@ -194,20 +204,13 @@ class SourceCraftConnection:
                 raise SourceCraftError("invalid_response")
             items = []
             for row in rows:
-                repo_id, slug = identifier(row.get("id")), identifier(row.get("slug"))
-                organization = row.get("organization")
-                org = identifier(organization.get("slug") if isinstance(organization, dict) else None)
-                visibility = row.get("visibility")
-                if visibility not in {"public", "private", "internal"}:
-                    raise SourceCraftError("invalid_response")
-                branch = normalize_default_branch(row.get("default_branch"))
-                is_empty = row.get("is_empty")
-                if is_empty is not None and type(is_empty) is not bool:
-                    raise SourceCraftError("invalid_response")
-                items.append({"id": repo_id, "organization_slug": org, "repository_slug": slug,
-                              "url": f"https://sourcecraft.dev/{org}/{slug}", "visibility": visibility,
-                              "default_branch": branch, "is_empty": is_empty,
-                              "can_analyze": visibility == "public"})
+                metadata = normalize_repository_metadata(row)
+                items.append({"id": metadata.sourcecraft_id,
+                              "organization_slug": metadata.organization_slug,
+                              "repository_slug": metadata.repository_slug,
+                              "url": metadata.canonical_url, "visibility": metadata.visibility,
+                              "default_branch": metadata.default_branch, "is_empty": metadata.is_empty,
+                              "can_analyze": metadata.visibility == "public"})
             next_token = payload.get("next_page_token")
             if next_token not in (None, "") and not isinstance(next_token, str):
                 raise SourceCraftError("invalid_pagination")

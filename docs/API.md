@@ -69,7 +69,13 @@ Import: `POST /api/v1/repositories`, body `{"url":"https://sourcecraft.dev/org/r
 принимается. RepositoryCollector проверяет явно public visibility; упsert сохраняет
 внутренний UUID существующего repo. Повторный import также возвращает 201 с тем же id.
 Неподтверждённый/private/not-found repo — 404, недоступная проверка/401 внешнего API —
-503 `public_repository_unverified`; invalid URL — 422 `invalid_sourcecraft_url`.
+Недоступность или rate limit SourceCraft — 503 `public_repository_unverified`;
+private/403/404 — 404 `public_repository_unverified`; отклонённый credential — 409
+`sourcecraft_credential_unverified`; malformed upstream DTO — 502
+`sourcecraft_invalid_response`; конфликт external identity — 409
+`repository_identity_conflict`; invalid URL — 422 `invalid_sourcecraft_url`.
+Authenticated browser import проверяет metadata подключённым PAT текущей сессии, если его
+lease ещё действует, но по-прежнему импортирует только public repository.
 Требуются session cookie и exact Origin. Я ID не даёт private SourceCraft permissions.
 Import сам не запускает анализ: frontend переходит на страницу repo с существующей
 кнопкой запуска. CLI register/discover дополнительно создают analysis run.

@@ -17,6 +17,7 @@ from ..schemas import (
     AnalysisPage,
     AnalysisRequest,
     AnalysisSummary,
+    ErrorResponse,
     RepositoryDetails,
     RepositoryImport,
     RepositoryPage,
@@ -32,11 +33,20 @@ def _repository_dto(repository: Repository, run: AnalysisRun | None, *, details:
     return schema(**schema.model_validate(repository).model_dump(exclude={"score_preview"}), score_preview=preview)
 
 
-@router.post("/api/v1/repositories", response_model=RepositoryDetails, status_code=201)
+@router.post("/api/v1/repositories", response_model=RepositoryDetails, status_code=201,
+             responses={502: {"model": ErrorResponse}})
 def import_repository(body: RepositoryImport, request: Request):
     require_user(request)
     check_origin(request)
-    repository_id = request.app.state.service.import_public_repository(body.url)
+    connection = SourceCraftConnection(request.app.state.auth)
+    client = connection.client_for_repository_import(request.cookies.get("sh_session"))
+    if client is None:
+        repository_id = request.app.state.service.import_public_repository(
+            body.url, request_id=request.state.request_id)
+    else:
+        with client as source:
+            repository_id = request.app.state.service.import_public_repository(
+                body.url, client=source, request_id=request.state.request_id)
     with request.app.state.sessions() as db:
         repository = public_repository(db, repository_id)
         run = db.get(AnalysisRun, repository.latest_analysis_id) if repository.latest_analysis_id else None

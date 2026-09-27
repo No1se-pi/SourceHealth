@@ -853,19 +853,140 @@ class PersistenceTests(unittest.TestCase):
         with TestClient(app, base_url="https://testserver") as client:
             self.assertEqual(client.post("/api/v1/repositories", json={"url": self.ref.canonical_url},
                                          headers={"Origin": "https://testserver"}).status_code, 401)
-        for status, payload in ((200, {"visibility": "private"}), (401, {}), (404, {}), (503, {})):
+        private = {"id": "private-repo", "slug": self.ref.repository_slug, "visibility": "private"}
+        for status, payload, code in ((200, private, "public_repository_unverified"),
+                                      (401, {}, "sourcecraft_credential_unverified"),
+                                      (404, {}, "public_repository_unverified"),
+                                      (503, {}, "public_repository_unverified"),
+                                      (200, {"broken": True}, "sourcecraft_invalid_response")):
             with self.subTest(status=status):
                 with SourceCraftClient(transport=httpx.MockTransport(lambda request: httpx.Response(status, json=payload)), sleep=lambda _: None) as source:
                     with self.assertRaises(ServiceError) as error:
                         self.service.import_public_repository(self.ref.canonical_url, client=source)
-                    self.assertEqual(error.exception.code, "public_repository_unverified")
+                    self.assertEqual(error.exception.code, code)
                 with self.sessions() as db:
-                    expected = "unknown" if status in {200, 404} else "public"
+                    expected = "unknown" if code == "public_repository_unverified" and status in {200, 403, 404} else "public"
                     self.assertEqual(db.get(Repository, self.repository_id).visibility, expected)
                 with self.sessions.begin() as db:
                     db.get(Repository, self.repository_id).visibility = "public"
         with self.sessions() as db:
             self.assertIsNone(db.get(Repository, self.repository_id).sourcecraft_id)
+
+    def test_http_import_uses_connected_pat_for_metadata_only(self):
+        import base64
+        import json
+
+        from sourcehealth.auth.sourcecraft import SourceCraftConnection
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        settings = self.settings.model_copy(update={"sourcecraft_credential_key": SecretStr(
+            base64.urlsafe_b64encode(os.urandom(32)).decode())})
+        auth = AuthService(settings, self.redis, self.sessions)
+        token, user_id = uuid4().hex, uuid4()
+        self.redis.set(auth._key("session", token), json.dumps({"id": str(user_id)}), ex=120)
+        credential = "unit-" + uuid4().hex
+        verifier = SourceCraftConnection(auth, client_factory=lambda **kw: SourceCraftClient(
+            transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"id": "user-1"})), **kw))
+        verifier.connect(token, credential)
+        seen_authorization = []
+        visibility = {"value": "public"}
+
+        def source_client(**kwargs):
+            def handler(request):
+                seen_authorization.append(request.headers.get("authorization"))
+                if request.headers.get("authorization") != "Bearer " + credential:
+                    return httpx.Response(404)
+                return httpx.Response(200, json={
+                    "id": "connected-only", "slug": self.ref.repository_slug,
+                    "visibility": visibility["value"], "default_branch": None,
+                })
+            return SourceCraftClient(transport=httpx.MockTransport(handler), sleep=lambda _: None, **kwargs)
+
+        try:
+            app = create_app(settings, sessions=self.sessions, redis=self.redis)
+            with (patch("sourcehealth.auth.sourcecraft.SourceCraftClient", side_effect=source_client),
+                  TestClient(app, base_url="https://testserver") as client):
+                client.cookies.set("sh_session", token)
+                response = client.post("/api/v1/repositories", json={"url": self.ref.canonical_url},
+                                       headers={"Origin": "https://testserver"})
+                visibility["value"] = "private"
+                private = client.post("/api/v1/repositories", json={"url": self.ref.canonical_url},
+                                      headers={"Origin": "https://testserver"})
+            self.assertEqual(response.status_code, 201, response.text)
+            self.assertEqual(private.status_code, 404, private.text)
+            self.assertTrue(seen_authorization)
+            self.assertTrue(all(value == "Bearer " + credential for value in seen_authorization))
+            with self.sessions() as db:
+                self.assertEqual(db.get(Repository, self.repository_id).sourcecraft_id, "connected-only")
+        finally:
+            auth.logout(token)
+
+    def test_http_import_contract_variants_and_upstream_errors(self):
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        cases = (
+            ("empty", 200, {"default_branch": "", "is_empty": True}, 201, None),
+            ("unicode", 200, {"default_branch": "разработка"}, 201, None),
+            ("null", 200, {"default_branch": None}, 201, None),
+            ("minimal", 200, {}, 201, None),
+            ("private", 200, {"visibility": "private"}, 404, "public_repository_unverified"),
+            ("auth", 401, {}, 409, "sourcecraft_credential_unverified"),
+            ("denied", 403, {}, 404, "public_repository_unverified"),
+            ("missing", 404, {}, 404, "public_repository_unverified"),
+            ("limited", 429, {}, 503, "public_repository_unverified"),
+            ("outage", 503, {}, 503, "public_repository_unverified"),
+            ("malformed", 200, {"id": None}, 502, "sourcecraft_invalid_response"),
+        )
+        app = create_app(self.settings, sessions=self.sessions, redis=self.redis)
+        with (TestClient(app, base_url="https://testserver") as client,
+              patch.object(app.state.auth, "current_user", return_value={"id": str(uuid4())})):
+            for name, upstream_status, overrides, expected_status, expected_code in cases:
+                with self.subTest(name=name):
+                    slug = f"contract-{name}-{uuid4().hex[:8]}"
+                    payload = {"id": f"id-{name}-{uuid4().hex[:8]}", "slug": slug,
+                               "visibility": "public", **overrides}
+
+                    def factory(**kwargs):
+                        return SourceCraftClient(transport=httpx.MockTransport(
+                            lambda _: httpx.Response(upstream_status, json=payload)), sleep=lambda _: None, **kwargs)
+
+                    with patch("sourcehealth.integrations.sourcecraft.client.SourceCraftClient", side_effect=factory):
+                        response = client.post("/api/v1/repositories",
+                            json={"url": f"https://sourcecraft.dev/test/{slug}"},
+                            headers={"Origin": "https://testserver"})
+                    self.assertEqual(response.status_code, expected_status, response.text)
+                    if expected_code:
+                        self.assertEqual(response.json()["code"], expected_code)
+
+    def test_manual_import_reconciles_rename_and_rejects_identity_collision(self):
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        stable_id = "rename-" + uuid4().hex
+
+        def imported(url, slug, sourcecraft_id=stable_id):
+            payload = {"id": sourcecraft_id, "slug": slug, "visibility": "public"}
+            with SourceCraftClient(transport=httpx.MockTransport(
+                    lambda _: httpx.Response(200, json=payload))) as source:
+                return self.service.import_public_repository(url, client=source)
+
+        old_slug = "old-" + uuid4().hex[:12]
+        old_url = f"https://sourcecraft.dev/test/{old_slug}"
+        repository_id = imported(old_url, old_slug)
+        new_slug = "renamed-" + uuid4().hex[:12]
+        new_url = f"https://sourcecraft.dev/test/{new_slug}"
+        self.assertEqual(imported(new_url, new_slug), repository_id)
+        with self.sessions() as db:
+            row = db.get(Repository, repository_id)
+            self.assertEqual((row.repository_slug, row.canonical_url), (new_slug, new_url))
+
+        taken_slug = "taken-" + uuid4().hex[:12]
+        taken = RepositoryRef.from_url(f"https://sourcecraft.dev/test/{taken_slug}",
+                                       sourcecraft_id="other-" + uuid4().hex, visibility="public")
+        self.service.register_repository(taken)
+        with self.assertRaises(ServiceError) as caught:
+            imported(taken.canonical_url, taken_slug)
+        self.assertEqual((caught.exception.code, caught.exception.status),
+                         ("repository_identity_conflict", 409))
 
     def test_recovery_does_not_fail_live_lock_holder(self):
         run = self.service.request_analysis(self.repository_id)

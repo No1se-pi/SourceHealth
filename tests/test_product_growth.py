@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from sourcehealth.achievements.service import derive
 from sourcehealth.analyzers.analytics import CIAnalyzer
-from sourcehealth.application.services import ServiceError
+from sourcehealth.application.services import AnalysisService, ServiceError
 from sourcehealth.auth.sourcecraft import SourceCraftConnection
 from sourcehealth.catalog.scheduler import adaptive_interval, effective_interval
 from sourcehealth.catalog.sync import CatalogSync
@@ -60,6 +60,11 @@ class ProfileSourceCraftTests(unittest.TestCase):
         self.assertEqual((caught.exception.code, caught.exception.status),
                          ("sourcecraft_connection_required", 409))
 
+    def test_expired_import_credential_falls_back(self):
+        service = self.service(lambda **kwargs: self.fail("expired credential must not create a PAT client"))
+        service._decrypt = lambda key: None
+        self.assertIsNone(service.client_for_repository_import("session"))
+
     def test_upstream_auth_failure_is_safe_and_logs_only_stable_code(self):
         secret = "test-pat"
 
@@ -87,9 +92,34 @@ class ProfileSourceCraftTests(unittest.TestCase):
         source = (Path(__file__).parents[1] / "frontend/src/pages/ProfilePage.tsx").read_text(encoding="utf-8")
         for contract in ("availableLoading", "availableError", "setAvailableError(reason)",
                          'title="Не удалось загрузить репозитории SourceCraft"',
-                         "onRetry={() => void loadAvailable()}", "setLoadMoreError(reason)"):
+                         "onRetry={() => void loadAvailable()}", "setLoadMoreError(reason)",
+                         "setTrackingError(reason)", 'title="Не удалось добавить репозиторий"'):
             self.assertIn(contract, source)
         self.assertNotIn(".catch(() => setAvailable(null))", source)
+
+    def test_import_failure_log_contains_only_stable_diagnostics(self):
+        import httpx
+
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+
+        settings = SimpleNamespace(sourcecraft_pat=None, sourcecraft_timeout=1)
+        service = AnalysisService(SimpleNamespace(), settings)
+        client = SourceCraftClient(transport=httpx.MockTransport(
+            lambda _: httpx.Response(200, json={"broken": "private-body"})))
+        try:
+            with self.assertLogs("sourcehealth.application.services", level="WARNING") as logs:
+                with self.assertRaises(ServiceError):
+                    service.import_public_repository("https://sourcecraft.dev/team/repo", client=client,
+                                                     request_id="request-1")
+            record = logs.records[0]
+            self.assertEqual(record.event, "sourcecraft_repository_import_failed")
+            self.assertEqual(record.endpoint, "repository_metadata")
+            self.assertEqual(record.sourcecraft_error_code, "invalid_response")
+            self.assertEqual(record.request_id, "request-1")
+            rendered = EventFormatter().format(record)
+            self.assertNotIn("private-body", rendered)
+        finally:
+            client.close()
 
 
 class AdaptiveSchedulerTests(unittest.TestCase):
