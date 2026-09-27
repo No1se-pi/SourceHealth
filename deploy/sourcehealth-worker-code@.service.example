@@ -1,0 +1,20 @@
+[Unit]
+Description=SourceHealth trusted code-analysis worker instance %i
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=sourcehealth
+Group=sourcehealth
+SupplementaryGroups=docker
+WorkingDirectory=/opt/sourcehealth
+EnvironmentFile=/etc/sourcehealth/sourcehealth.env
+Environment=CODE_RUNTIME_ENABLED=true
+ExecStart=/opt/sourcehealth/.venv/bin/python -m sourcehealth.application worker-code
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+
+[Install]
+WantedBy=multi-user.target

@@ -177,6 +177,11 @@ def execute_analysis(analysis_id: str) -> None:
                     repository = repository_ref(db.get(Repository, run.repository_id))
                     profile = run.profile
                 service.transition(run_id, "collecting")
+                logger.info("worker_job_started", extra={
+                    "analysis_id": analysis_id, "repository_id": repository.id,
+                    "profile": profile, "queue": queue_name(profile),
+                    "component": "worker", "event": "worker_job_started",
+                })
                 user_pat = credentials.analysis_credential(run_id)
                 context = (collect_platform(repository, settings, redis, user_pat=user_pat) if user_pat
                            else collect_platform(repository, settings, redis))
@@ -217,6 +222,13 @@ def execute_analysis(analysis_id: str) -> None:
                 timings["total_ms"] = round((perf_counter() - total_started) * 1000)
                 logger.info("analysis_finished", extra={"analysis_id": analysis_id, "repository_id": repository.id,
                                                         "component": "worker", "event": "analysis_finished", **timings})
+                logger.info("worker_job_finished", extra={
+                    "analysis_id": analysis_id, "repository_id": repository.id,
+                    "profile": profile, "queue": queue_name(profile),
+                    "duration_ms": timings["total_ms"],
+                    "status": "completed" if report.complete else "partial",
+                    "component": "worker", "event": "worker_job_finished",
+                })
             except Exception:
                 # Neither exception text nor source responses are suitable for RQ failure storage/logs.
                 with sessions() as db:
@@ -224,9 +236,20 @@ def execute_analysis(analysis_id: str) -> None:
                     active = row is not None and row.status in ACTIVE_STATUSES
                 if active:
                     service.transition(run_id, "failed", error_code="analysis_failed")
+                total_duration = round((perf_counter() - total_started) * 1000)
                 logger.error("analysis_failed", extra={"analysis_id": analysis_id, "component": "worker",
                                                         "event": "analysis_failed", **timings,
-                                                        "total_ms": round((perf_counter() - total_started) * 1000)})
+                                                        "total_ms": total_duration})
+                logger.error("worker_job_finished", extra={
+                    "analysis_id": analysis_id,
+                    "repository_id": getattr(repository, "id", None) if "repository" in locals() and repository else None,
+                    "profile": profile if "profile" in locals() else None,
+                    "queue": queue_name(profile) if "profile" in locals() else None,
+                    "duration_ms": total_duration,
+                    "status": "failed",
+                    "component": "worker",
+                    "event": "worker_job_finished",
+                })
             finally:
                 credentials.delete_analysis_credential(run_id)
                 guard.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": lock_key(run_id)})
@@ -260,7 +283,7 @@ def recover_abandoned(engine, sessions, settings) -> int:
     """Mark expired runs failed only after proving no worker still holds the lock."""
     with sessions() as db:
         ids = list(db.scalars(select(AnalysisRun.id).where(AnalysisRun.status.in_(ACTIVE_STATUSES[1:]),
-                                                          AnalysisRun.deadline_at < datetime.now(UTC))))
+                                                           AnalysisRun.deadline_at < datetime.now(UTC))))
     count = 0
     for run_id in ids:
         with engine.connect() as guard:
@@ -278,3 +301,44 @@ def recover_abandoned(engine, sessions, settings) -> int:
                 guard.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": lock_key(run_id)})
                 guard.commit()
     return count
+
+
+def queue_status(sessions, redis: Redis) -> dict:
+    """Aggregate operational statistics without secrets or repository contents."""
+    from datetime import timedelta
+
+    from sqlalchemy import func
+
+    try:
+        q_analysis = Queue("analysis", connection=redis)
+        analysis_len = len(q_analysis)
+    except Exception:
+        analysis_len = None
+    try:
+        q_code = Queue("analysis-code", connection=redis)
+        code_len = len(q_code)
+    except Exception:
+        code_len = None
+    with sessions() as db:
+        counts = dict(db.execute(select(AnalysisRun.status, func.count()).group_by(AnalysisRun.status)).all())
+        oldest_queued = db.scalar(select(func.min(AnalysisRun.queued_at)).where(AnalysisRun.status == "queued"))
+        since_24h = datetime.now(UTC) - timedelta(hours=24)
+        completed_24h = db.scalar(select(func.count()).select_from(AnalysisRun).where(
+            AnalysisRun.status == "completed", AnalysisRun.completed_at >= since_24h)) or 0
+        failed_24h = db.scalar(select(func.count()).select_from(AnalysisRun).where(
+            AnalysisRun.status == "failed", AnalysisRun.completed_at >= since_24h)) or 0
+    oldest_age = None
+    if oldest_queued is not None:
+        tz = UTC if oldest_queued.tzinfo is None else oldest_queued.tzinfo
+        oldest_age = round(max(0.0, (datetime.now(UTC) - oldest_queued.replace(tzinfo=tz)).total_seconds()), 1)
+    return {
+        "analysis_queue_length": analysis_len,
+        "analysis_code_queue_length": code_len,
+        "queued_runs": counts.get("queued", 0),
+        "collecting_runs": counts.get("collecting", 0),
+        "analyzing_runs": counts.get("analyzing", 0),
+        "scoring_runs": counts.get("scoring", 0),
+        "oldest_queued_age_seconds": oldest_age,
+        "failed_runs_24h": failed_24h,
+        "completed_runs_24h": completed_24h,
+    }

@@ -183,7 +183,13 @@ class AnalysisService:
                 run.data_coverage = {name: category["availability"] for name, category in report.category_scores.items()}
                 run.head_sha = report.repository.get("head_sha")
             repo = db.get(Repository, run.repository_id, with_for_update=True)
-            repo.latest_analysis_id = run.id
+            existing_canonical = None
+            if repo.latest_analysis_id is not None:
+                existing_run = db.get(AnalysisRun, repo.latest_analysis_id)
+                if existing_run and existing_run.profile == "mvp-v1":
+                    existing_canonical = existing_run
+            if run.profile == "mvp-v1" or existing_canonical is None:
+                repo.latest_analysis_id = run.id
             if run.profile == "mvp-v1":
                 repo.health_score = run.health_score
                 repo.head_sha = run.head_sha

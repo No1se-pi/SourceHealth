@@ -210,9 +210,20 @@ def repository(repository_id: UUID, request: Request):
 def latest(repository_id: UUID, request: Request):
     with request.app.state.sessions() as db:
         repo = public_repository(db, repository_id)
-        if repo.latest_analysis_id is None:
+        canonical_run = db.scalars(
+            select(AnalysisRun)
+            .where(
+                AnalysisRun.repository_id == repository_id,
+                AnalysisRun.profile == "mvp-v1",
+                AnalysisRun.status.in_(["completed", "partial"]),
+            )
+            .order_by(AnalysisRun.completed_at.desc().nulls_last(), AnalysisRun.id.desc())
+            .limit(1)
+        ).first()
+        run_id = canonical_run.id if canonical_run is not None else repo.latest_analysis_id
+        if run_id is None:
             raise ServiceError("analysis_not_found", 404)
-        return AnalysisSummary.model_validate(public_run(db, repo.latest_analysis_id))
+        return AnalysisSummary.model_validate(public_run(db, run_id))
 
 
 @router.get("/api/v1/repositories/{repository_id}/analyses", response_model=AnalysisPage)
