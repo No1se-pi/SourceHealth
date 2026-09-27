@@ -10,7 +10,9 @@ class EventFormatter(logging.Formatter):
         values = {"time": datetime.now(UTC).isoformat(), "level": record.levelname,
                   "component": getattr(record, "component", record.name),
                   "event": getattr(record, "event", record.msg)}
-        for name in ("request_id", "analysis_id", "repository_id"):
+        # These integration diagnostics are stable allowlisted values. Arbitrary
+        # record fields, response bodies and exception text remain excluded.
+        for name in ("request_id", "analysis_id", "repository_id", "endpoint", "sourcecraft_error_code"):
             values[name] = getattr(record, name, None)
         # Не включаем exc_info, args, query string и произвольный record.__dict__.
         return json.dumps(values, ensure_ascii=True, default=str)

@@ -2,7 +2,6 @@
 
 import base64
 import logging
-import re
 import secrets
 from uuid import UUID
 
@@ -201,8 +200,10 @@ class SourceCraftConnection:
                 if visibility not in {"public", "private", "internal"}:
                     raise SourceCraftError("invalid_response")
                 branch = row.get("default_branch")
-                if branch is not None and (not isinstance(branch, str) or
-                                           not re.fullmatch(r"[A-Za-z0-9_./-]{1,255}", branch)):
+                # Git refs may contain Unicode. Keep a bounded display value and reject
+                # control characters; this field is never used to construct a URL or command.
+                if branch is not None and (not isinstance(branch, str) or not 1 <= len(branch) <= 255
+                                           or any(ord(char) < 32 or ord(char) == 127 for char in branch)):
                     raise SourceCraftError("invalid_response")
                 is_empty = row.get("is_empty")
                 if is_empty is not None and type(is_empty) is not bool:
