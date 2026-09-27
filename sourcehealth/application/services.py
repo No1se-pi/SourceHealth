@@ -4,13 +4,13 @@ import logging
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import func, select, update
 
 from sourcehealth.catalog.scheduler import effective_interval
 from sourcehealth.core.domain import ACTIVE_STATUSES, RepositoryRef, validate_transition
 from sourcehealth.scoring.mvp import MVPPolicy
 from sourcehealth.storage.models import AnalysisRun, Repository, UserRepository
+from sourcehealth.storage.repositories import RepositoryIdentityConflict, upsert_sourcecraft_repository
 
 from .cache import fingerprint
 
@@ -38,15 +38,19 @@ class AnalysisService:
         with self.sessions.begin() as db:
             values = ref.to_dict()
             values["id"] = UUID(ref.id)
-            db.execute(insert(Repository).values(**values).on_conflict_do_update(
-                index_elements=[Repository.canonical_url],
-                set_={key: values[key] for key in ("sourcecraft_id", "visibility", "default_branch")}))
+            if ref.sourcecraft_id:
+                try:
+                    return upsert_sourcecraft_repository(db, values).id
+                except RepositoryIdentityConflict:
+                    raise ServiceError("repository_identity_conflict", 409) from None
             row = db.scalar(select(Repository).where(Repository.canonical_url == ref.canonical_url))
             if row is None:
-                raise ServiceError("repository_identity_conflict", 409)
+                row = Repository(**values)
+                db.add(row)
+                db.flush()
             return row.id
 
-    def import_public_repository(self, url: str, *, client=None) -> UUID:
+    def import_public_repository(self, url: str, *, client=None, request_id: str | None = None) -> UUID:
         """HTTP/CLI import проверяет публичность у платформы; сессия Я ID не даёт private прав."""
         from contextlib import nullcontext
 
@@ -63,13 +67,23 @@ class AnalysisService:
         with manager as source:
             collected = RepositoryCollector(source).collect(ref)
         if collected.availability != "available":
+            LOG.warning("sourcecraft_repository_import_failed", extra={
+                "component": "sourcecraft", "event": "sourcecraft_repository_import_failed",
+                "request_id": request_id, "endpoint": "repository_metadata",
+                "sourcecraft_error_code": collected.error, "availability": str(collected.availability),
+                "organization_slug": ref.organization_slug, "repository_slug": ref.repository_slug,
+            })
             if collected.error in {"public_repository_required", "not_found", "access_denied"}:
                 with self.sessions.begin() as db:
-                    known = db.scalar(select(Repository).where(Repository.canonical_url == ref.canonical_url))
-                    if known is not None:
-                        known.visibility = "unknown"
-            status = 404 if collected.error in {"public_repository_required", "not_found", "access_denied"} else 503
-            raise ServiceError("public_repository_unverified", status)
+                    db.execute(update(Repository).where(
+                        Repository.canonical_url == ref.canonical_url).values(visibility="unknown"))
+            if collected.error in {"public_repository_required", "not_found", "access_denied"}:
+                raise ServiceError("public_repository_unverified", 404)
+            if collected.error == "authentication_required":
+                raise ServiceError("sourcecraft_credential_unverified", 409)
+            if collected.error == "invalid_response":
+                raise ServiceError("sourcecraft_invalid_response", 502)
+            raise ServiceError("public_repository_unverified", 503)
         ref = RepositoryRef.from_url(ref.canonical_url, sourcecraft_id=collected.facts["id"],
                                      default_branch=collected.facts.get("default_branch"), visibility="public")
         repository_id = self.register_repository(ref)
