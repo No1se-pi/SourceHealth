@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, type RepositoryDetails, type Analysis, type ApiError } from '../api/client';
+import { api, type RepositoryDetails, type Analysis, type ApiError, type ShareInfo, type IntegrityResponse } from '../api/client';
+
 import { Card } from '../components/common/Card';
 import { Button, getButtonStyles } from '../components/common/Button';
 import { Badge } from '../components/common/Badge';
@@ -16,6 +17,9 @@ import { ErrorState } from '../components/common/ErrorState';
 import { RecommendationCard } from '../components/common/RecommendationCard';
 import { Breadcrumbs } from '../components/common/Breadcrumbs';
 import { CopyButton } from '../components/common/CopyButton';
+import { ShareResult } from '../components/publicity/ShareResult';
+import { IntegrityPanel } from '../components/integrity/IntegrityPanel';
+
 import { usePageTitle } from '../utils/usePageTitle';
 import { formatLikes, formatDateTime } from '../utils/formatters';
 import {
@@ -51,6 +55,8 @@ export const RepositoryPage: React.FC = () => {
 
   const [repo, setRepo] = useState<RepositoryDetails>();
   const [latestAnalysis, setLatestAnalysis] = useState<Analysis | null>(null);
+  const [shareInfo, setShareInfo] = useState<ShareInfo | null>(null);
+  const [integrityInfo, setIntegrityInfo] = useState<IntegrityResponse | null>(null);
   const [loadError, setLoadError] = useState<unknown>();
   const [startError, setStartError] = useState<unknown>();
   const [loading, setLoading] = useState(true);
@@ -67,22 +73,37 @@ export const RepositoryPage: React.FC = () => {
     setStartError(undefined);
     setRepo(undefined); // Clear stale repo from any previous repository immediately
     setLatestAnalysis(null); // Clear stale analysis from any previous repo immediately
+    setShareInfo(null);
+    setIntegrityInfo(null);
 
     try {
       const repoData = await api.repository(id);
       if (requestGenRef.current !== currentGen) return;
       setRepo(repoData);
 
-      if (repoData.latest_analysis_id) {
-        try {
-          const analysisData = await api.analysis(repoData.latest_analysis_id);
-          if (requestGenRef.current !== currentGen) return;
-          setLatestAnalysis(analysisData);
-        } catch {
-          if (requestGenRef.current !== currentGen) return;
-          setLatestAnalysis(null);
-        }
+      // Concurrently fetch analysis, publicity, and integrity
+      const [analysisRes, pubRes, integRes] = await Promise.allSettled([
+        repoData.latest_analysis_id ? api.analysis(repoData.latest_analysis_id) : Promise.reject(),
+        api.publicity(id),
+        api.integrity(id),
+      ]);
+
+      if (requestGenRef.current !== currentGen) return;
+
+      if (analysisRes.status === 'fulfilled') {
+        setLatestAnalysis(analysisRes.value);
+      } else {
+        setLatestAnalysis(null);
       }
+
+      if (pubRes.status === 'fulfilled') {
+        setShareInfo(pubRes.value);
+      }
+
+      if (integRes.status === 'fulfilled') {
+        setIntegrityInfo(integRes.value);
+      }
+
       setLoading(false);
     } catch (err) {
       if (requestGenRef.current !== currentGen) return;
@@ -90,6 +111,7 @@ export const RepositoryPage: React.FC = () => {
       setLoading(false);
     }
   }, [id]);
+
 
   useEffect(() => {
     void loadRepository();
@@ -200,8 +222,19 @@ export const RepositoryPage: React.FC = () => {
         <>
           {/* Main Repository Summary Card */}
           <Card
-            title={`${repo.organization_slug}/${repo.repository_slug}`}
+            title={
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <span>{`${repo.organization_slug}/${repo.repository_slug}`}</span>
+                <CopyButton
+                  value={`${repo.organization_slug}/${repo.repository_slug}`}
+                  label=""
+                  title="Скопировать slug репозитория (org/repo)"
+                  size="sm"
+                />
+              </div>
+            }
             subtitle={
+
               safeCanonicalUrl ? (
                 <a
                   href={safeCanonicalUrl}
@@ -388,18 +421,38 @@ export const RepositoryPage: React.FC = () => {
           </Card>
 
           {/* Latest Analysis Breakdown or Empty State */}
-          <AnalysisHistory key={id} repositoryId={id} />
+          <AnalysisHistory key={id} repositoryId={id} currentAnalysis={latestAnalysis} />
+
           {hasAnalysis && latestAnalysis ? (
             <Card
               title="Сводка последнего анализа"
               subtitle={
-                <span style={{ fontSize: '0.85rem', color: 'var(--sh-text-muted)' }}>
-                  Запуск {latestAnalysis.id.substring(0, 8)}… ·{' '}
-                  {latestAnalysis.completed_at
-                    ? `завершён ${formatDateTime(latestAnalysis.completed_at)}`
-                    : `в процессе с ${formatDateTime(latestAnalysis.queued_at)}`}
-                </span>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    flexWrap: 'wrap',
+                    fontSize: '0.85rem',
+                    color: 'var(--sh-text-muted)',
+                  }}
+                >
+                  <span>Запуск {latestAnalysis.id.substring(0, 8)}…</span>
+                  <CopyButton
+                    value={latestAnalysis.id}
+                    label=""
+                    title="Скопировать UUID анализа"
+                    size="sm"
+                  />
+                  <span>
+                    ·{' '}
+                    {latestAnalysis.completed_at
+                      ? `завершён ${formatDateTime(latestAnalysis.completed_at)}`
+                      : `в процессе с ${formatDateTime(latestAnalysis.queued_at)}`}
+                  </span>
+                </div>
               }
+
               headerAction={
                 analysisStatusMeta ? (
                   <Badge variant={analysisStatusMeta.variant}>
@@ -548,7 +601,13 @@ export const RepositoryPage: React.FC = () => {
               }
             />
           ) : null}
+          {/* Integrity Panel (anti-gaming / signals audit) */}
+          {integrityInfo && <IntegrityPanel integrity={integrityInfo} />}
+
+          {/* Share & Badges Card */}
+          {shareInfo && <ShareResult share={shareInfo} />}
         </>
+
       )}
     </div>
   );

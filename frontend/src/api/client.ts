@@ -22,6 +22,10 @@ export type CatalogStats = components['schemas']['CatalogStatsDTO'];
 export type CategoryScoreMini = components['schemas']['CategoryScoreMiniDTO'];
 export type HealthHistogramBucket = components['schemas']['HealthHistogramBucket'];
 export type CompareResponse = components['schemas']['CompareResponse'];
+export type Achievement = components['schemas']['AchievementDTO'];
+export type ProfileSummary = components['schemas']['ProfileSummaryDTO'];
+export type ShareInfo = components['schemas']['ShareInfo'];
+export type IntegrityResponse = components['schemas']['IntegrityResponse'];
 
 export class ApiError extends Error {
   constructor(
@@ -119,10 +123,14 @@ export const api = {
     request<RepositoryDetails>(`/repositories/${encodeURIComponent(id)}`),
   latestAnalysis: (repositoryId: string) =>
     request<AnalysisSummary>(`/repositories/${encodeURIComponent(repositoryId)}/analyses/latest`),
-  analysisHistory: (repositoryId: string) =>
-    request<AnalysisPage>(`/repositories/${encodeURIComponent(repositoryId)}/analyses?limit=10&offset=0`),
+  analysisHistory: (repositoryId: string, limit = 50, offset = 0) =>
+    request<AnalysisPage>(`/repositories/${encodeURIComponent(repositoryId)}/analyses?limit=${limit}&offset=${offset}`),
   analysis: (id: string) =>
     request<Analysis>(`/analyses/${encodeURIComponent(id)}`),
+  publicity: (repositoryId: string) =>
+    request<ShareInfo>(`/publicity/repositories/${encodeURIComponent(repositoryId)}`),
+  integrity: (repositoryId: string) =>
+    request<IntegrityResponse>(`/repositories/${encodeURIComponent(repositoryId)}/integrity`),
   start: (id: string) =>
     request<AnalysisSummary>(`/repositories/${encodeURIComponent(id)}/analyses`, {
       method: 'POST',

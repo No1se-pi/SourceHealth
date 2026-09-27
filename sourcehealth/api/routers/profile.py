@@ -22,8 +22,15 @@ def services(request):
 def profile(request: Request):
     user_id, service = services(request)
     connection = SourceCraftConnection(request.app.state.auth)
-    return {"sourcecraft": connection.status(request.cookies.get("sh_session")),
-            "repositories": service.repositories(user_id), "achievements": service.achievements(user_id)}
+    repos = service.repositories(user_id)
+    achievements = service.achievements(user_id)
+    summary = service.summary(user_id, repos_dto=repos, achievements_dto=achievements)
+    return {
+        "sourcecraft": connection.status(request.cookies.get("sh_session")),
+        "repositories": repos,
+        "achievements": achievements,
+        "summary": summary,
+    }
 
 
 @router.get("/repositories", response_model=list[ProfileRepositoryDTO])

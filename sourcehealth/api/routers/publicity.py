@@ -19,6 +19,7 @@ class ShareInfo(BaseModel):
     repository_url: str
     badge_url: str
     badge_markdown: str
+    badge_html: str | None = None
     latest_analysis_id: UUID | None
     latest_analysis_url: str | None
     markdown_report_url: str | None
