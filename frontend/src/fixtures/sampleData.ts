@@ -18,6 +18,7 @@ export const mockHealthyRepo = {
   repository_slug: 'fast-service',
   canonical_url: 'https://sourcecraft.dev/demo-org/fast-service',
   visibility: 'public',
+  origin: 'native',
   health_score: 88,
   language: 'TypeScript',
   likes: 42,
@@ -32,6 +33,7 @@ export const mockNoDataRepo = {
   repository_slug: 'empty-starter',
   canonical_url: 'https://sourcecraft.dev/newbie-corp/empty-starter',
   visibility: 'public',
+  origin: 'native',
   health_score: null, // NO_DATA: not calculated yet, NOT zero!
   language: 'Python',
   likes: null,
@@ -46,6 +48,7 @@ export const mockRepoDetails = {
   repository_slug: 'fast-service',
   canonical_url: 'https://sourcecraft.dev/demo-org/fast-service',
   visibility: 'public',
+  origin: 'native',
   health_score: 88,
   language: 'TypeScript',
   likes: 42,
@@ -61,6 +64,7 @@ export const mockEmptyRepositoryPage = {
   items: [],
   limit: 20,
   offset: 0,
+  total: 0,
   has_more: false,
 } satisfies RepositoryPage;
 

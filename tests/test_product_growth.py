@@ -231,10 +231,12 @@ class CatalogValidationTests(unittest.TestCase):
     def test_catalog_allowlist_and_public_only(self):
         row = {"id": "repo-1", "slug": "project", "visibility": "public",
                "organization": {"slug": "team"}, "default_branch": "main",
-               "description": "must not survive", "language": {"name": "Python"}}
+               "description": "clean description", "untrusted_payload": "must not survive",
+               "language": {"name": "Python"}}
         safe = CatalogSync._safe(row)
         self.assertEqual(safe["canonical_url"], "https://sourcecraft.dev/team/project")
-        self.assertNotIn("description", safe)
+        self.assertEqual(safe["description"], "clean description")
+        self.assertNotIn("untrusted_payload", safe)
         with self.assertRaises(SourceCraftError):
             CatalogSync._safe({**row, "visibility": "private"})
 

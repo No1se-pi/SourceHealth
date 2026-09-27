@@ -99,11 +99,26 @@ class CatalogSync:
 
     @staticmethod
     def _safe(row):
+        from sourcehealth.catalog.topics import TOPIC_CLASSIFIER_VERSION, classify_topics
+
         metadata = normalize_repository_metadata(row, require_public=True)
-        values = {"sourcecraft_id": metadata.sourcecraft_id,
-                "organization_slug": metadata.organization_slug,
-                "repository_slug": metadata.repository_slug, "canonical_url": metadata.canonical_url,
-                "visibility": "public", "next_analysis_at": datetime.now(UTC)}
+        topics = classify_topics(
+            metadata.repository_slug, metadata.description, metadata.project_slug, metadata.language
+        )
+        values = {
+            "sourcecraft_id": metadata.sourcecraft_id,
+            "organization_slug": metadata.organization_slug,
+            "repository_slug": metadata.repository_slug,
+            "canonical_url": metadata.canonical_url,
+            "visibility": "public",
+            "next_analysis_at": datetime.now(UTC),
+            "description": metadata.description,
+            "logo_url": metadata.logo_url,
+            "origin": metadata.origin or "unknown",
+            "project_slug": metadata.project_slug,
+            "topics": topics,
+            "topic_classifier_version": TOPIC_CLASSIFIER_VERSION,
+        }
         if metadata.default_branch is not None:
             values["default_branch"] = metadata.default_branch
         if metadata.language is not None:

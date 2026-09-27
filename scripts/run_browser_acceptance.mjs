@@ -20,12 +20,25 @@ function makeRepositorySummary(overrides = {}) {
     repository_slug: 'fast-service',
     canonical_url: 'https://sourcecraft.dev/demo-org/fast-service',
     visibility: 'public',
+    origin: 'native',
+    topics: ['web'],
+    topic_classifier_version: 'catalog-topic-v1',
+    description: 'High performance demo service',
+    logo_url: null,
     health_score: 70.5,
     language: 'TypeScript',
     likes: 42,
     last_activity_at: '2026-09-20T14:30:00Z',
     latest_analysis_id: 'b0000001-0000-0000-0000-000000000001',
     score_preview: null,
+    category_scores: {
+      documentation: { score: 85, availability: 'available' },
+      cicd: { score: 90, availability: 'available' },
+      security: { score: 80, availability: 'available' },
+      activity: { score: 75, availability: 'available' },
+      issues: { score: 70, availability: 'available' },
+      code_health: { score: 82, availability: 'available' },
+    },
     ...overrides
   };
 }
@@ -37,6 +50,11 @@ function makeRepositoryDetails(overrides = {}) {
     repository_slug: 'fast-service',
     canonical_url: 'https://sourcecraft.dev/demo-org/fast-service',
     visibility: 'public',
+    origin: 'native',
+    topics: ['web'],
+    topic_classifier_version: 'catalog-topic-v1',
+    description: 'High performance demo service',
+    logo_url: null,
     health_score: 70.5,
     language: 'TypeScript',
     likes: 42,
@@ -224,14 +242,14 @@ function validateScorePreview(preview, context) {
 }
 
 function validateRepositorySummary(repo, context) {
-  assertRequiredKeys(repo, ['id', 'organization_slug', 'repository_slug', 'canonical_url', 'visibility', 'health_score', 'language', 'likes', 'last_activity_at', 'latest_analysis_id', 'score_preview'], context);
+  assertRequiredKeys(repo, ['id', 'organization_slug', 'repository_slug', 'canonical_url', 'visibility', 'health_score', 'language', 'likes', 'last_activity_at', 'latest_analysis_id', 'origin', 'score_preview'], context);
   assertNoKeys(repo, ['created_at', 'updated_at', 'score', 'default_branch', 'head_sha'], context);
   assert(!repo.canonical_url.includes('sourcecraft.tech'), `${context}.canonical_url must not use sourcecraft.tech (use sourcecraft.dev)`);
   if (repo.score_preview != null) validateScorePreview(repo.score_preview, `${context}.score_preview`);
 }
 
 function validateRepositoryDetails(repo, context) {
-  assertRequiredKeys(repo, ['id', 'organization_slug', 'repository_slug', 'canonical_url', 'visibility', 'health_score', 'language', 'likes', 'last_activity_at', 'latest_analysis_id', 'sourcecraft_id', 'default_branch', 'head_sha', 'score_preview'], context);
+  assertRequiredKeys(repo, ['id', 'organization_slug', 'repository_slug', 'canonical_url', 'visibility', 'health_score', 'language', 'likes', 'last_activity_at', 'latest_analysis_id', 'sourcecraft_id', 'default_branch', 'head_sha', 'origin', 'score_preview'], context);
   assertNoKeys(repo, ['created_at', 'updated_at', 'score'], context);
   assert(!repo.canonical_url.includes('sourcecraft.tech'), `${context}.canonical_url must not use sourcecraft.tech (use sourcecraft.dev)`);
   if (repo.score_preview != null) validateScorePreview(repo.score_preview, `${context}.score_preview`);
@@ -744,23 +762,118 @@ const mockServer = http.createServer((req, res) => {
     return res.end(JSON.stringify({ id: 'sc-user-demo-42' }));
   }
 
-  // 1. Leaderboard
+  // 1. Leaderboard / Catalog
   if (url.pathname === '/api/v1/repositories') {
     if (url.searchParams.get('language') === 'EmptyLang') {
       res.writeHead(200);
-      return res.end(JSON.stringify({ items: [], limit: 20, offset: 0, has_more: false }));
+      return res.end(JSON.stringify({ items: [], limit: 20, offset: 0, total: 0, has_more: false }));
     }
     if (url.searchParams.get('sort') === 'error_trigger') {
       res.writeHead(500);
       return res.end(JSON.stringify({ code: 'service_unavailable', request_id: 'req-lb-err-500' }));
     }
 
+    const limit = parseInt(url.searchParams.get('limit') || '20', 10);
+    const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+    const total = 100;
+
     res.writeHead(200);
     return res.end(JSON.stringify({
       items: fixtureLeaderboardItems,
-      limit: 20,
-      offset: 0,
-      has_more: false
+      limit,
+      offset,
+      total,
+      has_more: offset + fixtureLeaderboardItems.length < total
+    }));
+  }
+
+  // 1b. Catalog Stats
+  if (url.pathname === '/api/v1/catalog/stats') {
+    res.writeHead(200);
+    return res.end(JSON.stringify({
+      catalog_total_public: 30000,
+      matched_total: fixtureLeaderboardItems.length,
+      analyzed_count: 24000,
+      health_available_count: 22000,
+      health_forming_count: 2000,
+      health_no_data_count: 8000,
+      health_median: 74.2,
+      health_q1: 61.0,
+      health_q3: 86.4,
+      health_histogram: [
+        { range_label: '0-9', min_score: 0.0, max_score: 9.9, count: 500 },
+        { range_label: '10-19', min_score: 10.0, max_score: 19.9, count: 800 },
+        { range_label: '20-29', min_score: 20.0, max_score: 29.9, count: 1200 },
+        { range_label: '30-39', min_score: 30.0, max_score: 39.9, count: 1500 },
+        { range_label: '40-49', min_score: 40.0, max_score: 49.9, count: 2000 },
+        { range_label: '50-59', min_score: 50.0, max_score: 59.9, count: 3500 },
+        { range_label: '60-69', min_score: 60.0, max_score: 69.9, count: 4200 },
+        { range_label: '70-79', min_score: 70.0, max_score: 79.9, count: 4800 },
+        { range_label: '80-89', min_score: 80.0, max_score: 89.9, count: 3000 },
+        { range_label: '90-100', min_score: 90.0, max_score: 100.0, count: 500 },
+      ],
+      histogram_no_data_count: 8000,
+      languages: { TypeScript: 12000, Python: 9000, Go: 5000, Rust: 4000 },
+      topics: {
+        web: 8000,
+        bots: 3500,
+        ml_data: 2500,
+        security: 2000,
+        devops: 2200,
+        tools: 1800,
+        education: 1200,
+        games: 800,
+        mobile: 1000,
+        libraries: 900,
+        other: 100,
+      },
+      origins: { native: 18000, fork: 8000, migrated: 3000, unknown: 1000 },
+    }));
+  }
+
+  // 1c. Compare
+  if (url.pathname === '/api/v1/compare') {
+    res.writeHead(200);
+    return res.end(JSON.stringify({
+      comparable: { policy_versions_match: true },
+      repositories: [
+        {
+          repository_id: 'a0000001-0000-0000-0000-000000000001',
+          organization_slug: 'demo-org',
+          repository_slug: 'fast-service',
+          health_score: 88,
+          data_coverage_percent: 100,
+          language: 'TypeScript',
+          likes: 42,
+          last_activity_at: '2026-09-20T14:30:00Z',
+          categories: {
+            documentation: { score: 85, availability: 'available' },
+            cicd: { score: 90, availability: 'available' },
+            security: { score: 80, availability: 'available' },
+            activity: { score: 75, availability: 'available' },
+            issues: { score: 70, availability: 'available' },
+            code_health: { score: 82, availability: 'available' },
+          },
+        },
+        {
+          repository_id: 'a0000003-0000-0000-0000-000000000003',
+          organization_slug: 'yandex-cloud',
+          repository_slug: 'serverless-gate',
+          health_score: 94,
+          data_coverage_percent: 95,
+          language: 'Go',
+          likes: 87,
+          last_activity_at: '2026-09-19T18:00:00Z',
+          categories: {
+            documentation: { score: 90, availability: 'available' },
+            cicd: { score: 95, availability: 'available' },
+            security: { score: 92, availability: 'available' },
+            activity: { score: 88, availability: 'available' },
+            issues: { score: 85, availability: 'available' },
+            code_health: { score: 94, availability: 'available' },
+          },
+        },
+      ],
     }));
   }
 
@@ -1105,6 +1218,74 @@ const tasks = [
     width: 1440,
     height: 900,
     action: 'click-appearance'
+  },
+  // 8. Catalog / Search v2 Acceptance
+  {
+    name: '47-catalog-search-desktop-1440.png',
+    url: 'http://127.0.0.1:5173/?q=fast&theme=dark',
+    width: 1440,
+    height: 900
+  },
+  {
+    name: '48-catalog-histogram-click-1440.png',
+    url: 'http://127.0.0.1:5173/?theme=dark',
+    width: 1440,
+    height: 900,
+    action: 'click-histogram-bar-8'
+  },
+  {
+    name: '49-catalog-topic-filter-1440.png',
+    url: 'http://127.0.0.1:5173/?topic=web&theme=dark',
+    width: 1440,
+    height: 900
+  },
+  {
+    name: '50-catalog-compare-page-1440.png',
+    url: 'http://127.0.0.1:5173/?theme=dark',
+    width: 1440,
+    height: 900,
+    action: 'select-compare-2-and-navigate'
+  },
+  {
+    name: '51-catalog-mobile-390.png',
+    url: 'http://127.0.0.1:5173/?theme=dark',
+    width: 390,
+    height: 844
+  },
+  {
+    name: '52-catalog-page-jump-1440.png',
+    url: 'http://127.0.0.1:5173/?theme=dark',
+    width: 1440,
+    height: 900,
+    action: 'page-jump-3'
+  },
+  {
+    name: '53-catalog-command-palette-1440.png',
+    url: 'http://127.0.0.1:5173/?theme=dark',
+    width: 1440,
+    height: 900,
+    action: 'open-command-palette'
+  },
+  {
+    name: '54-catalog-compare-tray-4-1440.png',
+    url: 'http://127.0.0.1:5173/?theme=dark',
+    width: 1440,
+    height: 900,
+    action: 'select-compare-4'
+  },
+  {
+    name: '55-catalog-clear-filters-1440.png',
+    url: 'http://127.0.0.1:5173/?q=fast&topic=web&theme=dark',
+    width: 1440,
+    height: 900,
+    action: 'clear-all-filters'
+  },
+  {
+    name: '56-catalog-history-back-1440.png',
+    url: 'http://127.0.0.1:5173/?theme=dark',
+    width: 1440,
+    height: 900,
+    action: 'history-back'
   }
 ];
 
@@ -1112,6 +1293,26 @@ const acceptanceFilter = process.env.ACCEPTANCE_FILTER;
 const selectedTasks = acceptanceFilter ? tasks.filter((task) => task.name.includes(acceptanceFilter)) : tasks;
 
 let failureCount = 0;
+
+async function evalCdp(expression) {
+  const res = await sendCdp('Runtime.evaluate', {
+    expression,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  if (res && res.exceptionDetails) {
+    throw new Error(res.exceptionDetails.text || 'CDP evaluation exception');
+  }
+  return res && res.result ? res.result.value : undefined;
+}
+
+async function assertDom(taskName, conditionExpr, description) {
+  const passed = await evalCdp(conditionExpr);
+  if (!passed) {
+    throw new Error(`Semantic assertion failed for ${taskName}: ${description}`);
+  }
+  console.log(`  ✓ Semantic assertion passed: ${description}`);
+}
 
 for (const task of selectedTasks) {
   const filePath = path.join(outDir, task.name);
@@ -1128,40 +1329,162 @@ for (const task of selectedTasks) {
 
     // 2. Navigate
     await sendCdp('Page.navigate', { url: task.url });
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 650));
 
-    // 3. Optional interactive action via CDP
+    // 3. Interactive actions via CDP
     if (task.action === 'click-mobile-nav') {
       console.log('  -> Executing real click on .mobile-menu-btn...');
-      await sendCdp('Runtime.evaluate', {
-        expression: `(function() {
-          const btn = document.querySelector('.mobile-menu-btn');
-          if (btn) btn.click();
-          return !!btn;
-        })()`
-      });
-      await new Promise((r) => setTimeout(r, 350));
+      await evalCdp(`(function() {
+        const btn = document.querySelector('.mobile-menu-btn');
+        if (btn) btn.click();
+        return Boolean(btn);
+      })()`);
+      await new Promise((r) => setTimeout(r, 450));
+      await assertDom(task.name, "Boolean(document.querySelector('.sc-sidebar.mobile-open') || document.querySelector('.sc-mobile-backdrop'))", 'Mobile navigation drawer opened');
     } else if (task.action === 'click-appearance') {
       console.log('  -> Executing real click on .sc-topbar-icon-btn...');
-      await sendCdp('Runtime.evaluate', {
-        expression: `(function() {
-          const btn = document.querySelector('.sc-topbar-icon-btn');
-          if (btn) btn.click();
-          return !!btn;
-        })()`
-      });
+      await evalCdp(`(function() {
+        const btn = document.querySelector('.sc-topbar-icon-btn');
+        if (btn) btn.click();
+        return Boolean(btn);
+      })()`);
       await new Promise((r) => setTimeout(r, 350));
     } else if (task.action === 'open-appsec-explanation') {
       console.log('  -> Opening AppSec score explanation...');
-      await sendCdp('Runtime.evaluate', {
-        expression: `(function() {
-          const details = [...document.querySelectorAll('details.score-explanation')]
-            .find((node) => node.textContent.includes('Official SourceCraft AppSec'));
-          if (details) details.open = true;
-          return !!details;
-        })()`
-      });
+      await evalCdp(`(function() {
+        const details = [...document.querySelectorAll('details.score-explanation')]
+          .find((node) => node.textContent.includes('Official SourceCraft AppSec'));
+        if (details) details.open = true;
+        return Boolean(details);
+      })()`);
       await new Promise((r) => setTimeout(r, 350));
+    } else if (task.action === 'click-histogram-bar-8') {
+      console.log('  -> Clicking histogram bucket 8 (80-89 score range)...');
+      const clicked = await evalCdp(`(function() {
+        const bar = document.querySelector('[data-testid="histogram-bucket-8"]') ||
+                    [...document.querySelectorAll('.sh-histogram-bar')].find(b => b.getAttribute('title')?.includes('80-89'));
+        if (bar) {
+          bar.click();
+          return true;
+        }
+        return false;
+      })()`);
+      if (!clicked) throw new Error('Histogram bucket 8 element not found in DOM');
+      await new Promise((r) => setTimeout(r, 450));
+      await assertDom(task.name, "window.location.search.includes('health_min=80') && window.location.search.includes('health_max=89.9')", 'URL updated with health_min=80 and health_max=89.9');
+      await assertDom(task.name, "document.body.innerText.includes('80–89.9') || document.body.innerText.includes('80')", 'Active filter chip visible');
+    } else if (task.action === 'select-compare-2-and-navigate') {
+      console.log('  -> Selecting 2 repositories for compare...');
+      const selected = await evalCdp(`(function() {
+        const checkboxes = [...document.querySelectorAll('input[type="checkbox"][title*="сравнения"]')];
+        if (checkboxes.length >= 2) {
+          checkboxes[0].click();
+          checkboxes[1].click();
+          return true;
+        }
+        return false;
+      })()`);
+      if (!selected) throw new Error('Could not find 2 repository compare checkboxes');
+      await new Promise((r) => setTimeout(r, 350));
+      await assertDom(task.name, "document.body.innerText.includes('Сравнение (2 из 4)')", 'Compare tray shows "Сравнение (2 из 4)"');
+      console.log('  -> Clicking compare button...');
+      await evalCdp(`(function() {
+        const btn = [...document.querySelectorAll('button')].find(b => b.textContent.includes('Сравнить (2)'));
+        if (btn) btn.click();
+        return Boolean(btn);
+      })()`);
+      await new Promise((r) => setTimeout(r, 650));
+      await assertDom(task.name, "window.location.pathname.includes('/compare') && window.location.search.includes('repository_id=')", 'Navigated to /compare with selected repository IDs');
+    } else if (task.action === 'page-jump-3') {
+      console.log('  -> Jumping to page 3 via input...');
+      const jumped = await evalCdp(`(function() {
+        const form = document.querySelector('.sh-catalog-pagination form');
+        const input = form ? form.querySelector('input[type="number"]') : null;
+        if (input && form) {
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+          if (setter) {
+            setter.call(input, '3');
+          } else {
+            input.value = '3';
+          }
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          const submitBtn = form.querySelector('button[type="submit"]');
+          if (submitBtn) {
+            submitBtn.click();
+          } else {
+            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+          }
+          return true;
+        }
+        return false;
+      })()`);
+      if (!jumped) throw new Error('Pagination jump form not found');
+      await new Promise((r) => setTimeout(r, 650));
+      await assertDom(task.name, "window.location.search.includes('page=3')", 'URL query updated to page=3');
+    } else if (task.action === 'open-command-palette') {
+      console.log('  -> Opening Command Palette...');
+      await evalCdp(`(function() {
+        const kbd = document.querySelector('.sh-search-bar-wrapper kbd');
+        if (kbd) { kbd.click(); return true; }
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
+        return true;
+      })()`);
+      await new Promise((r) => setTimeout(r, 350));
+      await assertDom(task.name, "Boolean(document.querySelector('.sh-command-palette-backdrop'))", 'CommandPalette backdrop is rendered and open');
+    } else if (task.action === 'select-compare-4') {
+      console.log('  -> Selecting 4 repositories for compare tray limit test...');
+      await evalCdp(`(function() {
+        const checkboxes = [...document.querySelectorAll('input[type="checkbox"][title*="сравнения"]')];
+        for (let i = 0; i < Math.min(4, checkboxes.length); i++) {
+          checkboxes[i].click();
+        }
+        return checkboxes.length >= 4;
+      })()`);
+      await new Promise((r) => setTimeout(r, 350));
+      await assertDom(task.name, "document.body.innerText.includes('Сравнение (4 из 4)')", 'Compare tray shows "Сравнение (4 из 4)"');
+    } else if (task.action === 'clear-all-filters') {
+      console.log('  -> Clearing all filters...');
+      await evalCdp(`(function() {
+        const btn = [...document.querySelectorAll('button')].find(b => b.textContent.includes('Сбросить все'));
+        if (btn) { btn.click(); return true; }
+        return false;
+      })()`);
+      await new Promise((r) => setTimeout(r, 450));
+      await assertDom(task.name, "!window.location.search.includes('topic=') && !window.location.search.includes('q=')", 'All query filters removed from URL');
+    } else if (task.action === 'history-back') {
+      console.log('  -> Testing topic filter and browser history back...');
+      await evalCdp(`(function() {
+        const chips = [...document.querySelectorAll('.sh-topic-chips-container button')];
+        const webChip = chips.find(c => c.textContent.includes('Web'));
+        if (webChip) webChip.click();
+        return Boolean(webChip);
+      })()`);
+      await new Promise((r) => setTimeout(r, 450));
+      await evalCdp(`window.history.back()`);
+      await new Promise((r) => setTimeout(r, 450));
+      await assertDom(task.name, "!window.location.search.includes('topic=web')", 'History back successfully restored state');
+    }
+
+    // Semantic checks for specific states
+    if (task.name.includes('empty')) {
+      await assertDom(task.name, "document.body.innerText.includes('Ничего не найдено')", 'Empty state text "Ничего не найдено" is present');
+    } else if (task.name.includes('error')) {
+      await assertDom(task.name, "document.body.innerText.includes('Не удалось загрузить каталог')", 'Error state text "Не удалось загрузить каталог" is present');
+    }
+
+    // Global mobile horizontal overflow check
+    if (task.width < 768) {
+      const hasOverflow = await evalCdp(`(function() {
+        const docW = document.documentElement.scrollWidth;
+        const bodyW = document.body ? document.body.scrollWidth : 0;
+        const winW = window.innerWidth;
+        return (docW > winW + 1) || (bodyW > winW + 1);
+      })()`);
+      if (hasOverflow) {
+        throw new Error(`Horizontal overflow detected on mobile viewport (width: ${task.width})`);
+      }
+      console.log(`  ✓ Mobile horizontal overflow check passed (${task.width}px)`);
     }
 
     // 4. Capture screenshot

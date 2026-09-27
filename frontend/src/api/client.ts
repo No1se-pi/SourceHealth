@@ -18,6 +18,10 @@ export type ErrorResponse = components['schemas']['ErrorResponse'];
 export type Profile = components['schemas']['ProfileDTO'];
 export type ProfileRepository = components['schemas']['ProfileRepositoryDTO'];
 export type ConnectedRepositories = components['schemas']['ConnectedRepositoriesDTO'];
+export type CatalogStats = components['schemas']['CatalogStatsDTO'];
+export type CategoryScoreMini = components['schemas']['CategoryScoreMiniDTO'];
+export type HealthHistogramBucket = components['schemas']['HealthHistogramBucket'];
+export type CompareResponse = components['schemas']['CompareResponse'];
 
 export class ApiError extends Error {
   constructor(
@@ -76,14 +80,41 @@ export const api = {
   importRepository: (url: string) => request<RepositoryDetails>('/repositories', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }),
   }),
-  repositories: (offset = 0, sort = 'health_score', language = '') =>
-    request<RepositoryPage>(
-      `/repositories?${new URLSearchParams({
-        offset: String(offset),
-        sort,
-        ...(language ? { language } : {}),
-      })}`,
-    ),
+  repositories: (
+    paramsOrOffset: Record<string, string | number | boolean | undefined | null> | number = 0,
+    options?: RequestInit,
+  ) => {
+    let qs = '';
+    if (typeof paramsOrOffset === 'object' && paramsOrOffset !== null) {
+      const cleanParams = Object.entries(paramsOrOffset).reduce<Record<string, string>>((acc, [k, v]) => {
+        if (v !== undefined && v !== null && v !== '') {
+          acc[k] = String(v);
+        }
+        return acc;
+      }, {});
+      qs = new URLSearchParams(cleanParams).toString();
+    } else {
+      qs = new URLSearchParams({
+        offset: String(paramsOrOffset),
+      }).toString();
+    }
+    return request<RepositoryPage>(`/repositories${qs ? `?${qs}` : ''}`, options);
+  },
+  catalogStats: (params: Record<string, string | number | boolean | undefined | null> = {}) => {
+    const cleanParams = Object.entries(params).reduce<Record<string, string>>((acc, [k, v]) => {
+      if (v !== undefined && v !== null && v !== '') {
+        acc[k] = String(v);
+      }
+      return acc;
+    }, {});
+    const qs = new URLSearchParams(cleanParams).toString();
+    return request<CatalogStats>(`/catalog/stats${qs ? `?${qs}` : ''}`);
+  },
+  compare: (repositoryIds: string[]) => {
+    const params = new URLSearchParams();
+    repositoryIds.forEach((id) => params.append('repository_id', id));
+    return request<CompareResponse>(`/compare?${params.toString()}`);
+  },
   repository: (id: string) =>
     request<RepositoryDetails>(`/repositories/${encodeURIComponent(id)}`),
   latestAnalysis: (repositoryId: string) =>

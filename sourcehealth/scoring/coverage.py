@@ -33,3 +33,20 @@ def score_preview(policy_version, categories):
              if numeric else None)
     return {"score": value, "nominal_weight_percent": nominal_weight,
             "scored_categories": len(scored), "numeric": numeric}
+
+
+def calculate_nominal_coverage_percent(category_scores: dict | None) -> int | None:
+    """Calculate nominal coverage percentage (0..100) strictly from known numeric category scores.
+
+    Weights are derived from official WEIGHTS. A numeric score of 0 (e.g. cicd=0 with not_configured)
+    is a known score and contributes its category weight.
+    """
+    if not isinstance(category_scores, dict):
+        return None
+    scored = [
+        name for name, weight in WEIGHTS.items()
+        if isinstance(category_scores.get(name), dict)
+        and category_scores[name].get("score") is not None
+        and isinstance(category_scores[name]["score"], (int, float))
+    ]
+    return sum(WEIGHTS[name] for name in scored)

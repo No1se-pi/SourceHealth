@@ -92,6 +92,17 @@ class AnalysisService:
             if "language" in collected.facts:
                 row.language = collected.facts["language"]
             row.likes = collected.facts.get("likes")
+            if "description" in collected.facts:
+                row.description = collected.facts["description"]
+            if "logo_url" in collected.facts:
+                row.logo_url = collected.facts["logo_url"]
+            if "origin" in collected.facts:
+                row.origin = collected.facts["origin"]
+            if "project_slug" in collected.facts:
+                row.project_slug = collected.facts["project_slug"]
+            if "topics" in collected.facts:
+                row.topics = collected.facts["topics"]
+                row.topic_classifier_version = collected.facts.get("topic_classifier_version")
         return repository_id
 
     def request_analysis(self, repository_id: UUID, *, trigger: str = "manual", force: bool = False,
@@ -172,8 +183,9 @@ class AnalysisService:
                 run.data_coverage = {name: category["availability"] for name, category in report.category_scores.items()}
                 run.head_sha = report.repository.get("head_sha")
             repo = db.get(Repository, run.repository_id, with_for_update=True)
-            repo.latest_analysis_id, repo.health_score = run.id, run.health_score
+            repo.latest_analysis_id = run.id
             if run.profile == "mvp-v1":
+                repo.health_score = run.health_score
                 repo.head_sha = run.head_sha
                 # The first request may not know HEAD yet. Cache the completed
                 # observation under its actual snapshot, as subsequent requests do.

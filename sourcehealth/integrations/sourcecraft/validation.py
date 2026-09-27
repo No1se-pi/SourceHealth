@@ -41,6 +41,62 @@ def normalize_repository_likes(value: Any) -> int | None:
     return 0 if likes is None else likes
 
 
+def normalize_description(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = re.sub(r"[\x00-\x1f\x7f]+", " ", value)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if not cleaned:
+        return None
+    return cleaned[:500]
+
+
+def normalize_logo_url(value: Any) -> str | None:
+    url_str: str | None = None
+    if isinstance(value, dict):
+        candidate = value.get("url")
+        if isinstance(candidate, str):
+            url_str = candidate.strip()
+    elif isinstance(value, str):
+        url_str = value.strip()
+    if not url_str or not url_str.startswith("https://") or len(url_str) > 512:
+        return None
+    try:
+        from urllib.parse import urlsplit
+        parts = urlsplit(url_str)
+        hostname = (parts.hostname or "").lower()
+        allowed = (
+            "sourcecraft.dev",
+            "sourcecraft.tech",
+            "storage.yandexcloud.net",
+            "avatars.mds.yandex.net",
+        )
+        if any(hostname == domain or hostname.endswith("." + domain) for domain in allowed):
+            return url_str
+    except Exception:
+        pass
+    return None
+
+
+def normalize_origin(raw: dict) -> str:
+    if raw.get("parent") is not None:
+        return "fork"
+    if raw.get("migration_source") is not None or raw.get("migrated_from") is not None:
+        return "migrated"
+    return "native"
+
+
+def normalize_project_slug(raw: dict) -> str | None:
+    project = raw.get("project")
+    if isinstance(project, dict):
+        slug = project.get("slug")
+        if isinstance(slug, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", slug):
+            return slug
+    elif isinstance(project, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", project):
+        return project
+    return None
+
+
 @dataclass(frozen=True)
 class RepositoryMetadata:
     sourcecraft_id: str
@@ -51,6 +107,10 @@ class RepositoryMetadata:
     is_empty: bool | None
     language: str | None
     likes: int | None
+    description: str | None = None
+    logo_url: str | None = None
+    origin: str | None = "unknown"
+    project_slug: str | None = None
 
     @property
     def canonical_url(self) -> str:
@@ -85,9 +145,14 @@ def normalize_repository_metadata(raw: Any, *, expected_org: str | None = None,
     if language is not None and (not isinstance(language, str) or not 1 <= len(language) <= 64
                                  or any(ord(char) < 32 or ord(char) == 127 for char in language)):
         language = None
+    description = normalize_description(raw.get("description"))
+    logo_url = normalize_logo_url(raw.get("logo") or raw.get("logo_url"))
+    origin = normalize_origin(raw)
+    project_slug = normalize_project_slug(raw)
     return RepositoryMetadata(
         sourcecraft_id=sourcecraft_id, organization_slug=organization_slug,
         repository_slug=repository_slug, visibility=visibility,
         default_branch=normalize_default_branch(raw.get("default_branch")),
         is_empty=is_empty, language=language, likes=normalize_repository_likes(raw.get("rating")),
+        description=description, logo_url=logo_url, origin=origin, project_slug=project_slug,
     )

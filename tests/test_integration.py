@@ -56,7 +56,7 @@ class PersistenceTests(unittest.TestCase):
         cls.redis = Redis.from_url(redis_url)
         cls.redis.ping()
         with cls.engine.connect() as db:
-            if db.scalar(text("select version_num from alembic_version")) != "0002_product_growth":
+            if db.scalar(text("select version_num from alembic_version")) != "0003_catalog_search_v2":
                 raise RuntimeError("apply Alembic before integration tests")
 
     @classmethod
@@ -1083,3 +1083,570 @@ class PersistenceTests(unittest.TestCase):
         self.assertIsNone(auth.current_user(token))
         with self.sessions.begin() as db:
             db.execute(delete(User).where(User.id == UUID(user["id"])))
+
+    def test_catalog_stats_cartesian_product_regression(self):
+        created_repo_ids = []
+        unique_org = f"stat-org-{uuid4().hex[:8]}"
+        try:
+            scores = [60.0, 70.0, 80.0, 90.0, None]
+            with self.sessions.begin() as db:
+                for i, score in enumerate(scores):
+                    slug = f"repo-{i}"
+                    repo = Repository(
+                        sourcecraft_id=f"sc-stat-{uuid4().hex[:10]}",
+                        organization_slug=unique_org,
+                        repository_slug=slug,
+                        canonical_url=f"https://sourcecraft.dev/{unique_org}/{slug}",
+                        visibility="public",
+                        health_score=score,
+                        language="Python" if i % 2 == 0 else "TypeScript",
+                        topics=["web"] if i % 2 == 0 else ["tools"],
+                        likes=i * 10,
+                        last_activity_at=datetime.now(UTC),
+                    )
+                    db.add(repo)
+                    db.flush()
+                    created_repo_ids.append(repo.id)
+                    if score is not None:
+                        db.add(AnalysisRun(
+                            repository_id=repo.id,
+                            status="completed",
+                            trigger="manual",
+                            profile="mvp-v1",
+                            fingerprint=uuid4().hex,
+                            completed_at=datetime.now(UTC) - timedelta(minutes=10),
+                            health_score=score,
+                            scoring_policy_version="mvp-score-v1.2",
+                            category_scores={},
+                        ))
+                        db.add(AnalysisRun(
+                            repository_id=repo.id,
+                            status="completed",
+                            trigger="manual",
+                            profile="code-v1",
+                            fingerprint=uuid4().hex,
+                            completed_at=datetime.now(UTC),
+                            health_score=99.0,
+                            scoring_policy_version="code-score-v1",
+                            category_scores={},
+                        ))
+
+                private_repo = Repository(
+                    sourcecraft_id=f"sc-stat-priv-{uuid4().hex[:10]}",
+                    organization_slug=unique_org,
+                    repository_slug="priv-repo",
+                    canonical_url=f"https://sourcecraft.dev/{unique_org}/priv-repo",
+                    visibility="private",
+                    health_score=95.0,
+                    language="Go",
+                    topics=["security"],
+                    likes=100,
+                    last_activity_at=datetime.now(UTC),
+                )
+                db.add(private_repo)
+                db.flush()
+                created_repo_ids.append(private_repo.id)
+                db.add(AnalysisRun(
+                    repository_id=private_repo.id,
+                    status="completed",
+                    trigger="manual",
+                    profile="mvp-v1",
+                    fingerprint=uuid4().hex,
+                    completed_at=datetime.now(UTC),
+                    health_score=95.0,
+                    scoring_policy_version="mvp-score-v1.2",
+                    category_scores={},
+                ))
+
+            app = create_app(self.settings, sessions=self.sessions, redis=self.redis)
+            with TestClient(app, base_url="https://testserver") as client:
+                res = client.get("/api/v1/catalog/stats", params={"q": unique_org})
+                self.assertEqual(res.status_code, 200, res.text)
+                data = res.json()
+
+                self.assertEqual(data["matched_total"], 5)
+                self.assertEqual(data["health_available_count"], 4)
+                self.assertEqual(data["health_no_data_count"], 1)
+                self.assertEqual(data["health_median"], 75.0)
+                self.assertEqual(data["health_q1"], 67.5)
+                self.assertEqual(data["health_q3"], 82.5)
+                self.assertNotIn("priv-repo", str(data))
+        finally:
+            with self.sessions.begin() as db:
+                db.execute(update(Repository).where(Repository.id.in_(created_repo_ids)).values(latest_analysis_id=None))
+                db.execute(delete(AnalysisRun).where(AnalysisRun.repository_id.in_(created_repo_ids)))
+                db.execute(delete(Repository).where(Repository.id.in_(created_repo_ids)))
+
+    def test_canonical_latest_terminal_mvp_v1_regression(self):
+        created_repo_ids = []
+        unique_org = f"canon-org-{uuid4().hex[:8]}"
+        try:
+            with self.sessions.begin() as db:
+                repo = Repository(
+                    sourcecraft_id=f"sc-canon-{uuid4().hex[:10]}",
+                    organization_slug=unique_org,
+                    repository_slug="target-app",
+                    canonical_url=f"https://sourcecraft.dev/{unique_org}/target-app",
+                    visibility="public",
+                    health_score=72.0,
+                    language="Rust",
+                    topics=["security"],
+                    likes=42,
+                    last_activity_at=datetime.now(UTC),
+                )
+                db.add(repo)
+                db.flush()
+                created_repo_ids.append(repo.id)
+
+                mvp_run = AnalysisRun(
+                    repository_id=repo.id,
+                    status="completed",
+                    trigger="manual",
+                    profile="mvp-v1",
+                    fingerprint=uuid4().hex,
+                    completed_at=datetime.now(UTC) - timedelta(minutes=5),
+                    health_score=72.0,
+                    scoring_policy_version="mvp-score-v1.2",
+                    category_scores={
+                        "security": {"score": 88.0, "availability": "available"},
+                        "cicd": {"score": 75.0, "availability": "available"},
+                    },
+                )
+                db.add(mvp_run)
+                db.flush()
+                canonical_run_id = str(mvp_run.id)
+
+                code_run = AnalysisRun(
+                    repository_id=repo.id,
+                    status="completed",
+                    trigger="manual",
+                    profile="code-v1",
+                    fingerprint=uuid4().hex,
+                    completed_at=datetime.now(UTC) - timedelta(minutes=1),
+                    health_score=99.0,
+                    scoring_policy_version="code-score-v1",
+                    category_scores={
+                        "security": {"score": 99.0, "availability": "available"},
+                    },
+                )
+                db.add(code_run)
+                db.flush()
+                repo.latest_analysis_id = code_run.id
+
+            app = create_app(self.settings, sessions=self.sessions, redis=self.redis)
+            with TestClient(app, base_url="https://testserver") as client:
+                list_res = client.get("/api/v1/repositories", params={"q": unique_org})
+                self.assertEqual(list_res.status_code, 200, list_res.text)
+                items = list_res.json()["items"]
+                self.assertEqual(len(items), 1)
+                self.assertEqual(items[0]["health_score"], 72.0)
+                self.assertEqual(items[0]["latest_analysis_id"], canonical_run_id)
+
+                sec_res = client.get("/api/v1/repositories", params={"q": unique_org, "security_min": 80.0})
+                self.assertEqual(sec_res.status_code, 200)
+                self.assertEqual(len(sec_res.json()["items"]), 1)
+
+                sec_high_res = client.get("/api/v1/repositories", params={"q": unique_org, "security_min": 90.0})
+                self.assertEqual(sec_high_res.status_code, 200)
+                self.assertEqual(len(sec_high_res.json()["items"]), 0)
+
+                detail_res = client.get(f"/api/v1/repositories/{repo.id}")
+                self.assertEqual(detail_res.status_code, 200)
+                self.assertEqual(detail_res.json()["health_score"], 72.0)
+        finally:
+            with self.sessions.begin() as db:
+                db.execute(update(Repository).where(Repository.id.in_(created_repo_ids)).values(latest_analysis_id=None))
+                db.execute(delete(AnalysisRun).where(AnalysisRun.repository_id.in_(created_repo_ids)))
+                db.execute(delete(Repository).where(Repository.id.in_(created_repo_ids)))
+
+    def test_catalog_filters_comprehensive_contract(self):
+        created_repo_ids = []
+        unique_org = f"filter-org-{uuid4().hex[:8]}"
+        now = datetime.now(UTC)
+        try:
+            with self.sessions.begin() as db:
+                r1 = Repository(
+                    sourcecraft_id=f"sc-f-1-{uuid4().hex[:8]}",
+                    organization_slug=unique_org,
+                    repository_slug="python-web-service",
+                    canonical_url=f"https://sourcecraft.dev/{unique_org}/python-web-service",
+                    visibility="public",
+                    health_score=85.0,
+                    language="Python",
+                    topics=["web"],
+                    origin="native",
+                    likes=50,
+                    last_activity_at=now - timedelta(days=2),
+                )
+                r2 = Repository(
+                    sourcecraft_id=f"sc-f-2-{uuid4().hex[:8]}",
+                    organization_slug=unique_org,
+                    repository_slug="typescript-tools-cli",
+                    canonical_url=f"https://sourcecraft.dev/{unique_org}/typescript-tools-cli",
+                    visibility="public",
+                    health_score=65.0,
+                    language="TypeScript",
+                    topics=["tools"],
+                    origin="fork",
+                    likes=120,
+                    last_activity_at=now - timedelta(days=10),
+                )
+                r3 = Repository(
+                    sourcecraft_id=f"sc-f-3-{uuid4().hex[:8]}",
+                    organization_slug=unique_org,
+                    repository_slug="go-k8s-operator",
+                    canonical_url=f"https://sourcecraft.dev/{unique_org}/go-k8s-operator",
+                    visibility="public",
+                    health_score=95.0,
+                    language="Go",
+                    topics=["devops"],
+                    origin="migrated",
+                    likes=10,
+                    last_activity_at=now - timedelta(days=40),
+                )
+                r4 = Repository(
+                    sourcecraft_id=f"sc-f-4-{uuid4().hex[:8]}",
+                    organization_slug=unique_org,
+                    repository_slug="internal-secret-service",
+                    canonical_url=f"https://sourcecraft.dev/{unique_org}/internal-secret-service",
+                    visibility="private",
+                    health_score=99.0,
+                    language="Python",
+                    topics=["web"],
+                    origin="native",
+                    likes=999,
+                    last_activity_at=now,
+                )
+                db.add_all([r1, r2, r3, r4])
+                db.flush()
+                created_repo_ids.extend([r1.id, r2.id, r3.id, r4.id])
+
+            app = create_app(self.settings, sessions=self.sessions, redis=self.redis)
+            with TestClient(app, base_url="https://testserver") as client:
+                base_res = client.get("/api/v1/repositories", params={"q": unique_org})
+                self.assertEqual(base_res.status_code, 200)
+                self.assertEqual(base_res.json()["total"], 3)
+                slugs = {item["repository_slug"] for item in base_res.json()["items"]}
+                self.assertNotIn("internal-secret-service", slugs)
+
+                search_res = client.get("/api/v1/repositories", params={"q": "PYTHON-WEB"})
+                self.assertEqual(search_res.status_code, 200)
+                self.assertTrue(any(i["repository_slug"] == "python-web-service" for i in search_res.json()["items"]))
+
+                url_res = client.get("/api/v1/repositories", params={"q": f"https://sourcecraft.dev/{unique_org}/go-k8s-operator"})
+                self.assertEqual(url_res.status_code, 200)
+                self.assertEqual(len(url_res.json()["items"]), 1)
+                self.assertEqual(url_res.json()["items"][0]["repository_slug"], "go-k8s-operator")
+
+                topic_res = client.get("/api/v1/repositories", params={"q": unique_org, "topic": "devops"})
+                self.assertEqual(topic_res.status_code, 200)
+                self.assertEqual(len(topic_res.json()["items"]), 1)
+                self.assertEqual(topic_res.json()["items"][0]["repository_slug"], "go-k8s-operator")
+
+                origin_res = client.get("/api/v1/repositories", params={"q": unique_org, "origin": "fork"})
+                self.assertEqual(origin_res.status_code, 200)
+                self.assertEqual(len(origin_res.json()["items"]), 1)
+                self.assertEqual(origin_res.json()["items"][0]["repository_slug"], "typescript-tools-cli")
+
+                range_res = client.get("/api/v1/repositories", params={"q": unique_org, "health_min": 70.0, "health_max": 90.0})
+                self.assertEqual(range_res.status_code, 200)
+                self.assertEqual(len(range_res.json()["items"]), 1)
+                self.assertEqual(range_res.json()["items"][0]["repository_slug"], "python-web-service")
+
+                act_res = client.get("/api/v1/repositories", params={"q": unique_org, "activity_days": 7})
+                self.assertEqual(act_res.status_code, 200)
+                self.assertEqual(len(act_res.json()["items"]), 1)
+                self.assertEqual(act_res.json()["items"][0]["repository_slug"], "python-web-service")
+
+                sort_desc = client.get("/api/v1/repositories", params={"q": unique_org, "sort": "health_score", "order": "desc"})
+                self.assertEqual([i["health_score"] for i in sort_desc.json()["items"]], [95.0, 85.0, 65.0])
+
+                sort_asc = client.get("/api/v1/repositories", params={"q": unique_org, "sort": "health_score", "order": "asc"})
+                self.assertEqual([i["health_score"] for i in sort_asc.json()["items"]], [65.0, 85.0, 95.0])
+
+                p1 = client.get("/api/v1/repositories", params={"q": unique_org, "limit": 2, "offset": 0})
+                self.assertEqual(len(p1.json()["items"]), 2)
+                self.assertTrue(p1.json()["has_more"])
+
+                p2 = client.get("/api/v1/repositories", params={"q": unique_org, "limit": 2, "offset": 2})
+                self.assertEqual(len(p2.json()["items"]), 1)
+                self.assertFalse(p2.json()["has_more"])
+        finally:
+            with self.sessions.begin() as db:
+                db.execute(update(Repository).where(Repository.id.in_(created_repo_ids)).values(latest_analysis_id=None))
+                db.execute(delete(AnalysisRun).where(AnalysisRun.repository_id.in_(created_repo_ids)))
+                db.execute(delete(Repository).where(Repository.id.in_(created_repo_ids)))
+
+    def test_catalog_correction_pass_regressions(self):
+        created_repo_ids = []
+        unique_prefix = f"reg-{uuid4().hex[:8]}"
+        now = datetime.now(UTC)
+        try:
+            with self.sessions.begin() as db:
+                # 1. Exact match repo with low health
+                r_exact = Repository(
+                    sourcecraft_id=f"sc-ex-{uuid4().hex[:8]}",
+                    organization_slug=f"{unique_prefix}-org",
+                    repository_slug="custodes",
+                    canonical_url=f"https://sourcecraft.dev/{unique_prefix}-org/custodes",
+                    visibility="public",
+                    health_score=20.0,
+                    language="Python",
+                    topics=["security"],
+                    origin="native",
+                    likes=5,
+                    last_activity_at=now,
+                )
+                # 2. Substring match repo with high health
+                r_sub = Repository(
+                    sourcecraft_id=f"sc-sub-{uuid4().hex[:8]}",
+                    organization_slug=f"{unique_prefix}-other",
+                    repository_slug="prefix-custodes-suffix",
+                    canonical_url=f"https://sourcecraft.dev/{unique_prefix}-other/prefix-custodes-suffix",
+                    visibility="public",
+                    health_score=100.0,
+                    language="Python",
+                    topics=["security"],
+                    origin="native",
+                    likes=50,
+                    last_activity_at=now,
+                )
+                # 3. Repo with 50% coverage (doc: 80 [15%], act: 50 [15%], code_health: 100 [20%])
+                r_cov_50 = Repository(
+                    sourcecraft_id=f"sc-cov50-{uuid4().hex[:8]}",
+                    organization_slug=f"{unique_prefix}-org",
+                    repository_slug="cov-fifty",
+                    canonical_url=f"https://sourcecraft.dev/{unique_prefix}-org/cov-fifty",
+                    visibility="public",
+                    health_score=75.0,
+                    language="Go",
+                    topics=["tools"],
+                    origin="native",
+                    likes=10,
+                    last_activity_at=now,
+                )
+                # 4. Repo with cicd numeric score 0 and availability not_configured (15% coverage)
+                r_cicd_zero = Repository(
+                    sourcecraft_id=f"sc-cicd0-{uuid4().hex[:8]}",
+                    organization_slug=f"{unique_prefix}-org",
+                    repository_slug="cicd-zero",
+                    canonical_url=f"https://sourcecraft.dev/{unique_prefix}-org/cicd-zero",
+                    visibility="public",
+                    health_score=30.0,
+                    language="TypeScript",
+                    topics=["web"],
+                    origin="fork",
+                    likes=1,
+                    last_activity_at=now,
+                )
+                # 5. Repo with terminal NO_DATA (mvp-v1 completed, health_score None)
+                r_nodata = Repository(
+                    sourcecraft_id=f"sc-nodata-{uuid4().hex[:8]}",
+                    organization_slug=f"{unique_prefix}-org",
+                    repository_slug="terminal-nodata",
+                    canonical_url=f"https://sourcecraft.dev/{unique_prefix}-org/terminal-nodata",
+                    visibility="public",
+                    health_score=None,
+                    language="Rust",
+                    topics=["other"],
+                    origin="unknown",
+                    likes=0,
+                    last_activity_at=now,
+                )
+                db.add_all([r_exact, r_sub, r_cov_50, r_cicd_zero, r_nodata])
+                db.flush()
+                created_repo_ids.extend([r_exact.id, r_sub.id, r_cov_50.id, r_cicd_zero.id, r_nodata.id])
+
+                # Analysis runs
+                run_cov_50 = AnalysisRun(
+                    repository_id=r_cov_50.id,
+                    trigger="manual",
+                    fingerprint=f"fp-{uuid4().hex[:8]}",
+                    scoring_policy_version="mvp-score-v1.2",
+                    profile="mvp-v1",
+                    status="completed",
+                    health_score=75.0,
+                    category_scores={
+                        "documentation": {"score": 80.0, "availability": "available"},
+                        "activity": {"score": 50.0, "availability": "available"},
+                        "code_health": {"score": 100.0, "availability": "available"},
+                        "security": {"score": None, "availability": "no_data"},
+                        "cicd": {"score": None, "availability": "no_data"},
+                        "issues": {"score": None, "availability": "no_data"},
+                    },
+                    data_coverage={
+                        "documentation": "available",
+                        "activity": "available",
+                        "code_health": "available",
+                        "security": "no_data",
+                        "cicd": "no_data",
+                        "issues": "no_data",
+                    },
+                    queued_at=now - timedelta(minutes=5),
+                    completed_at=now - timedelta(minutes=4),
+                )
+                run_cicd_zero = AnalysisRun(
+                    repository_id=r_cicd_zero.id,
+                    trigger="manual",
+                    fingerprint=f"fp-{uuid4().hex[:8]}",
+                    scoring_policy_version="mvp-score-v1.2",
+                    profile="mvp-v1",
+                    status="completed",
+                    health_score=30.0,
+                    category_scores={
+                        "cicd": {"score": 0, "availability": "not_configured"},
+                        "documentation": {"score": None, "availability": "no_data"},
+                        "activity": {"score": None, "availability": "no_data"},
+                        "code_health": {"score": None, "availability": "no_data"},
+                        "security": {"score": None, "availability": "no_data"},
+                        "issues": {"score": None, "availability": "no_data"},
+                    },
+                    data_coverage={
+                        "cicd": "not_configured",
+                        "documentation": "no_data",
+                    },
+                    queued_at=now - timedelta(minutes=5),
+                    completed_at=now - timedelta(minutes=4),
+                )
+                run_nodata = AnalysisRun(
+                    repository_id=r_nodata.id,
+                    trigger="manual",
+                    fingerprint=f"fp-{uuid4().hex[:8]}",
+                    scoring_policy_version="mvp-score-v1.2",
+                    profile="mvp-v1",
+                    status="completed",
+                    health_score=None,
+                    category_scores={
+                        "documentation": {"score": None, "availability": "no_data"},
+                        "activity": {"score": None, "availability": "no_data"},
+                        "code_health": {"score": None, "availability": "no_data"},
+                        "security": {"score": None, "availability": "no_data"},
+                        "cicd": {"score": None, "availability": "no_data"},
+                        "issues": {"score": None, "availability": "no_data"},
+                    },
+                    data_coverage={"documentation": "no_data"},
+                    queued_at=now - timedelta(minutes=5),
+                    completed_at=now - timedelta(minutes=4),
+                )
+                db.add_all([run_cov_50, run_cicd_zero, run_nodata])
+                db.flush()
+                r_cov_50.latest_analysis_id = run_cov_50.id
+                r_cicd_zero.latest_analysis_id = run_cicd_zero.id
+                r_nodata.latest_analysis_id = run_nodata.id
+
+            app = create_app(self.settings, sessions=self.sessions, redis=self.redis)
+            with TestClient(app, base_url="https://testserver") as client:
+                # 1. Relevance default ranking: exact slug outranks substring even with much lower health
+                rel_res = client.get("/api/v1/repositories", params={"q": "custodes"})
+                self.assertEqual(rel_res.status_code, 200)
+                rel_items = [i for i in rel_res.json()["items"] if i["id"] in {str(r_exact.id), str(r_sub.id)}]
+                self.assertEqual(len(rel_items), 2)
+                self.assertEqual(rel_items[0]["id"], str(r_exact.id), "Exact slug must rank above substring result when sort is omitted")
+                self.assertEqual(rel_items[1]["id"], str(r_sub.id))
+                self.assertEqual(rel_res.json()["applied_sort"], "relevance")
+
+                # 2. Explicit sort overrides relevance: health_score desc puts health 100 above health 20
+                explicit_sort_res = client.get(
+                    "/api/v1/repositories",
+                    params={"q": "custodes", "sort": "health_score", "order": "desc"},
+                )
+                self.assertEqual(explicit_sort_res.status_code, 200)
+                exp_items = [i for i in explicit_sort_res.json()["items"] if i["id"] in {str(r_exact.id), str(r_sub.id)}]
+                self.assertEqual(len(exp_items), 2)
+                self.assertEqual(exp_items[0]["id"], str(r_sub.id), "Explicit sort=health_score desc must rank high health above low health")
+                self.assertEqual(exp_items[1]["id"], str(r_exact.id))
+                self.assertEqual(explicit_sort_res.json()["applied_sort"], "health_score")
+
+                # 3. Coverage calculations and filter
+                cov_dto_res = client.get(f"/api/v1/repositories/{r_cov_50.id}")
+                self.assertEqual(cov_dto_res.status_code, 200)
+                self.assertEqual(cov_dto_res.json()["data_coverage_percent"], 50)
+
+                cicd_dto_res = client.get(f"/api/v1/repositories/{r_cicd_zero.id}")
+                self.assertEqual(cicd_dto_res.status_code, 200)
+                self.assertEqual(cicd_dto_res.json()["data_coverage_percent"], 15)
+
+                cov_filter_res = client.get("/api/v1/repositories", params={"q": unique_prefix, "coverage_min": 30})
+                self.assertEqual(cov_filter_res.status_code, 200)
+                cov_filter_ids = [i["id"] for i in cov_filter_res.json()["items"]]
+                self.assertIn(str(r_cov_50.id), cov_filter_ids)
+                self.assertNotIn(str(r_cicd_zero.id), cov_filter_ids)
+
+                # 4. Coverage sort
+                sort_cov_desc = client.get(
+                    "/api/v1/repositories",
+                    params={"q": unique_prefix, "sort": "coverage", "order": "desc"},
+                )
+                self.assertEqual(sort_cov_desc.status_code, 200)
+                cov_ids_desc = [i["id"] for i in sort_cov_desc.json()["items"] if i["id"] in {str(r_cov_50.id), str(r_cicd_zero.id)}]
+                self.assertEqual(cov_ids_desc, [str(r_cov_50.id), str(r_cicd_zero.id)])
+
+                sort_cov_asc = client.get(
+                    "/api/v1/repositories",
+                    params={"q": unique_prefix, "sort": "coverage", "order": "asc"},
+                )
+                self.assertEqual(sort_cov_asc.status_code, 200)
+                cov_ids_asc = [i["id"] for i in sort_cov_asc.json()["items"] if i["id"] in {str(r_cov_50.id), str(r_cicd_zero.id)}]
+                self.assertEqual(cov_ids_asc, [str(r_cicd_zero.id), str(r_cov_50.id)])
+
+                # 5. Category numeric zero + not_configured is "Есть оценка" (available)
+                cicd_avail_res = client.get(
+                    "/api/v1/repositories",
+                    params={"q": unique_prefix, "cicd_status": "available"},
+                )
+                self.assertEqual(cicd_avail_res.status_code, 200)
+                cicd_avail_ids = [i["id"] for i in cicd_avail_res.json()["items"]]
+                self.assertIn(str(r_cicd_zero.id), cicd_avail_ids)
+
+                cicd_nodata_res = client.get(
+                    "/api/v1/repositories",
+                    params={"q": unique_prefix, "cicd_status": "no_data"},
+                )
+                self.assertEqual(cicd_nodata_res.status_code, 200)
+                cicd_nodata_ids = [i["id"] for i in cicd_nodata_res.json()["items"]]
+                self.assertNotIn(str(r_cicd_zero.id), cicd_nodata_ids)
+
+                # 6. Category min/max filters
+                doc_range_res = client.get(
+                    "/api/v1/repositories",
+                    params={"q": unique_prefix, "documentation_min": 70.0, "documentation_max": 90.0},
+                )
+                self.assertEqual(doc_range_res.status_code, 200)
+                doc_range_ids = [i["id"] for i in doc_range_res.json()["items"]]
+                self.assertIn(str(r_cov_50.id), doc_range_ids)
+
+                doc_high_res = client.get(
+                    "/api/v1/repositories",
+                    params={"q": unique_prefix, "documentation_min": 90.0},
+                )
+                self.assertEqual(doc_high_res.status_code, 200)
+                doc_high_ids = [i["id"] for i in doc_high_res.json()["items"]]
+                self.assertNotIn(str(r_cov_50.id), doc_high_ids)
+
+                # 7. Terminal NO_DATA is not falsely called "forming"
+                stats_res = client.get("/api/v1/catalog/stats", params={"q": unique_prefix})
+                self.assertEqual(stats_res.status_code, 200)
+                st = stats_res.json()
+                self.assertEqual(st["health_forming_count"], 0, "Terminal NO_DATA must not be counted in health_forming_count")
+                self.assertGreaterEqual(st["health_no_data_count"], 1)
+
+                nodata_filter_res = client.get(
+                    "/api/v1/repositories",
+                    params={"q": unique_prefix, "health_status": "no_data"},
+                )
+                self.assertEqual(nodata_filter_res.status_code, 200)
+                nodata_filter_ids = [i["id"] for i in nodata_filter_res.json()["items"]]
+                self.assertIn(str(r_nodata.id), nodata_filter_ids)
+
+                avail_filter_res = client.get(
+                    "/api/v1/repositories",
+                    params={"q": unique_prefix, "health_status": "available"},
+                )
+                self.assertEqual(avail_filter_res.status_code, 200)
+                avail_filter_ids = [i["id"] for i in avail_filter_res.json()["items"]]
+                self.assertNotIn(str(r_nodata.id), avail_filter_ids)
+        finally:
+            with self.sessions.begin() as db:
+                db.execute(update(Repository).where(Repository.id.in_(created_repo_ids)).values(latest_analysis_id=None))
+                db.execute(delete(AnalysisRun).where(AnalysisRun.repository_id.in_(created_repo_ids)))
+                db.execute(delete(Repository).where(Repository.id.in_(created_repo_ids)))
