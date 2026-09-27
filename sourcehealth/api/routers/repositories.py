@@ -32,6 +32,10 @@ def _repository_dto(repository: Repository, run: AnalysisRun | None, *, details:
     schema = RepositoryDetails if details else RepositorySummary
     preview = score_preview(run.scoring_policy_version, run.category_scores) if run is not None else None
 
+    effective_health = repository.health_score
+    if run is not None and run.profile == "mvp-v1" and run.health_score is not None:
+        effective_health = run.health_score
+
     cat_scores = {}
     coverage_pct = None
     if run is not None and isinstance(run.category_scores, dict):
@@ -54,8 +58,9 @@ def _repository_dto(repository: Repository, run: AnalysisRun | None, *, details:
 
     return schema(
         **schema.model_validate(repository).model_dump(
-            exclude={"score_preview", "category_scores", "data_coverage_percent", "health_rank"}
+            exclude={"score_preview", "category_scores", "data_coverage_percent", "health_rank", "health_score"}
         ),
+        health_score=effective_health,
         score_preview=preview,
         category_scores=cat_scores,
         data_coverage_percent=coverage_pct,
@@ -157,8 +162,13 @@ def repositories(
         rows, total = get_catalog_repositories(db, filters)
         items = []
         for idx, (repo_row, run_row) in enumerate(rows):
+            effective_health = (
+                run_row.health_score
+                if (run_row is not None and run_row.profile == "mvp-v1" and run_row.health_score is not None)
+                else repo_row.health_score
+            )
             rank = None
-            if sort == "health_score" and order == "desc" and repo_row.health_score is not None:
+            if sort == "health_score" and order == "desc" and effective_health is not None:
                 rank = offset + idx + 1
             items.append(_repository_dto(repo_row, run_row, rank=rank))
 

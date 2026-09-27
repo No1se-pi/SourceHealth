@@ -76,6 +76,7 @@ jobs:
       - run: python -m alembic upgrade head
       - run: python -m alembic check
       - run: python -m unittest tests.test_integration -v
+      - run: python -m scripts.catalog_30k_benchmark
       - run: docker compose config --quiet
 
   frontend-contract:

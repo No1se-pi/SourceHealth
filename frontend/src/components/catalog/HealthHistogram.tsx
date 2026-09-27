@@ -91,6 +91,8 @@ export const HealthHistogram: React.FC<HealthHistogramProps> = ({
           return (
             <div
               key={b.range_label}
+              className="sh-histogram-bar"
+              data-testid={`histogram-bucket-${idx}`}
               onClick={() => onSelectBucket(b.min_score, b.max_score, false)}
               style={{
                 flex: 1,
@@ -141,6 +143,8 @@ export const HealthHistogram: React.FC<HealthHistogramProps> = ({
         />
 
         <div
+          className="sh-histogram-bar-nodata"
+          data-testid="histogram-bucket-nodata"
           onClick={() => onSelectBucket(undefined, undefined, true)}
           style={{
             width: '36px',

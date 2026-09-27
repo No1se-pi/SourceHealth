@@ -183,8 +183,9 @@ class AnalysisService:
                 run.data_coverage = {name: category["availability"] for name, category in report.category_scores.items()}
                 run.head_sha = report.repository.get("head_sha")
             repo = db.get(Repository, run.repository_id, with_for_update=True)
-            repo.latest_analysis_id, repo.health_score = run.id, run.health_score
+            repo.latest_analysis_id = run.id
             if run.profile == "mvp-v1":
+                repo.health_score = run.health_score
                 repo.head_sha = run.head_sha
                 # The first request may not know HEAD yet. Cache the completed
                 # observation under its actual snapshot, as subsequent requests do.
