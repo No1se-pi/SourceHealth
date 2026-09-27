@@ -65,7 +65,15 @@ class CatalogSync:
                 for row in rows:
                     if isinstance(row, dict) and row.get("visibility") in {"private", "internal"}:
                         continue
-                    safe.append(self._safe(row))
+                    try:
+                        safe.append(self._safe(row))
+                    except SourceCraftError as exc:
+                        # A malformed public catalog row must not pin the shared page token forever.
+                        # Log only the stable validation code; the upstream DTO may contain private data.
+                        LOG.warning("catalog_repository_skipped", extra={
+                            "component": "catalog", "event": "catalog_repository_skipped",
+                            "sourcecraft_error_code": exc.code,
+                        })
                 next_token = payload.get("next_page_token")
                 if next_token not in (None, "") and (not isinstance(next_token, str)
                                                        or len(next_token) > 1024 or next_token in seen_tokens):
