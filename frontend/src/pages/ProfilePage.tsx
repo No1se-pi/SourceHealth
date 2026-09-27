@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type ConnectedRepositories, type Profile, type ApiError } from '../api/client';
 import { Card } from '../components/common/Card';
@@ -38,7 +38,10 @@ export const ProfilePage: React.FC = () => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [available, setAvailable] = useState<ConnectedRepositories | null>(null);
+  const [availableLoading, setAvailableLoading] = useState(false);
+  const [availableError, setAvailableError] = useState<unknown | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<unknown | null>(null);
   const [trackingRepoId, setTrackingRepoId] = useState<string | null>(null);
 
   const load = () =>
@@ -53,18 +56,31 @@ export const ProfilePage: React.FC = () => {
     void load();
   }, []);
 
+  const loadAvailable = useCallback(async () => {
+    setAvailableLoading(true);
+    setAvailableError(null);
+    try {
+      setAvailable(await api.mySourcecraftRepositories());
+    } catch (reason) {
+      setAvailableError(reason);
+    } finally {
+      setAvailableLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (profile?.sourcecraft.connected) {
-      void api
-        .mySourcecraftRepositories()
-        .then(setAvailable)
-        .catch(() => setAvailable(null));
+      void loadAvailable();
+    } else {
+      setAvailable(null);
+      setAvailableError(null);
     }
-  }, [profile?.sourcecraft.connected]);
+  }, [loadAvailable, profile?.sourcecraft.connected]);
 
   const loadMore = async () => {
     if (!available?.next_page_token) return;
     setLoadingMore(true);
+    setLoadMoreError(null);
     try {
       const page = await api.mySourcecraftRepositories(available.next_page_token);
       const seen = new Set<string>();
@@ -75,6 +91,8 @@ export const ProfilePage: React.FC = () => {
         return true;
       });
       setAvailable({ ...page, items });
+    } catch (reason) {
+      setLoadMoreError(reason);
     } finally {
       setLoadingMore(false);
     }
@@ -447,9 +465,15 @@ export const ProfilePage: React.FC = () => {
           title="Мои репозитории SourceCraft"
           subtitle="Репозитории, доступные вашему подключённому SourceCraft PAT"
         >
-          {!available ? (
+          {availableLoading ? (
             <LoadingState message="Загрузка доступных репозиториев…" />
-          ) : available.items.length === 0 ? (
+          ) : availableError ? (
+            <ErrorState
+              error={availableError}
+              title="Не удалось загрузить репозитории SourceCraft"
+              onRetry={() => void loadAvailable()}
+            />
+          ) : !available || available.items.length === 0 ? (
             <EmptyState description="Доступные репозитории не найдены." />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-3)' }}>
@@ -530,6 +554,13 @@ export const ProfilePage: React.FC = () => {
                     {loadingMore ? 'Загрузка…' : 'Показать ещё'}
                   </Button>
                 </div>
+              )}
+              {loadMoreError !== null && (
+                <ErrorState
+                  error={loadMoreError}
+                  title="Не удалось загрузить следующую страницу SourceCraft"
+                  onRetry={() => void loadMore()}
+                />
               )}
             </div>
           )}
