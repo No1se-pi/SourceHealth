@@ -39,11 +39,33 @@ def runtime_payload():
     debt = AnalyzerResult("technical_debt", category="code_health", source="git_snapshot", metadata=metadata,
                           metrics={"code_files": 10, "todo_count": 0, "fixme_count": 0, "files_with_debt": 0,
                                    "marker_density": 0, "large_files": 0, "oldest_marker_age_days": None, "age_complete": True})
+    insights_metadata = {**metadata, "deep_git_available": True, "snapshot_available": True}
+    insights = AnalyzerResult("repository_insights", category=None, source="git_snapshot", metadata=insights_metadata,
+                              metrics={"sampled_commits": 20, "history_complete": True,
+                                       "contributors_count": 3, "top_contributor_share": 0.4,
+                                       "top_2_contributors_share": 0.7, "top_3_contributors_share": 1.0,
+                                       "contributor_distribution": [
+                                           {"alias": "Contributor 1", "commits": 8, "share": 0.4},
+                                           {"alias": "Contributor 2", "commits": 6, "share": 0.3},
+                                           {"alias": "Contributor 3", "commits": 6, "share": 0.3}],
+                                       "bus_factor_proxy": 2, "bus_factor_threshold": 0.5,
+                                       "bus_factor_basis": "commit_concentration", "bus_factor_sample_commits": 20,
+                                       "bus_factor_complete": True, "bus_factor_reason": None,
+                                       "ownership_groups": [], "ownership_complete": True,
+                                       "ownership_sample_commits": 20, "path_touches_observed": 20,
+                                       "deep_analytics_ms": 1, "dependency_manifest_count": 1,
+                                       "dependency_lockfile_count": 1, "ecosystems_detected": ["python"],
+                                       "lockfile_coverage": 1.0, "dependency_update_automation": True,
+                                       "security_policy_present": True, "branch_policy_present": True,
+                                       "review_policy_present": True, "license_policy_present": True,
+                                       "codeowners_present": True, "contributing_present": True,
+                                       "snapshot_complete": True})
     commits = [Commit(str(i), "", "", NOW, "") for i in range(20)]
     return {"schema_version": "1.0", "complete": True, "checks": {
         "git_activity": {"status": "ok", "metrics": GitActivityAnalyzer().analyze(commits, now=NOW).to_dict()},
         "sast": ScanResult(files_scanned=10, code_files_lexed=10).to_dict(),
         "documentation": docs.to_dict(), "technical_debt": debt.to_dict(),
+        "repository_insights": insights.to_dict(),
     }}
 
 

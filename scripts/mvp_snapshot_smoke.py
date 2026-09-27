@@ -46,12 +46,17 @@ for command in [['init', '-q'], ['add', '.'], ['-c', 'user.name=Fixture', '-c', 
                         "/workspace/repo", "--with-git", "--with-mvp", timeout=120)
         report = json.loads(output)
         assert report["complete"] is True
-        assert set(report["checks"]) == {"sast", "git_activity", "documentation", "technical_debt"}
+        assert set(report["checks"]) == {"sast", "git_activity", "documentation", "technical_debt",
+                                         "repository_insights"}
         assert report["checks"]["documentation"]["metrics"]["run_instructions"] is True
         assert report["checks"]["technical_debt"]["metrics"]["todo_count"] == 1
         assert report["checks"]["technical_debt"]["metrics"]["age_complete"] is True
         assert len(report["checks"]["documentation"]["metadata"]["head_sha"]) == 40
-        print("MVP snapshot smoke passed: real offline container, Git/docs/debt/SAST, HEAD, no target execution.")
+        insights = report["checks"]["repository_insights"]
+        assert insights["metrics"]["sampled_commits"] == 1
+        assert insights["metrics"]["bus_factor_proxy"] is None
+        assert "fixture@example.invalid" not in output and "Fixture" not in json.dumps(insights)
+        print("MVP snapshot smoke passed: offline Git/docs/debt/SAST/insights, HEAD, no target execution.")
     finally:
         for suffix in ("-scan", "-seed"):
             subprocess.run(["docker", "rm", "--force", name + suffix], capture_output=True, timeout=30)

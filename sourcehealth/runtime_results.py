@@ -12,7 +12,8 @@ from sourcehealth.git.activity import GitActivityMetrics
 
 CLASSIFICATION = {"git_activity": ("activity", "git"), "sast": ("code_health", "sourcehealth_local")}
 MVP_CLASSIFICATION = {**CLASSIFICATION, "documentation": ("documentation", "git_snapshot"),
-                      "technical_debt": ("code_health", "git_snapshot")}
+                      "technical_debt": ("code_health", "git_snapshot"),
+                      "repository_insights": (None, "git_snapshot")}
 RUNTIME_ERRORS = frozenset({"docker_unavailable", "container_timeout", "docker_command_failed",
                             "invalid_or_missing_report", "invalid_report", "inconsistent_report"})
 SAST_COUNTERS = ("files_scanned", "bytes_read", "entries_seen", "python_files_parsed",
@@ -159,6 +160,117 @@ def snapshot_result(name, raw):
                                     "scope": "tracked_default_branch_excluding_generated"})
 
 
+def insights_result(raw):
+    """Allow only aggregate aliases, ratios and known hygiene facts across Docker."""
+    if raw.get("availability") == "no_data":
+        return unavailable("repository_insights", "insights_unavailable")
+    metadata, metrics = raw["metadata"], raw["metrics"]
+    sha, complete = metadata.get("head_sha"), metadata.get("complete")
+    deep_available, snapshot_available = metadata.get("deep_git_available"), metadata.get("snapshot_available")
+    if ((sha is not None and (not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", sha)))
+            or type(complete) is not bool or type(deep_available) is not bool
+            or type(snapshot_available) is not bool or not (deep_available or snapshot_available)
+            or complete and not (deep_available and snapshot_available)
+            or raw.get("status") != ("ok" if complete else "partial")):
+        raise ValueError("invalid insights coverage")
+    safe = {}
+    for key in ("sampled_commits", "contributors_count", "bus_factor_sample_commits",
+                "ownership_sample_commits", "path_touches_observed", "dependency_manifest_count",
+                "dependency_lockfile_count", "deep_analytics_ms"):
+        value = metrics.get(key)
+        safe[key] = number(value, integer=True) if value is not None else None
+    for key in ("history_complete", "bus_factor_complete", "ownership_complete", "snapshot_complete"):
+        if metrics.get(key) is not None and type(metrics.get(key)) is not bool:
+            raise ValueError("invalid insights completeness")
+        safe[key] = metrics.get(key)
+    for key in ("security_policy_present", "branch_policy_present", "review_policy_present",
+                "license_policy_present", "dependency_update_automation", "codeowners_present",
+                "contributing_present"):
+        if metrics.get(key) is not None and type(metrics[key]) is not bool:
+            raise ValueError("invalid hygiene flag")
+        safe[key] = metrics.get(key)
+    for key in ("top_contributor_share", "top_2_contributors_share", "top_3_contributors_share",
+                "lockfile_coverage"):
+        value = metrics.get(key)
+        if value is not None and (type(value) not in (int, float) or not 0 <= value <= 1):
+            raise ValueError("invalid insights ratio")
+        safe[key] = number(value) if value is not None else None
+    bus_factor = metrics.get("bus_factor_proxy")
+    safe["bus_factor_proxy"] = number(bus_factor, integer=True) if bus_factor is not None else None
+    threshold, basis = metrics.get("bus_factor_threshold"), metrics.get("bus_factor_basis")
+    if deep_available and (threshold != 0.5 or basis != "commit_concentration"):
+        raise ValueError("invalid bus factor semantics")
+    reason = metrics.get("bus_factor_reason")
+    if reason not in {None, "insufficient_commit_sample"}:
+        raise ValueError("invalid bus factor reason")
+    safe.update(bus_factor_threshold=threshold, bus_factor_basis=basis, bus_factor_reason=reason)
+    ecosystems = metrics.get("ecosystems_detected")
+    allowed = {"python", "node", "rust", "go", "java", "php", "ruby", "dotnet"}
+    if ecosystems is not None and (not isinstance(ecosystems, list) or len(ecosystems) > len(allowed)
+                                   or any(item not in allowed for item in ecosystems)):
+        raise ValueError("invalid ecosystems")
+    safe["ecosystems_detected"] = sorted(set(ecosystems)) if ecosystems is not None else None
+    distribution = metrics.get("contributor_distribution")
+    if distribution is not None and (not isinstance(distribution, list) or len(distribution) > 11):
+        raise ValueError("invalid contributor distribution")
+    safe["contributor_distribution"] = [] if distribution is not None else None
+    for index, item in enumerate(distribution or []):
+        expected = "Other" if index == 10 else f"Contributor {index + 1}"
+        if item.get("alias") != expected:
+            raise ValueError("invalid contributor alias")
+        share = item.get("share")
+        if type(share) not in (int, float) or not 0 <= share <= 1:
+            raise ValueError("invalid contributor share")
+        safe["contributor_distribution"].append({"alias": expected,
+                                                  "commits": number(item.get("commits"), integer=True),
+                                                  "share": number(share)})
+    ownership = metrics.get("ownership_groups")
+    if ownership is not None and (not isinstance(ownership, list) or len(ownership) > 20):
+        raise ValueError("invalid ownership groups")
+    safe["ownership_groups"] = [] if ownership is not None else None
+    for item in ownership or []:
+        alias = item.get("dominant_alias")
+        if alias != "Other" and not re.fullmatch(r"Contributor [1-9][0-9]*", alias or ""):
+            raise ValueError("invalid ownership alias")
+        share = item.get("dominant_share")
+        if type(share) not in (int, float) or not 0 <= share <= 1:
+            raise ValueError("invalid ownership share")
+        safe["ownership_groups"].append({"path_group": relative_path(item["path_group"]),
+                                          "contributors": number(item["contributors"], integer=True),
+                                          "dominant_alias": alias, "dominant_share": number(share),
+                                          "observed_touches": number(item["observed_touches"], integer=True)})
+    deep_fields = {"sampled_commits", "history_complete", "contributors_count", "top_contributor_share",
+                   "top_2_contributors_share", "top_3_contributors_share", "contributor_distribution",
+                   "bus_factor_proxy", "bus_factor_threshold", "bus_factor_basis", "bus_factor_sample_commits",
+                   "bus_factor_complete", "bus_factor_reason", "ownership_groups", "ownership_complete",
+                   "ownership_sample_commits", "path_touches_observed", "deep_analytics_ms"}
+    snapshot_fields = {"dependency_manifest_count", "dependency_lockfile_count", "ecosystems_detected",
+                       "lockfile_coverage", "dependency_update_automation", "security_policy_present",
+                       "branch_policy_present", "review_policy_present", "license_policy_present",
+                       "codeowners_present", "contributing_present", "snapshot_complete"}
+    if ((deep_available and any(metrics.get(key) is None for key in (
+            "sampled_commits", "history_complete", "contributors_count", "contributor_distribution",
+            "bus_factor_sample_commits", "bus_factor_complete", "ownership_groups", "ownership_complete",
+            "ownership_sample_commits", "path_touches_observed", "deep_analytics_ms")))
+            or (not deep_available and any(metrics.get(key) is not None for key in deep_fields))
+            or (snapshot_available and any(metrics.get(key) is None for key in (
+                "dependency_manifest_count", "dependency_lockfile_count", "ecosystems_detected",
+                "snapshot_complete")))
+            or (not snapshot_available and any(metrics.get(key) is not None for key in snapshot_fields))):
+        raise ValueError("inconsistent insights source availability")
+    evidence = [Evidence(id="insights:repository", source="git_snapshot", type="repository_insights",
+                         reference=sha or "deep_git_observation", summary=("Полная Git-история и tracked snapshot проанализированы без публикации авторов."
+                                                if complete else "Углублённая аналитика основана на ограниченной выборке; авторы не публикуются."))]
+    return AnalyzerResult("repository_insights", status=raw["status"],
+                          availability=DataAvailability.AVAILABLE if complete else DataAvailability.PARTIAL,
+                          category=None, source="git_snapshot", analyzer_version="1", metrics=safe,
+                          metadata={"head_sha": sha, "complete": complete,
+                                    "deep_git_available": deep_available,
+                                    "snapshot_available": snapshot_available,
+                                    "scope": "tracked_default_branch_excluding_generated" if snapshot_available else None},
+                          evidence=evidence)
+
+
 def normalize_runtime_report(payload: dict, *, with_mvp=False) -> dict[str, AnalyzerResult]:
     """Изолировать невалидные checks; неполный runtime/cleanup не становятся успехом."""
     if (not isinstance(payload, dict) or payload.get("schema_version") != "1.0"
@@ -171,7 +283,8 @@ def normalize_runtime_report(payload: dict, *, with_mvp=False) -> dict[str, Anal
     converters = [("git_activity", git_result), ("sast", sast_result)]
     if with_mvp:
         converters += [("documentation", lambda raw: snapshot_result("documentation", raw)),
-                       ("technical_debt", lambda raw: snapshot_result("technical_debt", raw))]
+                       ("technical_debt", lambda raw: snapshot_result("technical_debt", raw)),
+                       ("repository_insights", insights_result)]
     for name, converter in converters:
         raw = payload["checks"].get(name)
         if raw is None:

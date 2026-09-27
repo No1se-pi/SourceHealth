@@ -59,6 +59,36 @@ class SnapshotTests(unittest.TestCase):
         self.assertFalse(docs.metrics["readme"])
         self.assertFalse(docs.metrics["run_instructions"])
 
+    def test_repository_hygiene_present_absent_and_unknown(self):
+        self.files({"SECURITY.md": "policy", "CONTRIBUTING.md": "workflow",
+                    ".github/CODEOWNERS": "owner", ".sourcecraft/branches.yaml": "rules",
+                    ".sourcecraft/review.yaml": "rules", ".sourcecraft/security/licenses.yaml": "rules",
+                    "pyproject.toml": "[project]\nname='fixture'", "uv.lock": "lock",
+                    ".github/dependabot.yml": "version: 2"})
+        facts = SnapshotCollector().collect(self.root, NOW)
+        hygiene = facts["repository_hygiene"]
+        self.assertTrue(facts["hygiene_complete"])
+        self.assertTrue(all(hygiene[key] for key in (
+            "security_policy_present", "branch_policy_present", "review_policy_present",
+            "license_policy_present", "dependency_update_automation")))
+        self.assertEqual(hygiene["ecosystems_detected"], ["python"])
+        self.assertEqual(hygiene["lockfile_coverage"], 1)
+        self.files({"package.json": "{}"})
+        hygiene = SnapshotCollector().collect(self.root, NOW)["repository_hygiene"]
+        self.assertEqual(hygiene["lockfile_coverage"], 0.5)
+        facts = SnapshotCollector(max_files=0).collect(self.root, NOW)
+        self.assertFalse(facts["hygiene_complete"])
+        self.assertIsNone(facts["repository_hygiene"]["security_policy_present"])
+
+    def test_partial_lockfile_unknown(self):
+        self.files({"package.json": "{}", "yarn.lock": "observed only after manifest"})
+        facts = SnapshotCollector(max_files=1).collect(self.root, NOW)
+        hygiene = facts["repository_hygiene"]
+        self.assertFalse(facts["hygiene_complete"])
+        self.assertEqual(hygiene["dependency_manifest_count"], 1)
+        self.assertEqual(hygiene["dependency_lockfile_count"], 0)
+        self.assertIsNone(hygiene["lockfile_coverage"])
+
     def test_legacy_sourcecraft_ci_path_is_detected_with_provenance(self):
         self.files({"README.md": "# Project", ".src.ci.yaml": "untrusted: true"})
         docs, _ = self.analyze()
@@ -106,7 +136,8 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(set(baseline["checks"]), {"git_activity", "sast"})
         payload = to_legacy_report(analyze_repository(self.root, SASTScanner(), with_mvp=True))
         results = normalize_runtime_report(payload, with_mvp=True)
-        self.assertEqual(set(results), {"git_activity", "sast", "documentation", "technical_debt"})
+        self.assertEqual(set(results), {"git_activity", "sast", "documentation", "technical_debt",
+                                        "repository_insights"})
         self.assertTrue(all(r.status == "ok" for r in results.values()))
         self.assertEqual(results["technical_debt"].metrics["todo_count"], 1)
         self.assertNotIn(str(self.root), str({k: v.to_dict() for k, v in results.items()}))
