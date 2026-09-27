@@ -1,10 +1,10 @@
 [Unit]
 Description=SourceHealth scheduler one-shot
-After=sourcehealth.service
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
 
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/sourcehealth
-EnvironmentFile=/opt/sourcehealth/.env.production
-Environment=REDIS_URL=redis://127.0.0.1:6379/0
-ExecStart=/opt/sourcehealth/.venv/bin/python -m sourcehealth.application enqueue-due
+ExecStart=/usr/bin/docker compose --env-file /etc/sourcehealth/sourcehealth.env -f /opt/sourcehealth/compose.yaml -f /etc/sourcehealth/compose.production.yaml run --rm scheduler
