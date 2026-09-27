@@ -9,7 +9,7 @@ from sourcehealth.core.domain import DataAvailability, RepositoryRef
 
 from .appsec import SourceCraftAppSecClient
 from .client import SourceCraftClient, SourceCraftError
-from .validation import normalize_default_branch
+from .validation import normalize_repository_likes, normalize_repository_metadata
 
 
 @dataclass(frozen=True)
@@ -37,52 +37,25 @@ class RepositoryCollector:
     def collect(self, repository: RepositoryRef) -> CollectedFacts:
         try:
             raw = self.client.repository(repository.organization_slug, repository.repository_slug)
-            if raw.get("visibility") != "public":
-                return CollectedFacts("sourcecraft", DataAvailability.NO_DATA, error="public_repository_required")
-            if not isinstance(raw.get("id"), str) or not isinstance(raw.get("slug"), str):
-                raise SourceCraftError("invalid_response")
-            if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", raw["id"]) or raw["slug"] != repository.repository_slug:
-                raise SourceCraftError("invalid_response")
-            branch = normalize_default_branch(raw.get("default_branch"))
-            if "is_empty" in raw and type(raw["is_empty"]) is not bool:
-                raise SourceCraftError("invalid_response")
-            # Allowlist: description, clone credentials and arbitrary links never reach persistence.
-            facts = {k: raw[k] for k in ("id", "slug", "default_branch", "visibility", "is_empty") if k in raw}
-            if "default_branch" in raw:
-                facts["default_branch"] = branch
-            language = raw.get("language")
-            if isinstance(language, dict) and isinstance(language.get("name"), str):
-                if re.fullmatch(r"[A-Za-z0-9+# ._-]{1,64}", language["name"]):
-                    facts["language"] = language["name"]
-            facts["likes"] = repository_likes(raw.get("rating"))
+            metadata = normalize_repository_metadata(
+                raw, expected_org=repository.organization_slug,
+                expected_slug=repository.repository_slug, require_public=True)
+            facts = {"id": metadata.sourcecraft_id, "slug": metadata.repository_slug,
+                     "visibility": metadata.visibility, "default_branch": metadata.default_branch,
+                     "is_empty": metadata.is_empty, "likes": metadata.likes}
+            if metadata.language is not None:
+                facts["language"] = metadata.language
             return CollectedFacts("sourcecraft", DataAvailability.AVAILABLE, facts)
         except SourceCraftError as error:
-            availability = (DataAvailability.NO_DATA if error.code in {"not_found", "access_denied"}
+            availability = (DataAvailability.NO_DATA if error.code in {
+                "not_found", "access_denied", "public_repository_required"}
                             else DataAvailability.SOURCE_UNAVAILABLE)
             return CollectedFacts("sourcecraft", availability, error=error.code)
 
 
 def repository_likes(rating: Any) -> int | None:
-    """Like — только positive_low; неизвестный/невалидный счётчик не становится нулём.
-
-    API отдаёт sparse uint64 counters. Хранилище использует signed int32:
-    переполнение оставляем неизвестным, не обрезаем и не роняем весь import.
-    """
-    if not isinstance(rating, dict) or not isinstance(rating.get("reaction_counts"), list):
-        return None
-    likes = None
-    for reaction in rating["reaction_counts"]:
-        if not isinstance(reaction, dict):
-            return None
-        if reaction.get("type") != "positive_low":
-            continue
-        value = reaction.get("count")
-        if likes is not None or not isinstance(value, str) or not re.fullmatch(r"[0-9]{1,20}", value):
-            return None
-        likes = int(value)
-        if likes > 2_147_483_647:
-            return None
-    return 0 if likes is None else likes
+    """Backward-compatible entry point for the shared repository rating normalizer."""
+    return normalize_repository_likes(rating)
 
 
 class AppSecCollector:

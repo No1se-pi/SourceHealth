@@ -3,11 +3,12 @@
 import logging
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import func, select, text
 
-from sourcehealth.integrations.sourcecraft.analytics import identifier
 from sourcehealth.integrations.sourcecraft.client import SourceCraftClient, SourceCraftError
-from sourcehealth.storage.models import AnalysisRun, CatalogSyncState, Repository
+from sourcehealth.integrations.sourcecraft.validation import normalize_repository_metadata
+from sourcehealth.storage.models import AnalysisRun, CatalogSyncState
+from sourcehealth.storage.repositories import RepositoryIdentityConflict, upsert_sourcecraft_repository
 
 LOG = logging.getLogger(__name__)
 CATALOG_SYNC_LOCK_KEY = 0x534F555243454843
@@ -90,51 +91,25 @@ class CatalogSync:
 
     @staticmethod
     def _safe(row):
-        if not isinstance(row, dict) or row.get("visibility") != "public":
-            raise SourceCraftError("invalid_response")
-        sourcecraft_id = identifier(row.get("id"))
-        slug = identifier(row.get("slug"))
-        organization = row.get("organization")
-        organization_slug = identifier(organization.get("slug") if isinstance(organization, dict) else None)
-        branch = row.get("default_branch")
-        if branch is not None and (not isinstance(branch, str) or len(branch) > 256):
-            raise SourceCraftError("invalid_response")
-        language = row.get("language")
-        language = language.get("name") if isinstance(language, dict) else None
-        if language is not None and (not isinstance(language, str) or len(language) > 64):
-            language = None
-        values = {"sourcecraft_id": sourcecraft_id, "organization_slug": organization_slug,
-                "repository_slug": slug, "canonical_url": f"https://sourcecraft.dev/{organization_slug}/{slug}",
+        metadata = normalize_repository_metadata(row, require_public=True)
+        values = {"sourcecraft_id": metadata.sourcecraft_id,
+                "organization_slug": metadata.organization_slug,
+                "repository_slug": metadata.repository_slug, "canonical_url": metadata.canonical_url,
                 "visibility": "public", "next_analysis_at": datetime.now(UTC)}
-        if branch is not None:
-            values["default_branch"] = branch
-        if language is not None:
-            values["language"] = language
+        if metadata.default_branch is not None:
+            values["default_branch"] = metadata.default_branch
+        if metadata.language is not None:
+            values["language"] = metadata.language
+        if metadata.likes is not None:
+            values["likes"] = metadata.likes
         return values
 
     @staticmethod
     def _upsert(db, values):
-        row = db.scalar(select(Repository).where(
-            Repository.sourcecraft_id == values["sourcecraft_id"]).with_for_update())
-        collision = db.scalar(select(Repository).where(or_(
-            Repository.canonical_url == values["canonical_url"],
-            (Repository.organization_slug == values["organization_slug"])
-            & (Repository.repository_slug == values["repository_slug"])
-        )).with_for_update())
-        if row is not None and collision is not None and collision.id != row.id:
-            raise SourceCraftError("repository_identity_conflict")
-        if row is None and collision is not None:
-            if collision.sourcecraft_id not in {None, values["sourcecraft_id"]}:
-                raise SourceCraftError("repository_identity_conflict")
-            row = collision
-        if row is None:
-            db.add(Repository(**values))
-            return
-        row.sourcecraft_id = values["sourcecraft_id"]
-        for key in ("organization_slug", "repository_slug", "canonical_url", "visibility",
-                    "default_branch", "language"):
-            if key in values:
-                setattr(row, key, values[key])
+        try:
+            return upsert_sourcecraft_repository(db, values)
+        except RepositoryIdentityConflict:
+            raise SourceCraftError("repository_identity_conflict") from None
 
 
 def queue_backlog(sessions) -> int:

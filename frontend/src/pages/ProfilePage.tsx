@@ -43,6 +43,7 @@ export const ProfilePage: React.FC = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<unknown | null>(null);
   const [trackingRepoId, setTrackingRepoId] = useState<string | null>(null);
+  const [trackingError, setTrackingError] = useState<unknown | null>(null);
 
   const load = () =>
     api
@@ -522,10 +523,13 @@ export const ProfilePage: React.FC = () => {
                           disabled={isTracking}
                           onClick={async () => {
                             setTrackingRepoId(repoKey);
+                            setTrackingError(null);
                             try {
                               const imported = await api.importRepository(repo.url);
                               await api.trackRepository(imported.id);
                               await load();
+                            } catch (reason) {
+                              setTrackingError(reason);
                             } finally {
                               setTrackingRepoId(null);
                             }
@@ -542,6 +546,14 @@ export const ProfilePage: React.FC = () => {
                   </div>
                 );
               })}
+
+              {trackingError !== null && (
+                <ErrorState
+                  error={trackingError}
+                  title="Не удалось добавить репозиторий"
+                  onRetry={() => setTrackingError(null)}
+                />
+              )}
 
               {available.next_page_token && (
                 <div style={{ marginTop: '0.5rem' }}>

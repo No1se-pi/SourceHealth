@@ -12,7 +12,8 @@ class EventFormatter(logging.Formatter):
                   "event": getattr(record, "event", record.msg)}
         # These integration diagnostics are stable allowlisted values. Arbitrary
         # record fields, response bodies and exception text remain excluded.
-        for name in ("request_id", "analysis_id", "repository_id", "endpoint", "sourcecraft_error_code"):
+        for name in ("request_id", "analysis_id", "repository_id", "endpoint", "sourcecraft_error_code",
+                     "availability", "organization_slug", "repository_slug"):
             values[name] = getattr(record, name, None)
         # Не включаем exc_info, args, query string и произвольный record.__dict__.
         return json.dumps(values, ensure_ascii=True, default=str)
