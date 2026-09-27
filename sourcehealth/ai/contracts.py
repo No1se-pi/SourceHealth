@@ -1,6 +1,6 @@
 """Strict Pydantic contracts for AI summary context and outputs."""
 
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -10,7 +10,7 @@ class GroundedFact(BaseModel):
     id: str
     kind: str
     summary: str = Field(..., max_length=500)
-    value: Any = None
+    value: bool | int | float | None = None
     unit: str | None = None
     evidence_refs: list[str] = Field(default_factory=list)
 

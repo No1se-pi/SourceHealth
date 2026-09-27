@@ -50,17 +50,30 @@ def validate_ai_output(context: AISummaryContext, result: AISummaryResult) -> No
         raise AIValidationError(f"Executive summary too long: {len(result.executive_summary)} chars (max 1000)")
 
     # 4. Check evidence refs in statements
+    # Strengths and risks MUST cite at least one valid evidence reference
     for group_name, statements in (
         ("strengths", result.strengths),
         ("risks", result.risks),
-        ("limitations", result.limitations),
     ):
         for stmt in statements:
             if len(stmt.text) > 500:
                 raise AIValidationError(f"{group_name} statement too long: {len(stmt.text)} chars (max 500)")
+            if not stmt.evidence_refs:
+                singular = "Strength" if group_name == "strengths" else "Risk"
+                raise AIValidationError(
+                    f"{singular} '{stmt.text[:50]}...' must contain at least one valid evidence reference"
+                )
             for ref in stmt.evidence_refs:
                 if ref not in valid_evidence_ids:
                     raise AIValidationError(f"Unknown evidence reference '{ref}' in {group_name}")
+
+    # Limitations may remain without refs when describing missing coverage, but any cited refs must be valid
+    for stmt in result.limitations:
+        if len(stmt.text) > 500:
+            raise AIValidationError(f"limitations statement too long: {len(stmt.text)} chars (max 500)")
+        for ref in stmt.evidence_refs:
+            if ref not in valid_evidence_ids:
+                raise AIValidationError(f"Unknown evidence reference '{ref}' in limitations")
 
     # 5. Check actions: must have at least one valid rec_id OR evidence_ref
     for action in result.actions:
@@ -91,7 +104,7 @@ Use ONLY the supplied facts, categories, and recommendations below.
 Do not infer missing facts.
 Do not calculate or modify Health score.
 NO_DATA means unknown.
-Every risk and action MUST cite supplied IDs.
+Every strength, risk, and action MUST cite supplied IDs.
 Output strictly valid JSON matching schema_version 'ai-summary-v1'.
 
 Repository: {context.repository.get('org')}/{context.repository.get('repo')}

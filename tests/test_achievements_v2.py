@@ -9,11 +9,12 @@ from sourcehealth.achievements.service import DEFINITIONS, derive
 
 
 class AchievementsV2Tests(unittest.TestCase):
-    def make_run(self, score=None, categories=None, completed=None, repo_id=None):
+    def make_run(self, score=None, categories=None, completed=None, repo_id=None, profile="mvp-v1"):
         return SimpleNamespace(
             id=uuid4(),
             repository_id=repo_id or uuid4(),
             status="completed",
+            profile=profile,
             queued_at=completed,
             completed_at=completed,
             health_score=score,
@@ -205,6 +206,61 @@ class AchievementsV2Tests(unittest.TestCase):
         self.assertFalse(res["first_checkup"]["unlocked"])
         self.assertFalse(res["perfect_health"]["unlocked"])
         self.assertEqual(res["maintainer"]["progress_current"], 0)
+
+
+    def test_official_health_achievements_require_mvp_v1_profile(self):
+        tracked = datetime(2026, 1, 1, tzinfo=UTC)
+        repo_id = uuid4()
+        relation = SimpleNamespace(created_at=tracked, repository_id=repo_id)
+
+        all_six = {
+            "security": {"score": 85, "availability": "available"},
+            "cicd": {"score": 90, "availability": "available"},
+            "activity": {"score": 75, "availability": "available"},
+            "documentation": {"score": 80, "availability": "available"},
+            "issues": {"score": 70, "availability": "available"},
+            "code_health": {"score": 95, "availability": "available"},
+        }
+
+        # 1. code-v1 Health=100 -> perfect_health locked
+        run_code_v1 = self.make_run(100.0, completed=tracked + timedelta(hours=1), repo_id=repo_id, profile="code-v1")
+        res_code = {item["id"]: item for item in derive([(run_code_v1, relation)])}
+        self.assertFalse(res_code["perfect_health"]["unlocked"])
+
+        # 2. platform-v1 six numeric categories -> full_house locked
+        run_platform_v1 = self.make_run(85.0, all_six, tracked + timedelta(hours=1), repo_id=repo_id, profile="platform-v1")
+        res_plat = {item["id"]: item for item in derive([(run_platform_v1, relation)])}
+        self.assertFalse(res_plat["full_house"]["unlocked"])
+
+        # 3. 5 non-mvp analyzed tracked repos -> portfolio_keeper locked
+        repo_ids = [uuid4() for _ in range(5)]
+        links = [SimpleNamespace(repository_id=rid, created_at=tracked) for rid in repo_ids]
+        non_mvp_runs = [
+            self.make_run(80.0, completed=tracked + timedelta(days=i), repo_id=repo_ids[i], profile="legacy-v0")
+            for i in range(5)
+        ]
+        pairs_non_mvp = list(zip(non_mvp_runs, links))
+        res_non_mvp_pk = {item["id"]: item for item in derive(pairs_non_mvp, tracked_repositories=links)}
+        self.assertFalse(res_non_mvp_pk["portfolio_keeper"]["unlocked"])
+        self.assertEqual(res_non_mvp_pk["portfolio_keeper"]["progress_current"], 0)
+
+        # 4. Equivalent mvp-v1 cases -> unlocked
+        run_mvp_100 = self.make_run(100.0, completed=tracked + timedelta(hours=1), repo_id=repo_id, profile="mvp-v1")
+        res_mvp_100 = {item["id"]: item for item in derive([(run_mvp_100, relation)])}
+        self.assertTrue(res_mvp_100["perfect_health"]["unlocked"])
+
+        run_mvp_full = self.make_run(85.0, all_six, tracked + timedelta(hours=1), repo_id=repo_id, profile="mvp-v1")
+        res_mvp_full = {item["id"]: item for item in derive([(run_mvp_full, relation)])}
+        self.assertTrue(res_mvp_full["full_house"]["unlocked"])
+
+        mvp_runs = [
+            self.make_run(80.0, completed=tracked + timedelta(days=i), repo_id=repo_ids[i], profile="mvp-v1")
+            for i in range(5)
+        ]
+        pairs_mvp = list(zip(mvp_runs, links))
+        res_mvp_pk = {item["id"]: item for item in derive(pairs_mvp, tracked_repositories=links)}
+        self.assertTrue(res_mvp_pk["portfolio_keeper"]["unlocked"])
+        self.assertEqual(res_mvp_pk["portfolio_keeper"]["progress_current"], 5)
 
 
 if __name__ == "__main__":

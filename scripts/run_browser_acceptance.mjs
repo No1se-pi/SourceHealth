@@ -424,6 +424,21 @@ const fixtureAnalysisHistory = [
     scoring_policy_version: 'mvp-score-v1.2',
     analyzer_contract_version: 'v1',
     error_code: null
+  }),
+  makeAnalysisSummary({
+    id: 'b0000002-0000-0000-0000-000000000002',
+    repository_id: 'a0000001-0000-0000-0000-000000000001',
+    status: 'completed',
+    health_score: 55.0,
+    queued_at: '2026-09-13T10:00:00Z',
+    started_at: '2026-09-13T10:00:02Z',
+    completed_at: '2026-09-13T10:01:10Z',
+    head_sha: 'd1d2d3d456789abcdef0123456789abcdef012',
+    profile: 'mvp-v1',
+    trigger: 'scheduled',
+    scoring_policy_version: 'mvp-score-v1.2',
+    analyzer_contract_version: 'v1',
+    error_code: null
   })
 ];
 
@@ -1639,6 +1654,7 @@ for (const task of selectedTasks) {
     } else if (task.action === 'repository-assertions') {
       console.log('  -> Verifying Repository history, share, and integrity DOM...');
       await assertDom(task.name, "document.body.innerText.includes('История анализов')", 'Analysis history card is present');
+      await assertDom(task.name, "document.body.innerText.includes('Изменения по категориям')", 'Category delta section is rendered');
       await assertDom(task.name, "document.body.innerText.includes('Проверка устойчивости рейтинга')", 'Integrity panel is present');
       await assertDom(task.name, "document.body.innerText.includes('Поделиться результатом')", 'Share card is present');
     } else if (task.action === 'developers-assertions') {

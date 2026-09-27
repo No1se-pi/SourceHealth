@@ -216,6 +216,103 @@ class AIContractsTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "ai_provider_disabled"):
             provider.summarize(context)
 
+    def test_validate_ai_output_rejects_ungrounded_risk(self):
+        context = build_ai_context(self.raw_report)
+        invalid_result = AISummaryResult(
+            schema_version="ai-summary-v1",
+            executive_summary="Summary",
+            strengths=[],
+            risks=[
+                GroundedStatement(text="Risk without evidence citations", evidence_refs=[]),
+            ],
+            actions=[],
+            limitations=[],
+        )
+        with self.assertRaisesRegex(AIValidationError, "Risk 'Risk without evidence citations...' must contain at least one valid evidence reference"):
+            validate_ai_output(context, invalid_result)
+
+    def test_validate_ai_output_rejects_ungrounded_strength(self):
+        context = build_ai_context(self.raw_report)
+        invalid_result = AISummaryResult(
+            schema_version="ai-summary-v1",
+            executive_summary="Summary",
+            strengths=[
+                GroundedStatement(text="Strength without citations", evidence_refs=[]),
+            ],
+            risks=[],
+            actions=[],
+            limitations=[],
+        )
+        with self.assertRaisesRegex(AIValidationError, "Strength 'Strength without citations...' must contain at least one valid evidence reference"):
+            validate_ai_output(context, invalid_result)
+
+    def test_validate_ai_output_allows_limitations_without_refs(self):
+        context = build_ai_context(self.raw_report)
+        valid_result = AISummaryResult(
+            schema_version="ai-summary-v1",
+            executive_summary="Summary",
+            strengths=[GroundedStatement(text="Strong docs", evidence_refs=["doc:readme"])],
+            risks=[GroundedStatement(text="Docs need update", evidence_refs=["doc:readme"])],
+            actions=[GroundedAction(text="Update docs", recommendation_ids=["rec-docs-1"])],
+            limitations=[GroundedStatement(text="Coverage missing for SAST", evidence_refs=[])],
+        )
+        validate_ai_output(context, valid_result)
+
+    def test_privacy_safe_evidence_with_secret_string_value_is_stripped(self):
+        report = deepcopy(self.raw_report)
+        report["checks"]["documentation"]["evidence"].append({
+            "id": "doc:safe_id",
+            "kind": "documentation",
+            "summary": "Safe summary description",
+            "value": "VERY_PRIVATE_SECRET",
+        })
+        context = build_ai_context(report)
+        serialized = context.model_dump_json()
+        self.assertNotIn("VERY_PRIVATE_SECRET", serialized)
+        fact = next(f for f in context.facts if f.id == "doc:safe_id")
+        self.assertIsNone(fact.value)
+
+    def test_privacy_metric_with_nested_dict_is_rejected(self):
+        report = deepcopy(self.raw_report)
+        report["checks"]["documentation"]["metrics"]["secret_metric"] = {"secret": "VERY_PRIVATE_SECRET"}
+        context = build_ai_context(report)
+        serialized = context.model_dump_json()
+        self.assertNotIn("VERY_PRIVATE_SECRET", serialized)
+        self.assertNotIn("documentation:secret_metric", [f.id for f in context.facts])
+
+    def test_privacy_metric_short_list_or_dict_is_absent(self):
+        report = deepcopy(self.raw_report)
+        report["checks"]["documentation"]["metrics"]["short_list"] = [1, 2]
+        report["checks"]["documentation"]["metrics"]["short_dict"] = {"a": 1}
+        context = build_ai_context(report)
+        fact_ids = [f.id for f in context.facts]
+        self.assertNotIn("documentation:short_list", fact_ids)
+        self.assertNotIn("documentation:short_dict", fact_ids)
+
+    def test_privacy_numeric_and_bool_metrics_are_preserved_with_proper_types(self):
+        report = deepcopy(self.raw_report)
+        report["checks"]["documentation"]["metrics"]["active_count"] = 42
+        report["checks"]["documentation"]["metrics"]["ratio"] = 0.85
+        report["checks"]["documentation"]["metrics"]["is_passing"] = True
+        report["checks"]["documentation"]["metrics"]["is_failing"] = False
+        context = build_ai_context(report)
+
+        count_fact = next(f for f in context.facts if f.id == "documentation:active_count")
+        self.assertEqual(count_fact.value, 42)
+        self.assertIsInstance(count_fact.value, int)
+
+        ratio_fact = next(f for f in context.facts if f.id == "documentation:ratio")
+        self.assertEqual(ratio_fact.value, 0.85)
+        self.assertIsInstance(ratio_fact.value, float)
+
+        pass_fact = next(f for f in context.facts if f.id == "documentation:is_passing")
+        self.assertEqual(pass_fact.value, True)
+        self.assertIsInstance(pass_fact.value, bool)
+
+        fail_fact = next(f for f in context.facts if f.id == "documentation:is_failing")
+        self.assertEqual(fail_fact.value, False)
+        self.assertIsInstance(fail_fact.value, bool)
+
     def test_prompt_template_builder(self):
         context = build_ai_context(self.raw_report)
         prompt = build_future_prompt(context)

@@ -95,9 +95,11 @@ def derive(rows, tracked_repositories=None):
         if run.completed_at is None or run.completed_at < tracking.created_at or run.status not in {"completed", "partial"}:
             continue
         terminal_count += 1
-        analyzed_tracked_repo_ids.add(run.repository_id)
+        is_mvp_v1 = getattr(run, "profile", None) == "mvp-v1"
+        if is_mvp_v1:
+            analyzed_tracked_repo_ids.add(run.repository_id)
 
-        # Check portfolio_keeper (5 analyzed tracked repos)
+        # Check portfolio_keeper (5 analyzed tracked repos with terminal mvp-v1 analysis)
         if len(analyzed_tracked_repo_ids) >= 5 and "portfolio_keeper" not in unlocked:
             unlocked["portfolio_keeper"] = (run.completed_at, run.repository_id)
 
@@ -134,9 +136,9 @@ def derive(rows, tracked_repositories=None):
             "healthy_project": run.health_score is not None and run.health_score >= 80,
             "recovery": (previous is not None and previous.health_score is not None and run.health_score is not None
                          and run.health_score - previous.health_score >= 20),
-            "full_house": all_six_numeric,
-            "perfect_health": run.health_score is not None and run.health_score == 100,
-            "clean_and_green": is_official_appsec_100 and _score(categories, "cicd") == 100,
+            "full_house": is_mvp_v1 and all_six_numeric,
+            "perfect_health": is_mvp_v1 and run.health_score is not None and run.health_score == 100,
+            "clean_and_green": is_mvp_v1 and is_official_appsec_100 and _score(categories, "cicd") == 100,
         }
         for key, value in conditions.items():
             if value and key not in unlocked:

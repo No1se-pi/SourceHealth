@@ -13,6 +13,7 @@ DISALLOWED_PATTERNS = (
     "ghp_", "github_pat", "sourcecraft_pat", "Bearer ", "SECRET_RAW_RESPONSE_MARKER",
     "BEGIN PRIVATE KEY", "BEGIN RSA PRIVATE KEY", "BEGIN OPENSSH PRIVATE KEY",
     "@users.noreply.github.com",
+    "cookie", "oauth", "password", "client_secret", "session_secret",
 )
 
 
@@ -26,11 +27,26 @@ def _sanitize_string(text: str | None, max_len: int = 500) -> str:
     return val[:max_len]
 
 
+def _extract_safe_scalar(val: Any) -> bool | int | float | None:
+    """Extract strictly scalar bool, int, or float with explicit boolean precedence."""
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, (int, float)) and not isinstance(val, bool):
+        return val
+    return None
+
+
 def _is_safe_fact(fact_id: str, kind: str, summary: str) -> bool:
-    # Reject facts that represent raw source, commits, or credentials
+    # Reject facts that represent raw source, commits, credentials, or PII
     lower_id = fact_id.lower()
     lower_kind = kind.lower()
-    if any(k in lower_id or k in lower_kind for k in ("source_snippet", "raw_payload", "cookie", "token", "pat", "author_email")):
+    lower_sum = summary.lower()
+    blocked_keywords = (
+        "source_snippet", "raw_payload", "cookie", "token", "pat",
+        "author_email", "oauth", "author_name", "commit_message",
+        "private_key", "secret", "password", "session_secret",
+    )
+    if any(k in lower_id or k in lower_kind or k in lower_sum for k in blocked_keywords):
         return False
     return True
 
@@ -115,12 +131,15 @@ def build_ai_context(report: Any) -> AISummaryContext:
                         kind = str(ev.get("kind", check_name))
                         summary = _sanitize_string(ev.get("summary", ""), max_len=500)
                         if _is_safe_fact(ev_id, kind, summary):
+                            safe_val = _extract_safe_scalar(ev.get("value"))
+                            raw_unit = ev.get("unit")
+                            safe_unit = _sanitize_string(raw_unit, max_len=50) if raw_unit and isinstance(raw_unit, str) else None
                             grounded_facts.append(GroundedFact(
                                 id=ev_id,
                                 kind=kind,
                                 summary=summary,
-                                value=ev.get("value"),
-                                unit=ev.get("unit"),
+                                value=safe_val,
+                                unit=safe_unit,
                                 evidence_refs=[],
                             ))
 
@@ -130,17 +149,25 @@ def build_ai_context(report: Any) -> AISummaryContext:
                 for metric_key, metric_val in metrics.items():
                     if len(grounded_facts) >= 50:
                         break
-                    if isinstance(metric_val, (int, float, bool, str)) and not isinstance(metric_val, str) or len(str(metric_val)) < 100:
-                        fact_id = f"{check_name}:{metric_key}"
-                        if _is_safe_fact(fact_id, check_name, str(metric_val)):
-                            grounded_facts.append(GroundedFact(
-                                id=fact_id,
-                                kind=check_name,
-                                summary=f"{check_name} {metric_key}: {metric_val}",
-                                value=metric_val,
-                                unit=None,
-                                evidence_refs=[],
-                            ))
+                    # Strictly allow only scalar bool, int, float; skip dict, list, str, object, None
+                    if isinstance(metric_val, bool):
+                        scalar_val = metric_val
+                    elif isinstance(metric_val, (int, float)) and not isinstance(metric_val, bool):
+                        scalar_val = metric_val
+                    else:
+                        continue
+
+                    fact_id = f"{check_name}:{metric_key}"
+                    fact_summary = _sanitize_string(f"{check_name} {metric_key}: {scalar_val}", max_len=500)
+                    if _is_safe_fact(fact_id, check_name, fact_summary):
+                        grounded_facts.append(GroundedFact(
+                            id=fact_id,
+                            kind=check_name,
+                            summary=fact_summary,
+                            value=scalar_val,
+                            unit=None,
+                            evidence_refs=[],
+                        ))
 
     return AISummaryContext(
         schema_version="ai-context-v1",

@@ -50,13 +50,17 @@ export function AnalysisHistory({
   const [attempt, setAttempt] = useState(0);
   const [hoveredRun, setHoveredRun] = useState<AnalysisSummary | null>(null);
   const [prevAnalysis, setPrevAnalysis] = useState<Analysis | null>(null);
+  const [fetchedLatestAnalysis, setFetchedLatestAnalysis] = useState<Analysis | null>(null);
   const generation = useRef(0);
-
+  const prevReqGen = useRef(0);
+  const latestReqGen = useRef(0);
 
   useEffect(() => {
     const request = ++generation.current;
     setPage(undefined);
     setError(undefined);
+    setPrevAnalysis(null);
+    setFetchedLatestAnalysis(null);
     api
       .analysisHistory(repositoryId, 50, 0)
       .then((value) => {
@@ -96,6 +100,58 @@ export function AnalysisHistory({
     canCompareWithPrevious && latestRun.health_score !== null && previousRun.health_score !== null
       ? Math.round((latestRun.health_score - previousRun.health_score) * 10) / 10
       : null;
+
+  useEffect(() => {
+    if (!canCompareWithPrevious || !previousRun?.id) {
+      setPrevAnalysis(null);
+      return;
+    }
+    const currentGen = ++prevReqGen.current;
+    api
+      .analysis(previousRun.id)
+      .then((data) => {
+        if (currentGen === prevReqGen.current) {
+          setPrevAnalysis(data);
+        }
+      })
+      .catch(() => {
+        if (currentGen === prevReqGen.current) {
+          setPrevAnalysis(null);
+        }
+      });
+    return () => {
+      prevReqGen.current++;
+    };
+  }, [repositoryId, previousRun?.id, canCompareWithPrevious]);
+
+  useEffect(() => {
+    if (currentAnalysis?.id === latestRun?.id) {
+      setFetchedLatestAnalysis(null);
+      return;
+    }
+    if (!latestRun?.id) {
+      setFetchedLatestAnalysis(null);
+      return;
+    }
+    const currentGen = ++latestReqGen.current;
+    api
+      .analysis(latestRun.id)
+      .then((data) => {
+        if (currentGen === latestReqGen.current) {
+          setFetchedLatestAnalysis(data);
+        }
+      })
+      .catch(() => {
+        if (currentGen === latestReqGen.current) {
+          setFetchedLatestAnalysis(null);
+        }
+      });
+    return () => {
+      latestReqGen.current++;
+    };
+  }, [repositoryId, latestRun?.id, currentAnalysis?.id]);
+
+  const effectiveCurrent = (currentAnalysis?.id === latestRun?.id ? currentAnalysis : fetchedLatestAnalysis) ?? null;
 
   const scores = comparableRuns
     .map((r) => r.health_score)
@@ -401,7 +457,7 @@ export function AnalysisHistory({
           )}
 
           {/* Category Deltas between two comparable runs with same policy */}
-          {currentAnalysis && prevAnalysis && canCompareWithPrevious && (
+          {effectiveCurrent && prevAnalysis && canCompareWithPrevious && (
             <div
               style={{
                 padding: 'var(--sh-space-4)',
@@ -427,7 +483,7 @@ export function AnalysisHistory({
                 }}
               >
                 {CATEGORY_ORDER.map((catKey) => {
-                  const curr = extractCategoryScore(currentAnalysis.category_scores?.[catKey]);
+                  const curr = extractCategoryScore(effectiveCurrent.category_scores?.[catKey]);
                   const prev = extractCategoryScore(prevAnalysis.category_scores?.[catKey]);
 
                   let labelText = 'без изменений';
