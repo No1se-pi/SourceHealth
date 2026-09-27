@@ -322,5 +322,155 @@ class AIContractsTests(unittest.TestCase):
         self.assertIn("NO_DATA means unknown", prompt)
 
 
+    def test_privacy_redacts_entire_secret_value_across_all_string_surfaces(self):
+        report = deepcopy(self.raw_report)
+
+        # 1. Evidence summary
+        report["checks"]["documentation"]["evidence"].append({
+            "id": "doc:evidence_auth",
+            "kind": "documentation",
+            "summary": "Verified header Authorization: Bearer abcXYZ987 and token=ghp_ABCDEF123",
+            "value": None,
+        })
+
+        # 2. Category explanation
+        report["category_scores"]["documentation"]["explanation"] = (
+            "Status with Bearer abcdef123 and token=ghp_ABCDEF123"
+        )
+
+        # 3. Recommendation text: title, description, suggested_action, expected_impact
+        report["recommendations"].append({
+            "id": "rec-sec-1",
+            "priority": 1,
+            "category": "security",
+            "title": "Revoke token=ghp_ABCDEF123 in config",
+            "description": "Hardcoded Bearer abcXYZ987 discovered",
+            "suggested_action": "Rotate sourcecraft_pat=SECRET_PAT_BODY immediately",
+            "expected_impact": "Prevents exposure of password=SUPER_SECRET_PASS",
+            "evidence_refs": [],
+        })
+
+        # 4. Unit (if unit is still supported)
+        report["checks"]["documentation"]["evidence"].append({
+            "id": "doc:evidence_unit",
+            "kind": "documentation",
+            "summary": "Check with sensitive unit",
+            "value": 10,
+            "unit": "Authorization: Bearer abcXYZ987",
+        })
+
+        context = build_ai_context(report)
+        serialized = context.model_dump_json()
+
+        # Secret bodies must NOT appear anywhere in the output
+        secret_bodies = ["abcXYZ987", "ABCDEF123", "abcdef123", "SECRET_PAT_BODY", "SUPER_SECRET_PASS"]
+        for secret in secret_bodies:
+            self.assertNotIn(secret, serialized, f"Secret body '{secret}' leaked in serialized AI context!")
+
+        # Check evidence summary
+        ev_auth = next(f for f in context.facts if f.id == "doc:evidence_auth")
+        self.assertNotIn("abcXYZ987", ev_auth.summary)
+        self.assertNotIn("ABCDEF123", ev_auth.summary)
+        self.assertIn("[REDACTED]", ev_auth.summary)
+
+        # Check category explanation
+        cat_doc = next(c for c in context.categories if c.name == "documentation")
+        self.assertNotIn("abcdef123", cat_doc.explanation)
+        self.assertNotIn("ABCDEF123", cat_doc.explanation)
+        self.assertIn("[REDACTED]", cat_doc.explanation)
+
+        # Check recommendation text
+        rec_sec = next(r for r in context.recommendations if r.id == "rec-sec-1")
+        self.assertNotIn("ABCDEF123", rec_sec.title)
+        self.assertNotIn("abcXYZ987", rec_sec.description)
+        self.assertNotIn("SECRET_PAT_BODY", rec_sec.suggested_action)
+        self.assertNotIn("SUPER_SECRET_PASS", rec_sec.expected_impact)
+
+        # Check unit
+        ev_unit = next(f for f in context.facts if f.id == "doc:evidence_unit")
+        self.assertNotIn("abcXYZ987", ev_unit.unit)
+        self.assertEqual(ev_unit.unit, "[REDACTED]")
+
+    def test_privacy_redacts_private_key_material(self):
+        report = deepcopy(self.raw_report)
+        report["category_scores"]["documentation"]["explanation"] = (
+            "Found -----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0123456789\n-----END RSA PRIVATE KEY----- in repo"
+        )
+        report["checks"]["documentation"]["evidence"].append({
+            "id": "doc:private_key_evidence",
+            "kind": "documentation",
+            "summary": "Key header: BEGIN PRIVATE KEY abc123supersecret",
+            "value": None,
+        })
+        context = build_ai_context(report)
+        serialized = context.model_dump_json()
+
+        self.assertNotIn("MIIEowIBAAKCAQEA0123456789", serialized)
+        self.assertNotIn("abc123supersecret", serialized)
+
+    def test_validate_ai_output_rejects_category_name_as_evidence_ref(self):
+        # Regression: category name is metadata, not evidence
+        context = build_ai_context({
+            "organization_slug": "sourcecraft",
+            "repository_slug": "custodes",
+            "category_scores": {
+                "security": {
+                    "score": None,
+                    "availability": "no_data",
+                    "explanation": "Security checks missing",
+                    "evidence_refs": [],
+                }
+            },
+            "checks": {},
+            "recommendations": [],
+        })
+        self.assertEqual(len(context.categories), 1)
+        self.assertEqual(context.categories[0].name, "security")
+
+        invalid_result = AISummaryResult(
+            schema_version="ai-summary-v1",
+            executive_summary="Summary",
+            strengths=[],
+            risks=[
+                GroundedStatement(text="Security risk", evidence_refs=["security"]),
+            ],
+            actions=[],
+            limitations=[],
+        )
+        with self.assertRaisesRegex(AIValidationError, "Unknown evidence reference 'security' in risks"):
+            validate_ai_output(context, invalid_result)
+
+    def test_validate_ai_output_accepts_numeric_category_with_real_evidence_refs(self):
+        # Positive case: numeric category with real evidence_refs remains valid
+        context = build_ai_context({
+            "organization_slug": "sourcecraft",
+            "repository_slug": "custodes",
+            "category_scores": {
+                "security": {
+                    "score": 80.0,
+                    "availability": "available",
+                    "explanation": "Security verified",
+                    "evidence_refs": ["sec:headers", "sec:sast"],
+                }
+            },
+            "checks": {},
+            "recommendations": [],
+        })
+        valid_result = AISummaryResult(
+            schema_version="ai-summary-v1",
+            executive_summary="Summary",
+            strengths=[
+                GroundedStatement(text="Security is well-configured.", evidence_refs=["sec:headers"]),
+            ],
+            risks=[
+                GroundedStatement(text="SAST found minor warnings.", evidence_refs=["sec:sast"]),
+            ],
+            actions=[],
+            limitations=[],
+        )
+        # Should validate successfully
+        validate_ai_output(context, valid_result)
+
+
 if __name__ == "__main__":
     unittest.main()

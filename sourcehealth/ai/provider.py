@@ -29,7 +29,6 @@ def validate_ai_output(context: AISummaryContext, result: AISummaryResult) -> No
     for fact in context.facts:
         valid_evidence_ids.add(fact.id)
     for cat in context.categories:
-        valid_evidence_ids.add(cat.name)
         for ref in cat.evidence_refs:
             valid_evidence_ids.add(ref)
 

@@ -1,5 +1,6 @@
 """AI context builder with strict privacy allowlist and size bounds."""
 
+import re
 from typing import Any
 
 from .contracts import (
@@ -21,9 +22,34 @@ def _sanitize_string(text: str | None, max_len: int = 500) -> str:
     if not text:
         return ""
     val = str(text).strip()
-    for pattern in DISALLOWED_PATTERNS:
+
+    # 1. Private key blocks (entire block or marker to end)
+    val = re.sub(r"(?is)-----?BEGIN[ A-Z0-9_-]*PRIVATE KEY.*?-----?END[ A-Z0-9_-]*PRIVATE KEY-----?", "[REDACTED]", val)
+    val = re.sub(r"(?is)-----?BEGIN[ A-Z0-9_-]*PRIVATE KEY.*", "[REDACTED]", val)
+    val = re.sub(r"(?is)\bBEGIN[ A-Z0-9_-]*PRIVATE KEY\b.*", "[REDACTED]", val)
+
+    # 2. Bearer tokens (with optional Authorization: prefix and colon)
+    val = re.sub(r"(?i)\b(?:authorization:\s*)?bearer:?\s+(?:[\"']?[^\s\"'<>;,)]+[\"']?)", "[REDACTED]", val)
+    val = re.sub(r"(?i)\b(?:authorization:\s*)?bearer:?\b", "[REDACTED]", val)
+
+    # 3. Known token prefixes (GitHub, SourceCraft)
+    val = re.sub(r"\b(?:gh[pousr]|github_pat)_[A-Za-z0-9_]+", "[REDACTED]", val)
+    val = re.sub(r"(?i)\b(?:sourcecraft_pat|sc_pat)_[A-Za-z0-9_]+", "[REDACTED]", val)
+
+    # 4. Obvious key-value credentials: token=..., api_key=..., password=..., secret=..., pat=...
+    val = re.sub(
+        r"(?i)\b[\w.-]*(?:token|secret|password|passwd|api[_-]?key|pat)\s*[:=]\s*(?:[\"']?[^\s\"'<>;,)]+[\"']?)",
+        "[REDACTED]",
+        val,
+    )
+
+    # 5. Clean up any leftover disallowed markers and emails
+    for pattern in ("SECRET_RAW_RESPONSE_MARKER", "sourcecraft_pat", "github_pat", "ghp_"):
         if pattern in val:
             val = val.replace(pattern, "[REDACTED]")
+
+    val = re.sub(r"[A-Za-z0-9._%+-]+@users\.noreply\.github\.com", "[REDACTED]", val)
+
     return val[:max_len]
 
 
@@ -45,6 +71,7 @@ def _is_safe_fact(fact_id: str, kind: str, summary: str) -> bool:
         "source_snippet", "raw_payload", "cookie", "token", "pat",
         "author_email", "oauth", "author_name", "commit_message",
         "private_key", "secret", "password", "session_secret",
+        "bearer", "ghp_", "github_pat",
     )
     if any(k in lower_id or k in lower_kind or k in lower_sum for k in blocked_keywords):
         return False
