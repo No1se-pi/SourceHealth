@@ -140,6 +140,9 @@ def snapshot_result(name, raw):
     configured = metadata.get("ci_configured")
     if configured is not None and type(configured) is not bool:
         raise ValueError("invalid CI flag")
+    config_complete = metadata.get("ci_config_complete", False)
+    if type(config_complete) is not bool:
+        raise ValueError("invalid CI completeness flag")
     evidence = [Evidence(id=f"{name}:snapshot", source="git_snapshot", type="snapshot_observation", reference=sha,
                          summary="Проверка tracked snapshot; исходный текст не сохраняется.")]
     if name == "documentation":
@@ -152,6 +155,7 @@ def snapshot_result(name, raw):
     return AnalyzerResult(name, status="ok" if complete else "partial", category=MVP_CLASSIFICATION[name][0],
                           source="git_snapshot", metrics=safe, evidence=evidence, analyzer_version="2",
                           metadata={"head_sha": sha, "complete": complete, "ci_configured": configured,
+                                    "ci_config_complete": config_complete,
                                     "scope": "tracked_default_branch_excluding_generated"})
 
 

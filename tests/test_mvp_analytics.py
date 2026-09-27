@@ -1,13 +1,17 @@
 """Контрольные сценарии метрик, policy, рекомендаций и unavailable coverage."""
 
+import json
 import unittest
 from copy import deepcopy
 from dataclasses import replace
 from unittest.mock import Mock
 
 from sourcehealth.analyzers.analytics import CIAnalyzer, IssuesAnalyzer, PlatformActivityAnalyzer
+from sourcehealth.application.jobs import _timed_collection
 from sourcehealth.application.pipeline import analyze_context
 from sourcehealth.core.domain import DataAvailability as A
+from sourcehealth.integrations.sourcecraft.collectors import CollectedFacts
+from sourcehealth.logging_config import EventFormatter
 from sourcehealth.recommendations.mvp import recommend
 from sourcehealth.scoring.engine import ScoringEngine
 from sourcehealth.scoring.mvp import WEIGHTS, MVPPolicy
@@ -73,6 +77,62 @@ class MVPAnalyticsTests(unittest.TestCase):
             else:
                 self.assertIsNone(result.metrics["success_rate"])
                 self.assertNotEqual(result.availability, A.NOT_CONFIGURED)
+
+    def test_ci_correctness_matrix_roundtrips_runtime_contract(self):
+        def scored(configured, config_complete, runs, availability=A.AVAILABLE):
+            context = deepcopy(self.context)
+            context.sourcecraft_facts["cicd"]["items"] = runs
+            context.collection_statuses["cicd"] = availability
+            payload = runtime_payload()
+            payload["checks"]["documentation"]["metadata"].update(
+                ci_configured=configured, ci_config_complete=config_complete)
+            report = analyze_context(context, include_code=True, with_mvp=True,
+                                     runtime=Mock(analyze=Mock(return_value=payload)))
+            return self.score(report)
+
+        absent = scored(False, True, [])
+        self.assertEqual(absent.category_scores["cicd"]["score"], 0)
+        configured = scored(True, True, [])
+        self.assertEqual(configured.category_scores["cicd"]["score"], 40)
+        template = deepcopy(self.context.sourcecraft_facts["cicd"]["items"][0])
+        runs = [{**template, "id": f"run-{index}", "status": "success" if index < 8 else "failed"}
+                for index in range(10)]
+        self.assertEqual(scored(True, True, runs).category_scores["cicd"]["score"], 80)
+        self.assertIsNone(scored(False, False, []).category_scores["cicd"]["score"])
+        # A complete local snapshot is sufficient proof of native CI absence even during API outage.
+        self.assertEqual(scored(False, True, [], A.SOURCE_UNAVAILABLE).category_scores["cicd"]["score"], 0)
+        self.assertIsNone(scored(None, False, [], A.SOURCE_UNAVAILABLE).category_scores["cicd"]["score"])
+
+    def test_custodes_like_known_ci_absence_changes_health_denominator(self):
+        report = self.report()
+        docs = report.checks["documentation"]
+        docs.metrics.update({key: key in {"readme", "license", "run_instructions", "build_instructions",
+                                          "test_instructions"} for key in docs.metrics
+                             if key in {"readme", "license", "run_instructions", "build_instructions",
+                                        "test_instructions", "contributing", "codeowners", "docs_directory"}})
+        git = report.checks["git_activity"]
+        git.metrics.update(commits_last_30_days=0, active_days_last_30_days=0,
+                           days_since_last_commit=60.1275)
+        platform = report.checks["platform_activity"]
+        platform.metrics.update(recent_pr_activity=0, contributors_count=2, release_count=0, last_release=None)
+        report.checks["technical_debt"].metrics.update(marker_density=0, large_files=0,
+                                                        oldest_marker_age_days=None, age_complete=True)
+        report.checks["sast"].metrics["summary"] = {"high": 0, "medium": 0, "low": 0}
+        report.checks["issues"].status = "partial"
+        report.checks["issues"].availability = A.NO_DATA
+        report.checks["cicd"].status = "partial"
+        report.checks["cicd"].availability = A.NO_DATA
+        before = self.score(deepcopy(report))
+        self.assertEqual(before.category_scores["activity"]["score"], 16.61)
+        self.assertEqual(before.category_scores["documentation"]["score"], 80)
+        self.assertEqual(before.category_scores["code_health"]["score"], 100)
+        self.assertEqual(before.health_score, 68.98)
+        report.checks["cicd"] = CIAnalyzer().analyze(replace(
+            self.context, sourcecraft_facts={**self.context.sourcecraft_facts, "cicd": {"items": []}},
+            metadata={**self.context.metadata, "ci_configured": False, "ci_config_complete": True}))
+        after = self.score(report)
+        self.assertEqual(after.category_scores["cicd"]["score"], 0)
+        self.assertEqual(after.health_score, 53.06)
 
     def test_unanswered_issues_lower_response_component_and_partial_is_unknown(self):
         healthy = self.score(self.report()).category_scores["issues"]["score"]
@@ -148,6 +208,32 @@ class MVPAnalyticsTests(unittest.TestCase):
         result = PlatformActivityAnalyzer().analyze(self.context)
         self.assertEqual(result.metrics["pr_count"], 1)
         self.assertEqual(result.metrics["merged_count"], 1)
+
+    def test_collection_and_runtime_expose_bounded_stage_timings(self):
+        context = mvp_context()
+        self.assertEqual(set(context.metadata["stage_timings_ms"]),
+                         {"issues_ms", "cicd_ms", "pull_requests_ms", "contributors_ms", "releases_ms"})
+        self.assertTrue(all(type(value) is int and value >= 0
+                            for value in context.metadata["stage_timings_ms"].values()))
+        timings = {}
+        analyze_context(context, include_code=True, with_mvp=True,
+                        runtime=Mock(analyze=Mock(return_value=runtime_payload())), timings=timings)
+        self.assertIn("runtime_ms", timings)
+        self.assertGreaterEqual(timings["runtime_ms"], 0)
+
+    def test_stage_log_keeps_only_stable_code_and_never_collected_payload(self):
+        marker = "SECRET_RAW_RESPONSE_MARKER"
+        timings = {}
+        with self.assertLogs("sourcehealth.application.jobs", level="INFO") as captured:
+            _timed_collection("appsec", lambda: CollectedFacts(
+                "sourcecraft_appsec", A.NO_DATA, facts={"raw": marker}, error="appsec_access_denied"), timings)
+        record = captured.records[0]
+        self.assertEqual(record.sourcecraft_error_code, "appsec_access_denied")
+        self.assertNotIn(marker, json.dumps(record.__dict__, default=str))
+        rendered = json.loads(EventFormatter().format(record))
+        self.assertEqual(rendered["analyzer"], "appsec")
+        self.assertEqual(rendered["duration_ms"], timings["appsec_ms"])
+        self.assertNotIn(marker, json.dumps(rendered))
 
         self.context.sourcecraft_facts["releases"]["items"] = []
         result = PlatformActivityAnalyzer().analyze(self.context)

@@ -10,6 +10,7 @@ from sourcehealth.integrations.sourcecraft.appsec import SourceCraftAppSecClient
 from sourcehealth.integrations.sourcecraft.client import SourceCraftError
 from sourcehealth.integrations.sourcecraft.collectors import AppSecCollector
 from sourcehealth.markdown import render_markdown
+from sourcehealth.runner import AnalysisRunner
 from sourcehealth.scoring.engine import ScoringEngine
 from sourcehealth.scoring.mvp import MVPPolicy
 
@@ -54,7 +55,6 @@ class AppSecTests(unittest.TestCase):
         analyzed = SourceCraftSecurityAnalyzer().analyze(context)
         self.assertEqual(analyzed.status, "ok")
         self.assertEqual(analyzed.source, "sourcecraft_appsec")
-        from sourcehealth.runner import AnalysisRunner
         report = AnalysisRunner([SourceCraftSecurityAnalyzer()]).analyze_context(context)
         ScoringEngine(MVPPolicy()).apply(report)
         serialized = json.dumps(report.to_public_dict())
@@ -151,6 +151,28 @@ class AppSecTests(unittest.TestCase):
         result = AppSecCollector(None).collect(self.ref)
         self.assertEqual(result.error, "appsec_credential_unavailable")
         self.assertEqual(result.availability, DataAvailability.NO_DATA)
+
+        context = AnalysisContext(repository=self.ref, sourcecraft_facts={"appsec": result.facts},
+                                  collection_statuses={"appsec": result.availability},
+                                  metadata={"collection": {"appsec": {"error": result.error}}})
+        report = AnalysisRunner([SourceCraftSecurityAnalyzer()]).analyze_context(context)
+        ScoringEngine(MVPPolicy()).apply(report)
+        self.assertIsNone(report.category_scores["security"]["score"])
+        self.assertEqual(report.checks["sourcecraft_appsec"].error, "appsec_credential_unavailable")
+
+    def test_two_medium_official_findings_score_90(self):
+        context = AnalysisContext(
+            repository=self.ref,
+            sourcecraft_facts={"appsec": {"complete": True, "scan_uuid": "scan",
+                                           "open_by_severity": {"critical": 0, "high": 0,
+                                                                "medium": 2, "low": 0}}},
+            collection_statuses={"appsec": DataAvailability.AVAILABLE},
+            metadata={"collection": {"appsec": {"error": None}}},
+        )
+        from sourcehealth.runner import AnalysisRunner
+        report = AnalysisRunner([SourceCraftSecurityAnalyzer()]).analyze_context(context)
+        ScoringEngine(MVPPolicy()).apply(report)
+        self.assertEqual(report.category_scores["security"]["score"], 90)
 
 
 if __name__ == "__main__":
