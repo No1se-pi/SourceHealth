@@ -1572,22 +1572,36 @@ class PersistenceTests(unittest.TestCase):
                 self.assertIn(str(r_cov_50.id), cov_filter_ids)
                 self.assertNotIn(str(r_cicd_zero.id), cov_filter_ids)
 
-                # 4. Coverage sort
+                # 4. Coverage sort: canonical run 50%, 15%, 0%, and no-run (NULL)
                 sort_cov_desc = client.get(
                     "/api/v1/repositories",
                     params={"q": unique_prefix, "sort": "coverage", "order": "desc"},
                 )
                 self.assertEqual(sort_cov_desc.status_code, 200)
-                cov_ids_desc = [i["id"] for i in sort_cov_desc.json()["items"] if i["id"] in {str(r_cov_50.id), str(r_cicd_zero.id)}]
-                self.assertEqual(cov_ids_desc, [str(r_cov_50.id), str(r_cicd_zero.id)])
+                cov_ids_desc = [
+                    i["id"] for i in sort_cov_desc.json()["items"]
+                    if i["id"] in {str(r_cov_50.id), str(r_cicd_zero.id), str(r_nodata.id), str(r_exact.id)}
+                ]
+                self.assertEqual(
+                    cov_ids_desc,
+                    [str(r_cov_50.id), str(r_cicd_zero.id), str(r_nodata.id), str(r_exact.id)],
+                    "DESC coverage sort must rank 50% -> 15% -> 0% -> NULL (nulls last)",
+                )
 
                 sort_cov_asc = client.get(
                     "/api/v1/repositories",
                     params={"q": unique_prefix, "sort": "coverage", "order": "asc"},
                 )
                 self.assertEqual(sort_cov_asc.status_code, 200)
-                cov_ids_asc = [i["id"] for i in sort_cov_asc.json()["items"] if i["id"] in {str(r_cov_50.id), str(r_cicd_zero.id)}]
-                self.assertEqual(cov_ids_asc, [str(r_cicd_zero.id), str(r_cov_50.id)])
+                cov_ids_asc = [
+                    i["id"] for i in sort_cov_asc.json()["items"]
+                    if i["id"] in {str(r_cov_50.id), str(r_cicd_zero.id), str(r_nodata.id), str(r_exact.id)}
+                ]
+                self.assertEqual(
+                    cov_ids_asc,
+                    [str(r_nodata.id), str(r_cicd_zero.id), str(r_cov_50.id), str(r_exact.id)],
+                    "ASC coverage sort must rank 0% -> 15% -> 50% -> NULL (nulls last)",
+                )
 
                 # 5. Category numeric zero + not_configured is "Есть оценка" (available)
                 cicd_avail_res = client.get(

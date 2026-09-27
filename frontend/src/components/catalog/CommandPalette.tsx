@@ -153,6 +153,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
           <input
             ref={inputRef}
             type="text"
+            className="sh-command-palette-input"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Быстрый поиск по проектам и организациям..."

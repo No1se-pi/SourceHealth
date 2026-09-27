@@ -20,9 +20,8 @@ from sqlalchemy import delete, insert, text
 
 from sourcehealth.catalog.query import (
     CatalogFilters,
-    apply_catalog_filters,
-    build_catalog_base_query,
     compute_median_and_quartiles,
+    get_catalog_repositories,
     get_catalog_stats,
 )
 from sourcehealth.catalog.topics import ALL_TOPICS
@@ -265,8 +264,8 @@ def run_benchmark():
     ]
 
     results = []
-    print(f"{'Scenario':<42} | {'Time (ms)':<10} | {'Matched':<8}")
-    print("-" * 65)
+    print(f"{'Scenario':<42} | {'Time (ms)':<10} | {'Matched':<8} | {'Page Rows':<9}")
+    print("-" * 77)
 
     for name, params in scenarios:
         # Warmup
@@ -278,27 +277,31 @@ def run_benchmark():
         # 5 repetitions for stable timing
         times = []
         last_res = None
+        page_rows = 0
         for _ in range(5):
             t0 = time.perf_counter()
             if params.get("stats_mode"):
                 last_res = engine.stats()
                 matched = last_res["matched_total"]
+                page_rows = 0
             else:
-                _, matched = engine.query(**params)
+                p, matched = engine.query(**params)
+                page_rows = len(p)
             times.append((time.perf_counter() - t0) * 1000)
 
         min_ms = min(times)
-        results.append((name, min_ms, matched))
-        print(f"{name:<42} | {min_ms:7.2f} ms | {matched:<8,}")
+        results.append((name, min_ms, matched, page_rows))
+        page_str = str(page_rows) if not params.get("stats_mode") else "N/A (stats)"
+        print(f"{name:<42} | {min_ms:7.2f} ms | {matched:<8,} | {page_str:<9}")
 
-    print("-" * 65)
+    print("-" * 77)
     print("BENCHMARK SUMMARY:")
     print(f"  - Total catalog size: {TOTAL_REPOSITORIES:,} repositories")
-    print(f"  - Default page query: {results[0][1]:.2f} ms")
-    print(f"  - Text search query:  {results[1][1]:.2f} ms")
-    print(f"  - Deep page (p.400):  {results[8][1]:.2f} ms")
-    print(f"  - Stats & Histogram:  {results[9][1]:.2f} ms")
-    print("=" * 65)
+    print(f"  - Default page query: {results[0][1]:.2f} ms (returned {results[0][3]} rows of {results[0][2]:,} matched)")
+    print(f"  - Text search query:  {results[1][1]:.2f} ms (returned {results[1][3]} rows of {results[1][2]:,} matched)")
+    print(f"  - Deep page (p.400):  {results[8][1]:.2f} ms (returned {results[8][3]} rows of {results[8][2]:,} matched)")
+    print(f"  - Stats & Histogram:  {results[9][1]:.2f} ms (aggregated across {results[9][2]:,} matched)")
+    print("=" * 77)
 
 
 def run_postgres_benchmark(database_url: str):
@@ -391,8 +394,8 @@ def run_postgres_benchmark(database_url: str):
         ]
 
         results = []
-        print(f"{'Scenario':<42} | {'Time (ms)':<10} | {'Matched':<8}")
-        print("-" * 65)
+        print(f"{'Scenario':<42} | {'Time (ms)':<10} | {'Matched':<8} | {'Page Rows':<9}")
+        print("-" * 77)
 
         with sessions() as db:
             for name, params in scenarios:
@@ -400,7 +403,7 @@ def run_postgres_benchmark(database_url: str):
                     q=params.get("q"),
                     limit=params.get("limit", 20),
                     offset=params.get("offset", 0),
-                    sort=params.get("sort", "health_score"),
+                    sort=params.get("sort"),
                     order=params.get("order", "desc"),
                     language=params.get("language"),
                     topic=params.get("topic"),
@@ -414,37 +417,37 @@ def run_postgres_benchmark(database_url: str):
                 if params.get("stats_mode"):
                     get_catalog_stats(db, filters)
                 else:
-                    base = build_catalog_base_query()
-                    q = apply_catalog_filters(base, filters)
-                    db.execute(q).all()
+                    get_catalog_repositories(db, filters)
 
                 # 5 repetitions
                 times = []
                 matched = 0
+                page_rows = 0
                 for _ in range(5):
                     t0 = time.perf_counter()
                     if params.get("stats_mode"):
                         res = get_catalog_stats(db, filters)
                         matched = res["matched_total"]
+                        page_rows = 0
                     else:
-                        base = build_catalog_base_query()
-                        q = apply_catalog_filters(base, filters)
-                        rows = db.execute(q).all()
-                        matched = len(rows)
+                        rows, total = get_catalog_repositories(db, filters)
+                        matched = total
+                        page_rows = len(rows)
                     times.append((time.perf_counter() - t0) * 1000)
 
                 min_ms = min(times)
-                results.append((name, min_ms, matched))
-                print(f"{name:<42} | {min_ms:7.2f} ms | {matched:<8,}")
+                results.append((name, min_ms, matched, page_rows))
+                page_str = str(page_rows) if not params.get("stats_mode") else "N/A (stats)"
+                print(f"{name:<42} | {min_ms:7.2f} ms | {matched:<8,} | {page_str:<9}")
 
-        print("-" * 65)
+        print("-" * 77)
         print("BENCHMARK SUMMARY (POSTGRESQL):")
         print(f"  - Total catalog size: {TOTAL_REPOSITORIES:,} repositories")
-        print(f"  - Default page query: {results[0][1]:.2f} ms")
-        print(f"  - Text search query:  {results[1][1]:.2f} ms")
-        print(f"  - Deep page (p.400):  {results[8][1]:.2f} ms")
-        print(f"  - Stats & Histogram:  {results[9][1]:.2f} ms")
-        print("=" * 65)
+        print(f"  - Default page query: {results[0][1]:.2f} ms (returned {results[0][3]} rows of {results[0][2]:,} matched)")
+        print(f"  - Text search query:  {results[1][1]:.2f} ms (returned {results[1][3]} rows of {results[1][2]:,} matched)")
+        print(f"  - Deep page (p.400):  {results[8][1]:.2f} ms (returned {results[8][3]} rows of {results[8][2]:,} matched)")
+        print(f"  - Stats & Histogram:  {results[9][1]:.2f} ms (aggregated across {results[9][2]:,} matched)")
+        print("=" * 77)
     finally:
         print("Cleaning up synthetic benchmark data from PostgreSQL...")
         try:
@@ -461,10 +464,6 @@ def run_postgres_benchmark(database_url: str):
 if __name__ == "__main__":
     db_url = os.environ.get("TEST_DATABASE_URL") or os.environ.get("DATABASE_URL")
     if db_url and db_url.startswith("postgresql"):
-        try:
-            run_postgres_benchmark(db_url)
-        except Exception as e:
-            print(f"PostgreSQL benchmark could not run ({e}), falling back to in-memory benchmark.")
-            run_benchmark()
+        run_postgres_benchmark(db_url)
     else:
         run_benchmark()

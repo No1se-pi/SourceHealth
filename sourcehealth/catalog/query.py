@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import Select, case, func, or_, select
+from sqlalchemy import Select, case, func, null, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from sourcehealth.catalog.topics import ALL_TOPICS
@@ -109,7 +109,8 @@ def get_canonical_nominal_coverage_expr():
     for cat, weight in WEIGHTS.items():
         score_expr = _category_score_expr(cat)
         cov_cases.append(case((score_expr.isnot(None), weight), else_=0))
-    return sum(cov_cases)
+    sum_cases = sum(cov_cases)
+    return case((CanonicalAnalysisRun.id.isnot(None), sum_cases), else_=null())
 
 
 def build_catalog_base_query() -> Select:

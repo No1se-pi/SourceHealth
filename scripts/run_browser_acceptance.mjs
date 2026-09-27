@@ -360,6 +360,34 @@ const fixtureLeaderboardItems = [
   })
 ];
 
+const fixtureExactCustodes = makeRepositorySummary({
+  id: 'a0000090-0000-0000-0000-000000000090',
+  organization_slug: 'No1se-pi',
+  repository_slug: 'custodes',
+  canonical_url: 'https://sourcecraft.dev/No1se-pi/custodes',
+  visibility: 'public',
+  origin: 'native',
+  health_score: 20,
+  language: 'Python',
+  likes: 10,
+  last_activity_at: '2026-09-21T09:15:00Z',
+  latest_analysis_id: 'b0000001-0000-0000-0000-000000000001'
+});
+
+const fixtureSubCustodes = makeRepositorySummary({
+  id: 'a0000091-0000-0000-0000-000000000091',
+  organization_slug: 'other-org',
+  repository_slug: 'prefix-custodes-suffix',
+  canonical_url: 'https://sourcecraft.dev/other-org/prefix-custodes-suffix',
+  visibility: 'public',
+  origin: 'native',
+  health_score: 100,
+  language: 'Python',
+  likes: 50,
+  last_activity_at: '2026-09-21T09:15:00Z',
+  latest_analysis_id: 'b0000001-0000-0000-0000-000000000001'
+});
+
 const fixtureRepoHealthy = makeRepositoryDetails({
   id: 'a0000001-0000-0000-0000-000000000001',
   organization_slug: 'demo-org',
@@ -738,6 +766,8 @@ const fixtureAnalysisLongRecommendation = makeAnalysisDetails({
 // ============================================================================
 console.log('Validating acceptance mock fixtures against OpenAPI schema...');
 fixtureLeaderboardItems.forEach((repo, idx) => validateRepositorySummary(repo, `fixtureLeaderboardItems[${idx}]`));
+validateRepositorySummary(fixtureExactCustodes, 'fixtureExactCustodes');
+validateRepositorySummary(fixtureSubCustodes, 'fixtureSubCustodes');
 validateRepositoryDetails(fixtureRepoHealthy, 'fixtureRepoHealthy');
 validateRepositoryDetails(fixtureRepoNoData, 'fixtureRepoNoData');
 validateRepositoryDetails(fixtureRepoLongSlug, 'fixtureRepoLongSlug');
@@ -752,10 +782,35 @@ console.log('✓ All acceptance mock fixtures strictly adhere to OpenAPI contrac
 // ============================================================================
 // Start Mock HTTP API Server
 // ============================================================================
+let lastImportUrl = null;
+let importCallsCount = 0;
+
 const mockServer = http.createServer((req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${MOCK_PORT}`);
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', '*');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    return res.end();
+  }
+
+  if (url.pathname === '/api/v1/repositories' && req.method === 'POST') {
+    importCallsCount++;
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const parsed = JSON.parse(body);
+        lastImportUrl = parsed.url;
+      } catch {}
+      res.writeHead(200);
+      res.end(JSON.stringify(fixtureRepoHealthy));
+    });
+    return;
+  }
 
   if (url.pathname === '/api/v1/me') {
     res.writeHead(200);
@@ -764,6 +819,36 @@ const mockServer = http.createServer((req, res) => {
 
   // 1. Leaderboard / Catalog
   if (url.pathname === '/api/v1/repositories') {
+    const qParam = url.searchParams.get('q');
+    if (qParam === 'custodes') {
+      const isHealthSort = url.searchParams.get('sort') === 'health_score';
+      const items = isHealthSort
+        ? [fixtureSubCustodes, fixtureExactCustodes]
+        : [fixtureExactCustodes, fixtureSubCustodes];
+      res.writeHead(200);
+      return res.end(JSON.stringify({ items, limit: 20, offset: 0, total: 2, has_more: false }));
+    }
+    if (qParam === 'No1se-pi/custodes' || url.searchParams.get('empty') === '1') {
+      res.writeHead(200);
+      return res.end(JSON.stringify({ items: [], limit: 20, offset: 0, total: 0, has_more: false }));
+    }
+    if (qParam === 'race-slow') {
+      setTimeout(() => {
+        res.writeHead(200);
+        res.end(JSON.stringify({
+          items: [makeRepositorySummary({ id: 'a0000099-0000-0000-0000-000000000099', repository_slug: 'slow-repo-should-not-show' })],
+          limit: 20, offset: 0, total: 1, has_more: false
+        }));
+      }, 700);
+      return;
+    }
+    if (qParam === 'race-fast') {
+      res.writeHead(200);
+      return res.end(JSON.stringify({
+        items: [makeRepositorySummary({ id: 'a0000098-0000-0000-0000-000000000098', repository_slug: 'fast-repo-winner' })],
+        limit: 20, offset: 0, total: 1, has_more: false
+      }));
+    }
     if (url.searchParams.get('language') === 'EmptyLang') {
       res.writeHead(200);
       return res.end(JSON.stringify({ items: [], limit: 20, offset: 0, total: 0, has_more: false }));
@@ -1286,6 +1371,48 @@ const tasks = [
     width: 1440,
     height: 900,
     action: 'history-back'
+  },
+  {
+    name: '57-catalog-relevance-default-1440.png',
+    url: 'http://127.0.0.1:5173/?q=custodes&theme=dark',
+    width: 1440,
+    height: 900,
+    action: 'verify-default-relevance'
+  },
+  {
+    name: '58-catalog-all-six-category-filters-1440.png',
+    url: 'http://127.0.0.1:5173/?theme=dark',
+    width: 1440,
+    height: 900,
+    action: 'interact-all-six-category-filters'
+  },
+  {
+    name: '59-catalog-coverage-filter-1440.png',
+    url: 'http://127.0.0.1:5173/?theme=dark',
+    width: 1440,
+    height: 900,
+    action: 'interact-coverage-filter'
+  },
+  {
+    name: '60-catalog-import-cta-1440.png',
+    url: 'http://127.0.0.1:5173/?q=No1se-pi/custodes&theme=dark',
+    width: 1440,
+    height: 900,
+    action: 'verify-import-cta'
+  },
+  {
+    name: '61-catalog-command-palette-race-1440.png',
+    url: 'http://127.0.0.1:5173/?theme=dark',
+    width: 1440,
+    height: 900,
+    action: 'command-palette-race'
+  },
+  {
+    name: '62-catalog-invalid-pagination-1440.png',
+    url: 'http://127.0.0.1:5173/?page=abc&page_size=999999&theme=dark',
+    width: 1440,
+    height: 900,
+    action: 'verify-invalid-pagination'
   }
 ];
 
@@ -1464,6 +1591,171 @@ for (const task of selectedTasks) {
       await evalCdp(`window.history.back()`);
       await new Promise((r) => setTimeout(r, 450));
       await assertDom(task.name, "!window.location.search.includes('topic=web')", 'History back successfully restored state');
+    } else if (task.action === 'verify-default-relevance') {
+      console.log('  -> Verifying default relevance ranking for q=custodes without explicit sort...');
+      await new Promise((r) => setTimeout(r, 450));
+      await assertDom(task.name, `(function() {
+        const rows = [...document.querySelectorAll('tbody tr')];
+        if (rows.length < 2) return false;
+        const firstText = rows[0].innerText;
+        return firstText.includes('custodes') && !firstText.includes('prefix-custodes-suffix');
+      })()`, 'Exact org/repo match (Health 20) is displayed before substring match (Health 100)');
+      await assertDom(task.name, `(function() {
+        const sel = document.querySelector('select[aria-label="Сортировка репозиториев"]');
+        return sel && sel.value === 'relevance';
+      })()`, 'UI effective sort displays relevance');
+    } else if (task.action === 'interact-all-six-category-filters') {
+      console.log('  -> Opening Advanced Filters Modal and testing all six categories...');
+      await evalCdp(`(function() {
+        const btn = [...document.querySelectorAll('button')].find(b => b.textContent.includes('Фильтры'));
+        if (btn) btn.click();
+        return Boolean(btn);
+      })()`);
+      await new Promise((r) => setTimeout(r, 400));
+      await assertDom(task.name, "Boolean(document.querySelector('.sh-modal-content'))", 'Advanced filters modal opened');
+
+      const cats = ['Безопасность', 'CI/CD', 'Активность', 'Документация', 'Задачи и дефекты', 'Качество кода'];
+      for (const catName of cats) {
+        await assertDom(task.name, `document.querySelector('.sh-modal-content').innerText.includes('${catName}')`, `Category filter '${catName}' exists in DOM`);
+      }
+
+      await evalCdp(`(function() {
+        const modal = document.querySelector('.sh-modal-content');
+        const selects = [...modal.querySelectorAll('select')];
+        const catSelects = selects.filter(s => [...s.options].some(o => o.value === 'available'));
+        catSelects.forEach(s => {
+          s.value = 'available';
+          s.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        const inputs = [...modal.querySelectorAll('input[type="number"][placeholder="Мин"]')];
+        inputs.forEach(inp => {
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+          if (setter) setter.call(inp, '50');
+          else inp.value = '50';
+          inp.dispatchEvent(new Event('input', { bubbles: true }));
+          inp.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        return catSelects.length >= 6;
+      })()`);
+      await new Promise((r) => setTimeout(r, 350));
+
+      await evalCdp(`(function() {
+        const btn = document.querySelector('.sh-modal-content button[type="submit"]');
+        if (btn) btn.click();
+        return Boolean(btn);
+      })()`);
+      await new Promise((r) => setTimeout(r, 450));
+
+      const catIds = ['security', 'cicd', 'activity', 'documentation', 'issues', 'code_health'];
+      for (const cid of catIds) {
+        await assertDom(task.name, `window.location.search.includes('${cid}_status=available')`, `URL updated with ${cid}_status=available`);
+        await assertDom(task.name, `window.location.search.includes('${cid}_min=50')`, `URL updated with ${cid}_min=50`);
+      }
+    } else if (task.action === 'interact-coverage-filter') {
+      console.log('  -> Testing coverage terminology and filter interaction...');
+      await assertDom(task.name, "!document.body.innerText.includes('Покрытие тестами')", "Page body does NOT contain 'Покрытие тестами'");
+
+      await evalCdp(`(function() {
+        const btn = [...document.querySelectorAll('button')].find(b => b.textContent.includes('Фильтры'));
+        if (btn) btn.click();
+        return Boolean(btn);
+      })()`);
+      await new Promise((r) => setTimeout(r, 400));
+      await assertDom(task.name, "document.querySelector('.sh-modal-content').innerText.includes('Минимальный охват данных для Health')", "Modal label says 'Минимальный охват данных для Health'");
+
+      await evalCdp(`(function() {
+        const inp = document.querySelector('.sh-modal-content input[placeholder*=\"50\"]');
+        if (inp) {
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+          if (setter) setter.call(inp, '50');
+          else inp.value = '50';
+          inp.dispatchEvent(new Event('input', { bubbles: true }));
+          inp.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
+        }
+        return false;
+      })()`);
+      await new Promise((r) => setTimeout(r, 300));
+
+      await evalCdp(`(function() {
+        const btn = document.querySelector('.sh-modal-content button[type="submit"]');
+        if (btn) btn.click();
+        return Boolean(btn);
+      })()`);
+      await new Promise((r) => setTimeout(r, 450));
+
+      await assertDom(task.name, "window.location.search.includes('coverage_min=50')", "URL updated with coverage_min=50");
+      await assertDom(task.name, "document.body.innerText.includes('Охват данных ≥ 50%')", "Active chip displays 'Охват данных ≥ 50%'");
+    } else if (task.action === 'verify-import-cta') {
+      console.log('  -> Verifying import CTA on empty search state for valid org/repo slug...');
+      await new Promise((r) => setTimeout(r, 450));
+      await assertDom(task.name, "document.body.innerText.includes('Импортировать «https://sourcecraft.dev/No1se-pi/custodes» из SourceCraft')", "Import CTA button is visible with canonical HTTPS URL");
+
+      if (importCallsCount !== 0) throw new Error('Automatic import was triggered before clicking CTA');
+      console.log('  ✓ Verified: NO automatic import happened on search');
+
+      await evalCdp(`(function() {
+        const btn = [...document.querySelectorAll('button')].find(b => b.textContent.includes('Импортировать'));
+        if (btn) btn.click();
+        return Boolean(btn);
+      })()`);
+      await new Promise((r) => setTimeout(r, 450));
+
+      if (lastImportUrl !== 'https://sourcecraft.dev/No1se-pi/custodes') {
+        throw new Error(`Import clicked sent unexpected URL: ${lastImportUrl}`);
+      }
+      console.log('  ✓ Clicking CTA sent exact canonical HTTPS URL: https://sourcecraft.dev/No1se-pi/custodes');
+
+      await sendCdp('Page.navigate', { url: 'http://127.0.0.1:5173/?q=react&empty=1&theme=dark' });
+      await new Promise((r) => setTimeout(r, 550));
+      await assertDom(task.name, "!document.body.innerText.includes('Импортировать')", "Arbitrary search 'react' does NOT expose import CTA");
+    } else if (task.action === 'command-palette-race') {
+      console.log('  -> Testing CommandPalette race condition and stale response protection...');
+      await evalCdp(`(function() {
+        const kbd = document.querySelector('.sh-search-bar-wrapper kbd');
+        if (kbd) { kbd.click(); return true; }
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
+        return true;
+      })()`);
+      await new Promise((r) => setTimeout(r, 350));
+      await assertDom(task.name, "Boolean(document.querySelector('.sh-command-palette-backdrop'))", 'CommandPalette is open');
+
+      await evalCdp(`(function() {
+        const input = document.querySelector('.sh-command-palette input') || document.querySelector('.sh-command-palette-input');
+        if (!input) return false;
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+        if (setter) setter.call(input, 'race-slow');
+        else input.value = 'race-slow';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
+      })()`);
+      await new Promise((r) => setTimeout(r, 200));
+
+      await evalCdp(`(function() {
+        const input = document.querySelector('.sh-command-palette input') || document.querySelector('.sh-command-palette-input');
+        if (!input) return false;
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+        if (setter) setter.call(input, 'race-fast');
+        else input.value = 'race-fast';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
+      })()`);
+
+      await new Promise((r) => setTimeout(r, 1200));
+
+      await assertDom(task.name, "document.body.innerText.includes('fast-repo-winner')", "Newer query result 'fast-repo-winner' is visible");
+      await assertDom(task.name, "!document.body.innerText.includes('slow-repo-should-not-show')", "Stale slower query result was discarded and does NOT overwrite newer result");
+    } else if (task.action === 'verify-invalid-pagination') {
+      console.log('  -> Testing invalid pagination parameters (?page=abc&page_size=999999)...');
+      await new Promise((r) => setTimeout(r, 550));
+      await assertDom(task.name, "!window.location.search.includes('NaN')", "URL does not contain 'NaN'");
+      await assertDom(task.name, "!window.location.search.includes('page=abc')", "Malformed page=abc was sanitized");
+      await assertDom(task.name, "!window.location.search.includes('page_size=999999')", "Unsupported page_size=999999 was sanitized");
+
+      await sendCdp('Page.navigate', { url: 'http://127.0.0.1:5173/?page=-10&theme=dark' });
+      await new Promise((r) => setTimeout(r, 550));
+      await assertDom(task.name, "!window.location.search.includes('page=-10')", "Negative page=-10 was sanitized");
+      await assertDom(task.name, "Boolean(document.querySelector('.leaderboard-table'))", "Leaderboard table rendered successfully without crashing");
     }
 
     // Semantic checks for specific states
