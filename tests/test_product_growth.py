@@ -4,16 +4,80 @@ import unittest
 from contextlib import contextmanager
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
 from sourcehealth.achievements.service import derive
 from sourcehealth.analyzers.analytics import CIAnalyzer
+from sourcehealth.application.services import ServiceError
+from sourcehealth.auth.sourcecraft import SourceCraftConnection
 from sourcehealth.catalog.scheduler import adaptive_interval, effective_interval
 from sourcehealth.catalog.sync import CatalogSync
 from sourcehealth.core.domain import DataAvailability as A
 from sourcehealth.integrations.sourcecraft.client import SourceCraftError
 from tests.mvp_fixtures import mvp_context
+
+
+class ProfileSourceCraftTests(unittest.TestCase):
+    @staticmethod
+    def service(client_factory):
+        service = SourceCraftConnection.__new__(SourceCraftConnection)
+        service.client_factory = client_factory
+        service._keys = lambda token: (None, "credential-key", None)
+        service._decrypt = lambda key: "unit-pat"
+        return service
+
+    def test_my_repositories_success(self):
+        payload = {"repositories": [{"id": "repo-1", "slug": "project", "visibility": "public",
+                                      "organization": {"slug": "team"}}]}
+
+        class Client:
+            def __enter__(self): return self
+            def __exit__(self, *args): return None
+            def get(self, path, params=None):
+                self.path, self.params = path, params
+                return payload
+
+        result = self.service(lambda **kwargs: Client()).my_repositories("session")
+        self.assertEqual(result["items"][0]["url"], "https://sourcecraft.dev/team/project")
+        self.assertFalse(result["has_more"])
+
+    def test_my_repositories_requires_connection(self):
+        service = self.service(lambda **kwargs: self.fail("network must not be called"))
+        service._decrypt = lambda key: None
+        with self.assertRaises(ServiceError) as caught:
+            service.my_repositories("session")
+        self.assertEqual((caught.exception.code, caught.exception.status),
+                         ("sourcecraft_connection_required", 409))
+
+    def test_upstream_auth_failure_is_safe_and_logs_only_stable_code(self):
+        secret = "test-pat"
+
+        class Client:
+            def __enter__(self): return self
+            def __exit__(self, *args): return None
+            def get(self, path, params=None): raise SourceCraftError("authentication_required")
+
+        service = self.service(lambda **kwargs: Client())
+        service._decrypt = lambda key: secret
+        with self.assertLogs("sourcehealth.auth.sourcecraft", level="WARNING") as logs:
+            with self.assertRaises(ServiceError) as caught:
+                service.my_repositories("session")
+        self.assertEqual((caught.exception.code, caught.exception.status),
+                         ("sourcecraft_repositories_unavailable", 503))
+        record = logs.records[0]
+        self.assertEqual(record.endpoint, "me/repos")
+        self.assertEqual(record.sourcecraft_error_code, "authentication_required")
+        self.assertNotIn(secret, logs.output[0])
+
+    def test_profile_frontend_separates_loading_error_and_retry(self):
+        source = (Path(__file__).parents[1] / "frontend/src/pages/ProfilePage.tsx").read_text(encoding="utf-8")
+        for contract in ("availableLoading", "availableError", "setAvailableError(reason)",
+                         'title="Не удалось загрузить репозитории SourceCraft"',
+                         "onRetry={() => void loadAvailable()}", "setLoadMoreError(reason)"):
+            self.assertIn(contract, source)
+        self.assertNotIn(".catch(() => setAvailable(null))", source)
 
 
 class AdaptiveSchedulerTests(unittest.TestCase):
