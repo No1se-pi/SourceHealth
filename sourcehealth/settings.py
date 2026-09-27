@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     catalog_cycle_interval_seconds: int = Field(default=21600, ge=3600, le=604800)
     scheduler_batch_size: int = Field(default=100, ge=1, le=1000)
     scheduler_failed_retry_seconds: int = Field(default=3600, ge=1800, le=86400)
+    yandex_ai_api_key: SecretStr | None = None
+    yandex_ai_folder_id: str = ""
+    yandex_ai_timeout: float = Field(default=45, gt=0, le=60)
+    yandex_ai_cache_ttl: int = Field(default=86400, ge=60, le=604800)
+    yandex_ai_rate_limit: int = Field(default=10, ge=1, le=100)
 
     @model_validator(mode="after")
     def runtime_budget(self):
