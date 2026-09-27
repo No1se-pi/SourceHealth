@@ -113,9 +113,12 @@ POST создаёт/reuses run в транзакции. PostgreSQL row lock + pa
 
 ## Ограничения
 
-Не подключены official AppSec, private permissions, полный live каталог
-SourceCraft repo, ML/LLM, PDF и production deployment. AppSec API и Я ID → SourceCraft
-authorization bridge открыты. GitCollector собирает список истории в память;
-streaming/incremental путь нужен после измерений, shallow clone не подменяет историю.
-Масштабирование начинается с workers, rate limits и индексов. Выделение микросервисов
-или смена executor требует доказанной необходимости и ADR.
+Не подключены private permissions, полный live каталог SourceCraft repo, ML/LLM и PDF.
+Official AppSec клиент и authorization bridge Я ID → SourceCraft подключены (сбор при
+наличии валидного PAT; nullable baseline при отсутствии). Масштабирование worker-code
+подтверждено на уровне нескольких процессов с systemd unit templates (`deploy/sourcehealth-worker-code@.service.example`),
+детерминированным single-flight advisory locking и мониторингом очередей (`queue-status`).
+Подробнее: [SCALING](SCALING.md).
+GitCollector собирает список истории в память; streaming/incremental путь нужен после измерений,
+shallow clone не подменяет историю. Масштабирование начинается с workers, rate limits и индексов.
+Выделение микросервисов или смена executor требует доказанной необходимости и ADR.

@@ -27,7 +27,7 @@ def main(argv=None):
     configure_logging()
     parser = SafeParser()
     parser.add_argument("command", choices=("worker", "worker-code", "enqueue-due", "dispatch", "register", "discover",
-                                          "catalog-sync", "maintain",
+                                          "catalog-sync", "maintain", "queue-status",
                                           "probe-sourcecraft", "accept-public", "doctor"))
     parser.add_argument("url", nargs="?")
     parser.add_argument("--organization", help="Ограничить discovery одной организацией")
@@ -60,7 +60,11 @@ def main(argv=None):
     redis = create_redis(settings.redis_url.get_secret_value())
     try:
         service = AnalysisService(sessions, settings)
-        if args.command in {"worker", "worker-code"}:
+        if args.command == "queue-status":
+            from .jobs import queue_status
+
+            print(json.dumps(queue_status(sessions, redis), indent=2))
+        elif args.command in {"worker", "worker-code"}:
             if args.command == "worker-code" and not settings.code_runtime_enabled:
                 parser.exit(2, "worker-code requires explicit CODE_RUNTIME_ENABLED=true on a trusted host\n")
             queue = "analysis-code" if args.command == "worker-code" else "analysis"
