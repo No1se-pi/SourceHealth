@@ -20,6 +20,33 @@ def usable(check):
     return check is not None and check.status == "ok" and check.availability in {A.AVAILABLE, A.NOT_CONFIGURED}
 
 
+def activity_components(git, platform):
+    """Expose the v1.2 component calculation for deterministic characterization without changing policy."""
+    metrics = git.metrics
+    recent = min(clamp(metrics["commits_last_30_days"] / 20),
+                 clamp(metrics["active_days_last_30_days"] / 5))
+    values = {"recent": 100 * recent,
+              "recency": 100 * (1 - clamp(metrics["days_since_last_commit"] / 90)),
+              "pull_requests": None, "contributors": None, "releases": None}
+    components = [(40, values["recent"]), (40, values["recency"])]
+    if platform:
+        platform_metrics = platform.metrics
+        if platform_metrics.get("recent_pr_activity") is not None:
+            values["pull_requests"] = 100 * clamp(platform_metrics["recent_pr_activity"] / 5)
+            components.append((10, values["pull_requests"]))
+        if platform_metrics.get("contributors_count") is not None:
+            values["contributors"] = 100 * clamp(platform_metrics["contributors_count"] / 3)
+            components.append((5, values["contributors"]))
+        if platform_metrics.get("release_count") is not None:
+            age = 365
+            if platform_metrics.get("last_release"):
+                age = (datetime.fromisoformat(platform.metadata["reference_time"])
+                       - datetime.fromisoformat(platform_metrics["last_release"])).total_seconds() / 86400
+            values["releases"] = 100 * (1 - clamp(age / 365))
+            components.append((5, values["releases"]))
+    return components, values
+
+
 class MVPPolicy:
     version = "mvp-score-v1.2"
 
@@ -79,23 +106,10 @@ class MVPPolicy:
 
         git, platform = results.get("git_activity"), results.get("platform_activity")
         if usable(git) and git.metrics.get("days_since_last_commit") is not None:
-            m = git.metrics
             # A same-day commit burst cannot max the recent activity component.
-            recent = min(clamp(m["commits_last_30_days"] / 20), clamp(m["active_days_last_30_days"] / 5))
-            components = [(40, 100 * recent),
-                          (40, 100 * (1 - clamp(m["days_since_last_commit"] / 90)))]
+            components, _ = activity_components(git, platform)
             checks = [git]
             if platform:
-                pm = platform.metrics
-                if pm.get("recent_pr_activity") is not None:
-                    components.append((10, 100 * clamp(pm["recent_pr_activity"] / 5)))
-                if pm.get("contributors_count") is not None:
-                    components.append((5, 100 * clamp(pm["contributors_count"] / 3)))
-                if pm.get("release_count") is not None:
-                    age = 365
-                    if pm.get("last_release"):
-                        age = (datetime.fromisoformat(platform.metadata["reference_time"]) - datetime.fromisoformat(pm["last_release"])).total_seconds() / 86400
-                    components.append((5, 100 * (1 - clamp(age / 365))))
                 if platform.evidence:
                     checks.append(platform)
             assign("activity", components, checks,

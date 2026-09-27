@@ -3,6 +3,7 @@
 import logging
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
+from time import perf_counter
 from uuid import UUID
 
 from redis import Redis
@@ -40,6 +41,17 @@ from .pipeline import analyze_context
 from .services import AnalysisService, repository_ref
 
 logger = logging.getLogger(__name__)
+
+
+def _timed_collection(stage, collect, timings):
+    started = perf_counter()
+    result = collect()
+    timings[f"{stage}_ms"] = round((perf_counter() - started) * 1000)
+    logger.info("analysis_stage_finished", extra={"component": "worker", "event": "analysis_stage_finished",
+                "analyzer": stage, "availability": result.availability.value,
+                "complete": result.facts.get("complete") if isinstance(result.facts, dict) else None,
+                "sourcecraft_error_code": result.error, "duration_ms": timings[f"{stage}_ms"]})
+    return result
 
 
 def queue_name(profile: str) -> str:
@@ -93,6 +105,8 @@ def lock_key(analysis_id: UUID) -> int:
 
 def collect_platform(repository, settings, redis, *, user_pat=None):
     """Один реальный vertical slice: API metadata + честная AppSec availability."""
+    timings = {}
+    metadata_started = perf_counter()
     cache = JsonCache(redis)
     key = platform_cache_key(repository.id, "repository_metadata-v2")
     # A user-authorized run uses one caller identity and never consumes a shared platform cache.
@@ -106,22 +120,33 @@ def collect_platform(repository, settings, redis, *, user_pat=None):
     if metadata is None:
         with SourceCraftClient(pat=user_pat or (settings.sourcecraft_pat.get_secret_value() if settings.sourcecraft_pat else None),
                                timeout=settings.sourcecraft_timeout, max_pages=settings.sourcecraft_max_pages) as client:
-            metadata = RepositoryCollector(client).collect(repository)
+            metadata = _timed_collection(
+                "repository_metadata", lambda: RepositoryCollector(client).collect(repository), timings)
         if metadata.availability == DataAvailability.AVAILABLE and not user_pat:
             cache.put(key, asdict(metadata), settings.platform_cache_ttl)
+    elif "repository_metadata_ms" not in timings:
+        timings["repository_metadata_ms"] = round((perf_counter() - metadata_started) * 1000)
+        logger.info("analysis_stage_finished", extra={
+            "component": "worker", "event": "analysis_stage_finished", "analyzer": "repository_metadata",
+            "availability": metadata.availability.value, "complete": None,
+            "sourcecraft_error_code": metadata.error, "duration_ms": timings["repository_metadata_ms"],
+        })
     if user_pat and metadata.availability == DataAvailability.AVAILABLE:
         with SourceCraftAppSecClient(pat=user_pat, timeout=settings.sourcecraft_timeout,
                                      max_pages=min(settings.sourcecraft_max_pages, 20)) as client:
-            appsec = AppSecCollector(client).collect(repository, metadata.facts.get("id"))
+            appsec = _timed_collection(
+                "appsec", lambda: AppSecCollector(client).collect(repository, metadata.facts.get("id")), timings)
     else:
-        appsec = AppSecCollector(None).collect(repository, metadata.facts.get("id"))
+        appsec = _timed_collection(
+            "appsec", lambda: AppSecCollector(None).collect(repository, metadata.facts.get("id")), timings)
     return AnalysisContext(repository=repository,
                            metadata={"collection": {"repository_metadata": {"collected_at": metadata.collected_at,
                                                                               "schema_version": metadata.schema_version,
                                                                               "error": metadata.error},
                                                     "appsec": {"collected_at": appsec.collected_at,
                                                                "schema_version": appsec.schema_version,
-                                                               "error": appsec.error}}},
+                                                               "error": appsec.error}},
+                                     "stage_timings_ms": timings},
                            sourcecraft_facts={"repository_metadata": metadata.facts, "appsec": appsec.facts},
                            collection_statuses={"repository_metadata": metadata.availability,
                                                 "appsec": appsec.availability})
@@ -134,6 +159,8 @@ def execute_analysis(analysis_id: str) -> None:
     service = AnalysisService(sessions, settings)
     credentials = SourceCraftConnection(AuthService(settings, redis, sessions))
     run_id = UUID(analysis_id)
+    total_started = perf_counter()
+    timings = {}
     # Session advisory lock survives short database transactions but not process death.
     # Redis queue/lock loss therefore cannot start a second heavy execution.
     try:
@@ -168,16 +195,28 @@ def execute_analysis(analysis_id: str) -> None:
                 if profile == "mvp-v1":
                     context = collect_mvp(context, settings, pat=user_pat)
                 service.transition(run_id, "analyzing")
+                timings.update(context.metadata.get("stage_timings_ms", {}))
                 report = analyze_context(context, include_code=profile in {"code-v1", "mvp-v1"}, with_mvp=profile == "mvp-v1",
                                          runtime=configured_runtime(settings, with_mvp=True) if profile == "mvp-v1" else
-                                         configured_runtime(settings) if profile == "code-v1" else None)
+                                         configured_runtime(settings) if profile == "code-v1" else None,
+                                         timings=timings)
                 service.transition(run_id, "scoring")
+                scoring_started = perf_counter()
                 ScoringEngine(MVPPolicy() if profile == "mvp-v1" else None).apply(report)
+                timings["scoring_ms"] = round((perf_counter() - scoring_started) * 1000)
+                for check in report.checks.values():
+                    logger.info("analysis_check_result", extra={
+                        "analysis_id": analysis_id, "component": "worker", "event": "analysis_check_result",
+                        "analyzer": check.analyzer, "availability": check.availability.value,
+                        "complete": check.metrics.get("complete") if isinstance(check.metrics, dict) else None,
+                        "sourcecraft_error_code": check.error,
+                    })
                 if profile == "mvp-v1":
                     report.recommendations = recommend(report.checks)
                 service.finish(run_id, report)
+                timings["total_ms"] = round((perf_counter() - total_started) * 1000)
                 logger.info("analysis_finished", extra={"analysis_id": analysis_id, "repository_id": repository.id,
-                                                        "component": "worker", "event": "analysis_finished"})
+                                                        "component": "worker", "event": "analysis_finished", **timings})
             except Exception:
                 # Neither exception text nor source responses are suitable for RQ failure storage/logs.
                 with sessions() as db:
@@ -185,7 +224,9 @@ def execute_analysis(analysis_id: str) -> None:
                     active = row is not None and row.status in ACTIVE_STATUSES
                 if active:
                     service.transition(run_id, "failed", error_code="analysis_failed")
-                logger.error("analysis_failed", extra={"analysis_id": analysis_id, "component": "worker"})
+                logger.error("analysis_failed", extra={"analysis_id": analysis_id, "component": "worker",
+                                                        "event": "analysis_failed", **timings,
+                                                        "total_ms": round((perf_counter() - total_started) * 1000)})
             finally:
                 credentials.delete_analysis_credential(run_id)
                 guard.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": lock_key(run_id)})
@@ -204,14 +245,15 @@ def collect_mvp(context, settings, *, client=None, pat=None):
         timeout=min(settings.sourcecraft_timeout, 10), max_pages=min(settings.sourcecraft_max_pages, 5), deadline_seconds=120)
     facts, statuses = dict(context.sourcecraft_facts), dict(context.collection_statuses)
     collection = dict(context.metadata.get("collection", {}))
+    timings = dict(context.metadata.get("stage_timings_ms", {}))
     with manager as client:
         for cls in (IssuesCollector, CICollector, PullRequestsCollector, ContributorsCollector, ReleasesCollector):
-            collected = cls(client).collect(context.repository)
+            collected = _timed_collection(cls.name, lambda cls=cls: cls(client).collect(context.repository), timings)
             facts[cls.name], statuses[cls.name] = collected.facts, collected.availability
             collection[cls.name] = {"collected_at": collected.collected_at, "schema_version": collected.schema_version,
                                     "error": collected.error}
     return replace(context, sourcecraft_facts=facts, collection_statuses=statuses,
-                   metadata={**context.metadata, "collection": collection})
+                   metadata={**context.metadata, "collection": collection, "stage_timings_ms": timings})
 
 
 def recover_abandoned(engine, sessions, settings) -> int:

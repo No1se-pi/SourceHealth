@@ -13,6 +13,7 @@ from sourcehealth.runtime import DockerAnalysisRuntime
 from sourcehealth.runtime_results import normalize_runtime_report
 from sourcehealth.sast.models import ScanResult
 from sourcehealth.scoring.engine import ScoringEngine
+from tests.mvp_fixtures import runtime_payload
 
 
 def runtime_fixture(*, partial=False):
@@ -81,6 +82,18 @@ class RuntimePipelineTests(unittest.TestCase):
                 checks = normalize_runtime_report(fixture)
                 self.assertEqual(checks["git_activity"].status, "ok")
                 self.assertEqual(checks["sast"].availability, DataAvailability.NO_DATA)
+
+    def test_snapshot_preserves_explicit_ci_configuration_completeness(self):
+        fixture = runtime_payload()
+        docs = fixture["checks"]["documentation"]
+        docs["metadata"].update(ci_configured=False, ci_config_complete=True)
+        normalized = normalize_runtime_report(fixture, with_mvp=True)["documentation"]
+        self.assertFalse(normalized.metadata["ci_configured"])
+        self.assertTrue(normalized.metadata["ci_config_complete"])
+
+        docs["metadata"]["ci_config_complete"] = "yes"
+        invalid = normalize_runtime_report(fixture, with_mvp=True)["documentation"]
+        self.assertEqual(invalid.error, "runtime_invalid_check")
 
     def test_envelope_failures_are_safe_and_cleanup_is_not_success(self):
         for code in ("container_timeout", "docker_unavailable", "docker_command_failed", "private stderr marker"):

@@ -32,7 +32,7 @@ def platform_payloads():
 
 
 def runtime_payload():
-    metadata = {"head_sha": SHA, "complete": True, "ci_configured": True,
+    metadata = {"head_sha": SHA, "complete": True, "ci_configured": True, "ci_config_complete": True,
                 "scope": "tracked_default_branch_excluding_generated"}
     docs = AnalyzerResult("documentation", category="documentation", source="git_snapshot", metadata=metadata,
                           metrics={**dict.fromkeys(DOCUMENTATION_WEIGHTS, True), "readme_bytes": 500, "readme_headings": 4})

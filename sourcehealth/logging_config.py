@@ -15,6 +15,11 @@ class EventFormatter(logging.Formatter):
         for name in ("request_id", "analysis_id", "repository_id", "endpoint", "sourcecraft_error_code",
                      "availability", "organization_slug", "repository_slug"):
             values[name] = getattr(record, name, None)
+        for name in ("analyzer", "complete", "duration_ms", "repository_metadata_ms", "appsec_ms", "issues_ms",
+                     "cicd_ms", "pull_requests_ms", "contributors_ms", "releases_ms", "runtime_ms", "scoring_ms",
+                     "total_ms"):
+            if hasattr(record, name):
+                values[name] = getattr(record, name)
         # Не включаем exc_info, args, query string и произвольный record.__dict__.
         return json.dumps(values, ensure_ascii=True, default=str)
 

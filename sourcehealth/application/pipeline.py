@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from datetime import UTC, datetime
+from time import perf_counter
 
 from sourcehealth.analyzers.analytics import CIAnalyzer, IssuesAnalyzer, PlatformActivityAnalyzer
 from sourcehealth.analyzers.platform import RepositoryMetadataAnalyzer, SourceCraftSecurityAnalyzer
@@ -13,7 +14,8 @@ from sourcehealth.runtime_results import CLASSIFICATION, MVP_CLASSIFICATION, nor
 
 
 def analyze_context(context: AnalysisContext, *, include_code: bool = False,
-                    runtime: AnalysisRuntime | None = None, with_mvp: bool = False) -> AnalysisReport:
+                    runtime: AnalysisRuntime | None = None, with_mvp: bool = False,
+                    timings: dict[str, int] | None = None) -> AnalysisReport:
     """Один вызов runtime для Git и SAST, без повторного clone ради анализатора."""
     report = AnalysisRunner([RepositoryMetadataAnalyzer(), SourceCraftSecurityAnalyzer()]).analyze_context(context)
     if include_code:
@@ -21,11 +23,15 @@ def analyze_context(context: AnalysisContext, *, include_code: bool = False,
         if runtime is None:
             checks = {name: unavailable(name, "runtime_not_configured") for name in names}
         else:
+            started = perf_counter()
             try:
                 checks = normalize_runtime_report(runtime.analyze(context.repository), with_mvp=with_mvp)
             except Exception:
                 # Exceptions may include Git stderr/credentials. Persist only a fixed code.
                 checks = {name: unavailable(name, "runtime_failed") for name in names}
+            finally:
+                if timings is not None:
+                    timings["runtime_ms"] = round((perf_counter() - started) * 1000)
         report.checks.update(checks)
     if with_mvp:
         doc = report.checks.get("documentation")
