@@ -1,4 +1,4 @@
-﻿# SourceHealth — Матрица обязательной приёмки (Mandatory 100/100 Acceptance Matrix)
+# SourceHealth — Матрица обязательной приёмки (Mandatory 100/100 Acceptance Matrix)
 
 Дата формирования: 2026-09-26
 Ветка: `feature/release-acceptance-tooling` (PR #15)
@@ -11,7 +11,7 @@ Scoring Policy: `mvp-score-v1.2` (каноническая, без измене�
 
 | ID | Требование ТЗ | Реализация | Automated proof | Live/manual proof | Status | Notes |
 |---|---|---|---|---|---|---|
-| **M-01** | **6 обязательных категорий**<br>(Documentation, CI/CD, Security, Activity, Issues, Code Health) | Реализованы 6 независимых анализаторов (`DocumentationAnalyzer`, `CIAnalyzer`, `SourceCraftSecurityAnalyzer`, `PlatformActivityAnalyzer`, `IssuesAnalyzer`, `TechnicalDebtAnalyzer`) | `tests/test_mvp_analytics.py`, `tests/test_mvp_snapshot.py`, `tests/test_appsec.py`, `tests/test_sast_eligibility.py` (360 unit/integration тестов PASS) | Визуализировано в UI анализа: `docs/screenshots/14-analysis-light-1440.png`, `15-analysis-dark-1440.png` | **PASS** | Категории изолированы, факт отсутствия одной не ломает остальные. |
+| **M-01** | **6 обязательных категорий**<br>(Documentation, CI/CD, Security, Activity, Issues, Code Health) | Реализованы 6 независимых анализаторов (`DocumentationAnalyzer`, `CIAnalyzer`, `SourceCraftSecurityAnalyzer`, `PlatformActivityAnalyzer`, `IssuesAnalyzer`, `TechnicalDebtAnalyzer`) | `tests/test_mvp_analytics.py`, `tests/test_mvp_snapshot.py`, `tests/test_appsec.py`, `tests/test_sast_eligibility.py` (Ran 360 tests, OK (skipped=61)) | Визуализировано в UI анализа: `docs/screenshots/14-analysis-light-1440.png`, `15-analysis-dark-1440.png` | **PASS** | Категории изолированы, факт отсутствия одной не ломает остальные. |
 | **M-02** | **Repo Health Score 0–100**<br>(Детерминированный, воспроизводимый балл) | Движок `ScoringEngine` + политика `MVPPolicy` (`mvp-score-v1.2`). Нормализованные веса 15/15/20/15/15/20 (Documentation 15, CI/CD 15, Security 20, Activity 15, Issues 15, Code Health 20), округление до 2 знаков | `tests/test_mvp_analytics.py::MVPAnalyticsTests::test_six_slots_security_unavailable_and_weighted_coverage` | Browser mock: `01-leaderboard-light-1440.png`, `14-analysis-light-1440.png` | **PASS** | Численный балл строго в диапазоне [0, 100], без недетерминированных факторов. |
 | **M-03** | **Инвариант NO_DATA != 0**<br>(Отсутствие данных не превращается в 0) | `DataAvailability` (`available`, `partial`, `no_data`, `not_configured`). При `no_data` score равен `null`. Ренормализация по весам доступных категорий ($\ge 50\%$) | `tests/test_mvp_analytics.py::MVPAnalyticsTests::test_coverage_weight_is_not_category_count_or_full_scan_claim`, `tests/test_foundation.py` | UI скриншот: `docs/screenshots/22-analysis-security-nodata-1440.png`, `13-repository-nodata-1440.png` | **PASS** | Ни при каких условиях `null` не становится `0.0`. При весе $< 50\%$ Health = null. |
 | **M-04** | **Приоритизированные рекомендации**<br>(Actionable, с привязкой к evidence) | Модуль `sourcehealth.recommendations.mvp.recommend`: генерация карточек с приоритетом (1, 2, 3), action, impact и evidence | `tests/test_mvp_analytics.py`, `tests/test_acceptance.py` | Скриншоты UI: `docs/screenshots/14-analysis-light-1440.png`, `39-analysis-long-recommendation-1440.png` | **PASS** | Рекомендации строго детерминированы, не используют LLM/галлюцинации. |
@@ -138,7 +138,7 @@ Scoring Policy: `mvp-score-v1.2` (каноническая, без измене�
 - Статус: **PASS**.
 
 ### Gate S — Security regression suite
-- 360 unit/integration тестов проверяют отсутствие утечек, CSRF защиту, шифрование токенов.
+- Ran 360 tests, OK (skipped=61) проверяют отсутствие утечек, CSRF защиту, шифрование токенов.
 - Clean leak sweep: ни одного токена или секрета в git diff.
 - Статус: **PASS**.
 
