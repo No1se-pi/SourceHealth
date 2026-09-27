@@ -1,4 +1,4 @@
-import type { components } from './generated';
+﻿import type { components } from './generated';
 
 export type Repository = components['schemas']['RepositorySummary'];
 export type RepositoryDetails = components['schemas']['RepositoryDetails'];
@@ -26,6 +26,10 @@ export type Achievement = components['schemas']['AchievementDTO'];
 export type ProfileSummary = components['schemas']['ProfileSummaryDTO'];
 export type ShareInfo = components['schemas']['ShareInfo'];
 export type IntegrityResponse = components['schemas']['IntegrityResponse'];
+export type DemoSimulateRequest = components['schemas']['DemoSimulateRequest'];
+export type DemoSimulateResponse = components['schemas']['DemoSimulateResponse'];
+export type DemoPreset = components['schemas']['DemoPresetDTO'];
+export type DemoCategoryDetail = components['schemas']['DemoCategoryDetail'];
 export type AISummaryMode = 'flash' | 'lite' | 'pro';
 export interface AISummaryResult {
   schema_version: 'ai-summary-v1'; executive_summary: string;
@@ -158,4 +162,11 @@ export const api = {
       method: 'POST',
     }),
   me: () => request<User>('/me'),
+  demoSimulate: (scores: Record<string, number | null>) =>
+    request<DemoSimulateResponse>('/demo/simulate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scores }),
+    }),
+  demoPresets: () => request<DemoPreset[]>('/demo/presets'),
 };
