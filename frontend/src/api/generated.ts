@@ -400,12 +400,40 @@ export interface components {
             title: string;
             /** Description */
             description: string;
+            /**
+             * Category
+             * @default progress
+             * @enum {string}
+             */
+            category: "start" | "quality" | "security" | "automation" | "progress" | "exploration";
+            /**
+             * Rarity
+             * @default common
+             * @enum {string}
+             */
+            rarity: "common" | "uncommon" | "rare" | "epic";
+            /**
+             * Icon Key
+             * @default default
+             */
+            icon_key: string;
+            /**
+             * Hint
+             * @default
+             */
+            hint: string;
             /** Unlocked */
             unlocked: boolean;
             /** Unlocked At */
             unlocked_at: string | null;
             /** Repository Id */
             repository_id: string | null;
+            /** Progress Current */
+            progress_current?: number | null;
+            /** Progress Target */
+            progress_target?: number | null;
+            /** Progress Percent */
+            progress_percent?: number | null;
         };
         /** AnalysisDetails */
         AnalysisDetails: {
@@ -804,6 +832,7 @@ export interface components {
             repositories: components["schemas"]["ProfileRepositoryDTO"][];
             /** Achievements */
             achievements: components["schemas"]["AchievementDTO"][];
+            summary?: components["schemas"]["ProfileSummaryDTO"] | null;
         };
         /** ProfileRepositoryDTO */
         ProfileRepositoryDTO: {
@@ -836,6 +865,46 @@ export interface components {
             refresh_preference: "adaptive" | "1h" | "6h" | "24h" | "7d" | "off";
             /** Use Pat For Scheduled Analysis */
             use_pat_for_scheduled_analysis: boolean;
+        };
+        /** ProfileSummaryDTO */
+        ProfileSummaryDTO: {
+            /** Tracked Count */
+            tracked_count: number;
+            /** Analyzed Count */
+            analyzed_count: number;
+            /** Official Health Count */
+            official_health_count: number;
+            /** Best Health */
+            best_health?: number | null;
+            /** Median Health */
+            median_health?: number | null;
+            /** Next Analysis At */
+            next_analysis_at?: string | null;
+            /**
+             * Achievements Unlocked
+             * @default 0
+             */
+            achievements_unlocked: number;
+            /**
+             * Portfolio Healthy
+             * @default 0
+             */
+            portfolio_healthy: number;
+            /**
+             * Portfolio Medium
+             * @default 0
+             */
+            portfolio_medium: number;
+            /**
+             * Portfolio Needs Attention
+             * @default 0
+             */
+            portfolio_needs_attention: number;
+            /**
+             * Portfolio No Data
+             * @default 0
+             */
+            portfolio_no_data: number;
         };
         /** RecommendationDTO */
         RecommendationDTO: {
@@ -1054,6 +1123,8 @@ export interface components {
             badge_url: string;
             /** Badge Markdown */
             badge_markdown: string;
+            /** Badge Html */
+            badge_html?: string | null;
             /** Latest Analysis Id */
             latest_analysis_id: string | null;
             /** Latest Analysis Url */

@@ -963,8 +963,139 @@ const mockServer = http.createServer((req, res) => {
     }));
   }
 
+  // 14. Profile endpoint
+  if (url.pathname === '/api/v1/profile') {
+
+    res.writeHead(200);
+    return res.end(JSON.stringify({
+      sourcecraft: { connected: true, expires_in: 1800, retention_seconds: 1800 },
+      repositories: [
+        {
+          repository_id: 'a0000001-0000-0000-0000-000000000001',
+          organization_slug: 'demo-org',
+          repository_slug: 'fast-service',
+          health_score: 70.5,
+          score_preview: null,
+          last_analysis_at: '2026-09-20T14:36:12Z',
+          last_activity_at: '2026-09-20T14:30:00Z',
+          analysis_status: 'completed',
+          next_analysis_at: '2026-09-27T14:30:00Z',
+          refresh_preference: 'weekly',
+          use_pat_for_scheduled_analysis: true
+        },
+        {
+          repository_id: 'a0000002-0000-0000-0000-000000000002',
+          organization_slug: 'demo-org',
+          repository_slug: 'slow-worker',
+          health_score: 85.0,
+          score_preview: null,
+          last_analysis_at: '2026-09-20T14:36:12Z',
+          last_activity_at: '2026-09-20T14:30:00Z',
+          analysis_status: 'completed',
+          next_analysis_at: '2026-09-27T14:30:00Z',
+          refresh_preference: 'weekly',
+          use_pat_for_scheduled_analysis: true
+        }
+      ],
+      achievements: [
+        {
+          id: 'first_checkup',
+          title: 'Первый чекап',
+          description: 'Завершен первый анализ репозитория',
+          category: 'start',
+          rarity: 'common',
+          icon_key: 'first_checkup',
+          hint: 'Запустите анализ любого отслеживаемого репозитория',
+          unlocked: true,
+          unlocked_at: '2026-09-20T14:36:12Z',
+          repository_id: 'a0000001-0000-0000-0000-000000000001',
+          progress_current: null,
+          progress_target: null,
+          progress_percent: null
+        },
+        {
+          id: 'maintainer',
+          title: 'Хранитель репозитория',
+          description: 'Проведено не менее 10 анализов',
+          category: 'progress',
+          rarity: 'rare',
+          icon_key: 'maintainer',
+          hint: 'Выполняйте регулярные анализы проектов',
+          unlocked: false,
+          unlocked_at: null,
+          repository_id: null,
+          progress_current: 7,
+          progress_target: 10,
+          progress_percent: 70.0
+        },
+        {
+          id: 'full_house',
+          title: 'Шесть из шести',
+          description: 'Все 6 категорий Health подтверждены данными',
+          category: 'quality',
+          rarity: 'rare',
+          icon_key: 'full_house',
+          hint: 'Добейтесь 100% покрытия данных по всем направлениям',
+          unlocked: true,
+          unlocked_at: '2026-09-20T14:36:12Z',
+          repository_id: 'a0000001-0000-0000-0000-000000000001',
+          progress_current: null,
+          progress_target: null,
+          progress_percent: null
+        }
+      ],
+      summary: {
+        tracked_count: 2,
+        analyzed_count: 2,
+        official_health_count: 2,
+        best_health: 85.0,
+        median_health: 77.75,
+        next_analysis_at: '2026-09-27T14:30:00Z',
+        achievements_unlocked: 2,
+        portfolio_healthy: 1,
+        portfolio_medium: 1,
+        portfolio_needs_attention: 0,
+        portfolio_no_data: 0
+      }
+    }));
+  }
+
+  // 15. Publicity
+  if (url.pathname.startsWith('/api/v1/publicity/repositories/')) {
+    res.writeHead(200);
+    return res.end(JSON.stringify({
+      repository_id: 'a0000001-0000-0000-0000-000000000001',
+      organization_slug: 'demo-org',
+      repository_slug: 'fast-service',
+      health_score: 70.5,
+      health_available: true,
+      repository_url: 'http://127.0.0.1:5173/repositories/a0000001-0000-0000-0000-000000000001',
+      badge_url: 'http://127.0.0.1:5173/api/v1/badges/demo-org/fast-service.svg',
+      badge_markdown: '![SourceHealth](http://127.0.0.1:5173/api/v1/badges/demo-org/fast-service.svg)',
+      badge_html: '<a href="http://127.0.0.1:5173/repositories/a0000001-0000-0000-0000-000000000001"><img src="http://127.0.0.1:5173/api/v1/badges/demo-org/fast-service.svg" alt="SourceHealth" /></a>',
+      latest_analysis_id: 'b0000001-0000-0000-0000-000000000001',
+      latest_analysis_url: 'http://127.0.0.1:5173/analyses/b0000001-0000-0000-0000-000000000001',
+      markdown_report_url: 'http://127.0.0.1:5173/api/v1/analyses/b0000001-0000-0000-0000-000000000001/report.md'
+    }));
+  }
+
+  // 16. Integrity
+  if (url.pathname.endsWith('/integrity') && req.method === 'GET') {
+    res.writeHead(200);
+    return res.end(JSON.stringify({
+      repository_id: 'a0000001-0000-0000-0000-000000000001',
+      analysis_id: 'b0000001-0000-0000-0000-000000000001',
+      has_signals: false,
+      signal_count: 0,
+      warning_count: 0,
+      info_count: 0,
+      signals: []
+    }));
+  }
+
   res.writeHead(404);
   res.end(JSON.stringify({ error: 'not_found' }));
+
 });
 
 mockServer.listen(MOCK_PORT, '127.0.0.1', () => {
@@ -1286,8 +1417,43 @@ const tasks = [
     width: 1440,
     height: 900,
     action: 'history-back'
+  },
+  {
+    name: '57-profile-dashboard-1440.png',
+    url: 'http://127.0.0.1:5173/profile?theme=dark',
+    width: 1440,
+    height: 1000,
+    action: 'profile-assertions'
+  },
+  {
+    name: '58-profile-mobile-390.png',
+    url: 'http://127.0.0.1:5173/profile?theme=dark',
+    width: 390,
+    height: 844
+  },
+  {
+    name: '59-repository-history-share-1440.png',
+    url: 'http://127.0.0.1:5173/repositories/a0000001-0000-0000-0000-000000000001?theme=dark',
+    width: 1440,
+    height: 1200,
+    action: 'repository-assertions'
+  },
+  {
+    name: '60-developers-api-tabs-1440.png',
+    url: 'http://127.0.0.1:5173/developers?theme=dark',
+    width: 1440,
+    height: 1000,
+    action: 'developers-assertions'
+  },
+  {
+    name: '61-keyboard-help-modal-1440.png',
+    url: 'http://127.0.0.1:5173/?theme=dark',
+    width: 1440,
+    height: 900,
+    action: 'open-keyboard-help'
   }
 ];
+
 
 const acceptanceFilter = process.env.ACCEPTANCE_FILTER;
 const selectedTasks = acceptanceFilter ? tasks.filter((task) => task.name.includes(acceptanceFilter)) : tasks;
@@ -1464,7 +1630,31 @@ for (const task of selectedTasks) {
       await evalCdp(`window.history.back()`);
       await new Promise((r) => setTimeout(r, 450));
       await assertDom(task.name, "!window.location.search.includes('topic=web')", 'History back successfully restored state');
+    } else if (task.action === 'profile-assertions') {
+      console.log('  -> Verifying Profile dashboard and achievements DOM...');
+      await assertDom(task.name, "document.body.innerText.includes('Сводка профиля') || document.body.innerText.includes('Профиль пользователя')", 'Profile summary card is present');
+      await assertDom(task.name, "document.body.innerText.includes('Мои проекты')", 'Health portfolio card is present');
+      await assertDom(task.name, "document.body.innerText.includes('Достижения')", 'Achievements card is present');
+      await assertDom(task.name, "document.body.innerText.includes('Хранитель репозитория') || document.body.innerText.includes('Maintainer') || document.body.innerText.includes('Первый чекап')", 'Maintainer achievement is present');
+    } else if (task.action === 'repository-assertions') {
+      console.log('  -> Verifying Repository history, share, and integrity DOM...');
+      await assertDom(task.name, "document.body.innerText.includes('История анализов')", 'Analysis history card is present');
+      await assertDom(task.name, "document.body.innerText.includes('Проверка устойчивости рейтинга')", 'Integrity panel is present');
+      await assertDom(task.name, "document.body.innerText.includes('Поделиться результатом')", 'Share card is present');
+    } else if (task.action === 'developers-assertions') {
+      console.log('  -> Verifying Developers page tabs and API semantics DOM...');
+      await assertDom(task.name, "document.body.innerText.includes('Семантика и принципы REST API')", 'API semantics callout is present');
+      await assertDom(task.name, "document.body.innerText.includes('cURL')", 'cURL tab is present');
+      await assertDom(task.name, "document.body.innerText.includes('README бейдж')", 'Badge card is present');
+    } else if (task.action === 'open-keyboard-help') {
+      console.log('  -> Triggering keyboard help modal...');
+      await sendCdp('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: '?', text: '?' });
+      await sendCdp('Input.dispatchKeyEvent', { type: 'keyUp', key: '?' });
+      await new Promise((r) => setTimeout(r, 450));
+      await assertDom(task.name, "document.body.innerText.includes('Горячие клавиши')", 'Keyboard help modal opened');
+      await assertDom(task.name, "document.body.innerText.includes('Ctrl') || document.body.innerText.includes('⌘')", 'Shortcuts listed');
     }
+
 
     // Semantic checks for specific states
     if (task.name.includes('empty')) {

@@ -150,6 +150,8 @@ class AnalysisSummary(BaseModel):
     error_code: str | None
 
 
+
+
 class AnalysisPage(BaseModel):
     items: list[AnalysisSummary]
     limit: int
@@ -268,12 +270,34 @@ class AchievementDTO(BaseModel):
     id: str
     title: str
     description: str
+    category: Literal["start", "quality", "security", "automation", "progress", "exploration"] = "progress"
+    rarity: Literal["common", "uncommon", "rare", "epic"] = "common"
+    icon_key: str = "default"
+    hint: str = ""
     unlocked: bool
     unlocked_at: datetime | None
     repository_id: UUID | None
+    progress_current: int | None = None
+    progress_target: int | None = None
+    progress_percent: float | None = None
+
+
+class ProfileSummaryDTO(BaseModel):
+    tracked_count: int
+    analyzed_count: int
+    official_health_count: int
+    best_health: float | None = None
+    median_health: float | None = None
+    next_analysis_at: datetime | None = None
+    achievements_unlocked: int = 0
+    portfolio_healthy: int = 0
+    portfolio_medium: int = 0
+    portfolio_needs_attention: int = 0
+    portfolio_no_data: int = 0
 
 
 class ProfileDTO(BaseModel):
     sourcecraft: SourceCraftConnectionDTO
     repositories: list[ProfileRepositoryDTO]
     achievements: list[AchievementDTO]
+    summary: ProfileSummaryDTO | None = None

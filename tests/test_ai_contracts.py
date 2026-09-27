@@ -1,0 +1,229 @@
+"""Unit tests for AI foundation contracts, grounding, and privacy allowlists."""
+
+import unittest
+from copy import deepcopy
+from uuid import uuid4
+
+from pydantic import ValidationError
+
+from sourcehealth.ai.context import build_ai_context
+from sourcehealth.ai.contracts import (
+    AISummaryResult,
+    GroundedAction,
+    GroundedStatement,
+)
+from sourcehealth.ai.provider import (
+    AIValidationError,
+    DisabledAIProvider,
+    build_future_prompt,
+    validate_ai_output,
+)
+
+
+class AIContractsTests(unittest.TestCase):
+    def setUp(self):
+        self.raw_report = {
+            "id": str(uuid4()),
+            "organization_slug": "sourcecraft",
+            "repository_slug": "custodes",
+            "scoring_policy_version": "mvp-score-v1.2",
+            "health_score": 85.0,
+            "score_coverage": {"nominal_weight_percent": 80.0},
+            "category_scores": {
+                "documentation": {
+                    "score": 90.0,
+                    "availability": "available",
+                    "explanation": "README and license are complete",
+                    "evidence_refs": ["doc:readme", "doc:license"],
+                },
+                "cicd": {
+                    "score": 100.0,
+                    "availability": "available",
+                    "explanation": "CI pipeline passes reliably",
+                    "evidence_refs": ["ci:pipeline"],
+                },
+            },
+            "recommendations": [
+                {
+                    "id": "rec-docs-1",
+                    "priority": 1,
+                    "category": "documentation",
+                    "title": "Add CONTRIBUTING guide",
+                    "description": "A contributing guide helps new contributors.",
+                    "suggested_action": "Create CONTRIBUTING.md in root.",
+                    "expected_impact": "Raises documentation score to 100",
+                    "evidence_refs": ["doc:contributing"],
+                }
+            ],
+            "checks": {
+                "documentation": {
+                    "status": "ok",
+                    "metrics": {"readme": True, "license": True},
+                    "evidence": [
+                        {"id": "doc:readme", "kind": "documentation", "summary": "Found README.md", "value": True},
+                        {"id": "doc:license", "kind": "documentation", "summary": "Found LICENSE", "value": True},
+                    ],
+                }
+            },
+        }
+
+    def test_build_ai_context_safe_and_grounded(self):
+        context = build_ai_context(self.raw_report)
+        self.assertEqual(context.schema_version, "ai-context-v1")
+        self.assertEqual(context.repository, {"org": "sourcecraft", "repo": "custodes"})
+        self.assertEqual(context.official_health, 85.0)
+        self.assertEqual(context.score_coverage, 80.0)
+        self.assertEqual(len(context.categories), 2)
+        self.assertEqual(len(context.recommendations), 1)
+        self.assertGreaterEqual(len(context.facts), 2)
+
+    def test_privacy_allowlist_excludes_secrets_and_source(self):
+        tainted_report = deepcopy(self.raw_report)
+        tainted_report["category_scores"]["documentation"]["explanation"] += (
+            " token: ghp_1234567890abcdef and author: dev@users.noreply.github.com"
+        )
+        tainted_report["checks"]["documentation"]["evidence"].append({
+            "id": "raw_payload:leak",
+            "kind": "cookie_secret",
+            "summary": "Bearer SECRET_RAW_RESPONSE_MARKER",
+            "value": "source_snippet: def foo(): pass",
+        })
+
+        context = build_ai_context(tainted_report)
+        serialized = context.model_dump_json()
+
+        self.assertNotIn("ghp_1234567890abcdef", serialized)
+        self.assertNotIn("@users.noreply.github.com", serialized)
+        self.assertNotIn("SECRET_RAW_RESPONSE_MARKER", serialized)
+        self.assertNotIn("raw_payload:leak", serialized)
+
+    def test_health_and_categories_remain_strictly_immutable(self):
+        original_health = self.raw_report["health_score"]
+        original_categories = deepcopy(self.raw_report["category_scores"])
+
+        context = build_ai_context(self.raw_report)
+        self.assertEqual(self.raw_report["health_score"], original_health)
+        self.assertEqual(self.raw_report["category_scores"], original_categories)
+
+        # AI Context does not have fields that allow writing back to score
+        self.assertEqual(context.official_health, original_health)
+
+    def test_validate_ai_output_accepts_valid_grounded_result(self):
+        context = build_ai_context(self.raw_report)
+        valid_result = AISummaryResult(
+            schema_version="ai-summary-v1",
+            executive_summary="The repository has strong CI/CD automation and clean documentation.",
+            strengths=[
+                GroundedStatement(text="CI pipeline is fully configured and passing.", evidence_refs=["ci:pipeline"]),
+                GroundedStatement(text="Documentation includes README and LICENSE.", evidence_refs=["doc:readme"]),
+            ],
+            risks=[
+                GroundedStatement(text="Contributing guidelines are missing.", evidence_refs=["doc:license"]),
+            ],
+            actions=[
+                GroundedAction(
+                    text="Add CONTRIBUTING guide to streamline open-source contributions.",
+                    recommendation_ids=["rec-docs-1"],
+                    evidence_refs=[],
+                )
+            ],
+            limitations=[
+                GroundedStatement(text="AppSec coverage was not evaluated.", evidence_refs=[]),
+            ],
+        )
+
+        # Should not raise
+        validate_ai_output(context, valid_result)
+
+    def test_validate_ai_output_rejects_unknown_evidence_ref(self):
+        context = build_ai_context(self.raw_report)
+        invalid_result = AISummaryResult(
+            schema_version="ai-summary-v1",
+            executive_summary="Summary",
+            strengths=[
+                GroundedStatement(text="Claim with fake citation", evidence_refs=["fake:evidence:id"]),
+            ],
+            risks=[],
+            actions=[],
+            limitations=[],
+        )
+
+        with self.assertRaisesRegex(AIValidationError, "Unknown evidence reference 'fake:evidence:id'"):
+            validate_ai_output(context, invalid_result)
+
+    def test_validate_ai_output_rejects_unknown_recommendation_id(self):
+        context = build_ai_context(self.raw_report)
+        invalid_result = AISummaryResult(
+            schema_version="ai-summary-v1",
+            executive_summary="Summary",
+            strengths=[],
+            risks=[],
+            actions=[
+                GroundedAction(text="Action citing ghost recommendation", recommendation_ids=["rec-nonexistent"]),
+            ],
+            limitations=[],
+        )
+
+        with self.assertRaisesRegex(AIValidationError, "Unknown recommendation ID 'rec-nonexistent'"):
+            validate_ai_output(context, invalid_result)
+
+    def test_validate_ai_output_rejects_action_without_grounding(self):
+        context = build_ai_context(self.raw_report)
+        invalid_result = AISummaryResult(
+            schema_version="ai-summary-v1",
+            executive_summary="Summary",
+            strengths=[],
+            risks=[],
+            actions=[
+                GroundedAction(text="Action without any citations", recommendation_ids=[], evidence_refs=[]),
+            ],
+            limitations=[],
+        )
+
+        with self.assertRaisesRegex(AIValidationError, "must reference at least one valid recommendation ID"):
+            validate_ai_output(context, invalid_result)
+
+    def test_validate_ai_output_rejects_oversized_elements(self):
+        # Executive summary too long (>1000)
+
+        with self.assertRaises(ValidationError):
+            AISummaryResult(
+                schema_version="ai-summary-v1",
+                executive_summary="A" * 1001,
+                strengths=[],
+                risks=[],
+                actions=[],
+                limitations=[],
+            )
+
+        # Too many actions (>5)
+        with self.assertRaises(ValidationError):
+            AISummaryResult(
+                schema_version="ai-summary-v1",
+                executive_summary="Summary",
+                strengths=[],
+                risks=[],
+                actions=[
+                    GroundedAction(text=f"Action {i}", recommendation_ids=["rec-docs-1"])
+                    for i in range(6)
+                ],
+                limitations=[],
+            )
+
+    def test_disabled_ai_provider_raises_expected_error(self):
+        context = build_ai_context(self.raw_report)
+        provider = DisabledAIProvider()
+        with self.assertRaisesRegex(RuntimeError, "ai_provider_disabled"):
+            provider.summarize(context)
+
+    def test_prompt_template_builder(self):
+        context = build_ai_context(self.raw_report)
+        prompt = build_future_prompt(context)
+        self.assertIn("sourcecraft/custodes", prompt)
+        self.assertIn("Official Health: 85.0", prompt)
+        self.assertIn("You are a reporting layer", prompt)
+        self.assertIn("NO_DATA means unknown", prompt)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -33,6 +33,7 @@ class PublicityService:
                 "repository_url": f"{self.base}/repositories/{repo.id}",
                 "badge_url": badge,
                 "badge_markdown": f"![SourceHealth]({badge})",
+                "badge_html": f'<a href="{self.base}/repositories/{repo.id}"><img src="{badge}" alt="SourceHealth" /></a>',
                 "latest_analysis_id": analysis_id,
                 "latest_analysis_url": f"{self.base}/analyses/{analysis_id}" if analysis_id else None,
                 "markdown_report_url": (f"{self.base}/api/v1/analyses/{analysis_id}/report.md"

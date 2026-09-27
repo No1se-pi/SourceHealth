@@ -4,10 +4,12 @@ import { Sidebar } from '../components/layout/Sidebar';
 import { TopBar } from '../components/layout/TopBar';
 import { Footer } from '../components/layout/Footer';
 import { AppearanceModal } from '../components/layout/AppearanceModal';
+import { KeyboardHelpModal } from '../components/layout/KeyboardHelpModal';
 
 export const AppLayout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [keyboardHelpOpen, setKeyboardHelpOpen] = useState(false);
 
   // Close mobile drawer when resizing to desktop >= 768px
   useEffect(() => {
@@ -18,6 +20,28 @@ export const AppLayout: React.FC = () => {
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Global '?' shortcut for keyboard help
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+        e.preventDefault();
+        setKeyboardHelpOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   return (
@@ -59,6 +83,12 @@ export const AppLayout: React.FC = () => {
       <AppearanceModal
         isOpen={appearanceOpen}
         onClose={() => setAppearanceOpen(false)}
+      />
+
+      {/* Keyboard Shortcuts Help Dialog */}
+      <KeyboardHelpModal
+        isOpen={keyboardHelpOpen}
+        onClose={() => setKeyboardHelpOpen(false)}
       />
     </div>
   );

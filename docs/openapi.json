@@ -3863,6 +3863,40 @@
             "type": "string",
             "title": "Description"
           },
+          "category": {
+            "type": "string",
+            "enum": [
+              "start",
+              "quality",
+              "security",
+              "automation",
+              "progress",
+              "exploration"
+            ],
+            "title": "Category",
+            "default": "progress"
+          },
+          "rarity": {
+            "type": "string",
+            "enum": [
+              "common",
+              "uncommon",
+              "rare",
+              "epic"
+            ],
+            "title": "Rarity",
+            "default": "common"
+          },
+          "icon_key": {
+            "type": "string",
+            "title": "Icon Key",
+            "default": "default"
+          },
+          "hint": {
+            "type": "string",
+            "title": "Hint",
+            "default": ""
+          },
           "unlocked": {
             "type": "boolean",
             "title": "Unlocked"
@@ -3890,6 +3924,39 @@
               }
             ],
             "title": "Repository Id"
+          },
+          "progress_current": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Current"
+          },
+          "progress_target": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Target"
+          },
+          "progress_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Percent"
           }
         },
         "type": "object",
@@ -5078,6 +5145,16 @@
             },
             "type": "array",
             "title": "Achievements"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProfileSummaryDTO"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -5194,6 +5271,88 @@
           "use_pat_for_scheduled_analysis"
         ],
         "title": "ProfileRepositoryDTO"
+      },
+      "ProfileSummaryDTO": {
+        "properties": {
+          "tracked_count": {
+            "type": "integer",
+            "title": "Tracked Count"
+          },
+          "analyzed_count": {
+            "type": "integer",
+            "title": "Analyzed Count"
+          },
+          "official_health_count": {
+            "type": "integer",
+            "title": "Official Health Count"
+          },
+          "best_health": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Health"
+          },
+          "median_health": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Health"
+          },
+          "next_analysis_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Analysis At"
+          },
+          "achievements_unlocked": {
+            "type": "integer",
+            "title": "Achievements Unlocked",
+            "default": 0
+          },
+          "portfolio_healthy": {
+            "type": "integer",
+            "title": "Portfolio Healthy",
+            "default": 0
+          },
+          "portfolio_medium": {
+            "type": "integer",
+            "title": "Portfolio Medium",
+            "default": 0
+          },
+          "portfolio_needs_attention": {
+            "type": "integer",
+            "title": "Portfolio Needs Attention",
+            "default": 0
+          },
+          "portfolio_no_data": {
+            "type": "integer",
+            "title": "Portfolio No Data",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "tracked_count",
+          "analyzed_count",
+          "official_health_count"
+        ],
+        "title": "ProfileSummaryDTO"
       },
       "RecommendationDTO": {
         "properties": {
@@ -5922,6 +6081,17 @@
           "badge_markdown": {
             "type": "string",
             "title": "Badge Markdown"
+          },
+          "badge_html": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Badge Html"
           },
           "latest_analysis_id": {
             "anyOf": [
