@@ -9,6 +9,15 @@ interface AdvancedFiltersModalProps {
   onReset: () => void;
 }
 
+const CATEGORIES_CONFIG = [
+  { id: 'security', name: 'Безопасность (официальный AppSec)' },
+  { id: 'cicd', name: 'CI/CD' },
+  { id: 'activity', name: 'Активность разработки' },
+  { id: 'documentation', name: 'Документация' },
+  { id: 'issues', name: 'Задачи и дефекты (Issues)' },
+  { id: 'code_health', name: 'Качество кода (Code Health)' },
+] as const;
+
 export const AdvancedFiltersModal: React.FC<AdvancedFiltersModalProps> = ({
   isOpen,
   filters,
@@ -54,7 +63,7 @@ export const AdvancedFiltersModal: React.FC<AdvancedFiltersModalProps> = ({
           border: '1px solid var(--sh-border-default, #d0d7de)',
           borderRadius: 'var(--sh-radius-lg, 12px)',
           width: '100%',
-          maxWidth: '560px',
+          maxWidth: '580px',
           maxHeight: '90vh',
           overflowY: 'auto',
           boxShadow: 'var(--sh-shadow-lg, 0 10px 25px rgba(0,0,0,0.15))',
@@ -107,7 +116,6 @@ export const AdvancedFiltersModal: React.FC<AdvancedFiltersModalProps> = ({
             >
               <option value="">Все проекты</option>
               <option value="available">Только с рассчитанным Health</option>
-              <option value="forming">Формируется (активен анализ / есть Soul)</option>
               <option value="no_data">Только NO_DATA (без оценки)</option>
             </select>
           </div>
@@ -160,52 +168,10 @@ export const AdvancedFiltersModal: React.FC<AdvancedFiltersModalProps> = ({
             </div>
           </div>
 
-          {/* Security AppSec Score Min */}
+          {/* Health Data Coverage Minimum */}
           <div>
             <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8125rem', marginBottom: '6px' }}>
-              Безопасность (официальный AppSec) ≥
-            </label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                placeholder="Мин. балл безопасности"
-                value={local.security_min ?? ''}
-                onChange={(e) =>
-                  setLocal({
-                    ...local,
-                    security_min: e.target.value !== '' ? Number(e.target.value) : undefined,
-                  })
-                }
-                style={{
-                  flex: 1,
-                  padding: '8px',
-                  borderRadius: 'var(--sh-radius-sm, 6px)',
-                  border: '1px solid var(--sh-border-default, #d0d7de)',
-                }}
-              />
-              <select
-                value={local.security_status ?? ''}
-                onChange={(e) => setLocal({ ...local, security_status: e.target.value || undefined })}
-                style={{
-                  width: '160px',
-                  padding: '8px',
-                  borderRadius: 'var(--sh-radius-sm, 6px)',
-                  border: '1px solid var(--sh-border-default, #d0d7de)',
-                }}
-              >
-                <option value="">Все</option>
-                <option value="available">С AppSec оценкой</option>
-                <option value="no_data">Без AppSec</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Test Coverage Minimum */}
-          <div>
-            <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8125rem', marginBottom: '6px' }}>
-              Минимальное покрытие тестами (%)
+              Минимальный охват данных для Health (%)
             </label>
             <input
               type="number"
@@ -228,8 +194,91 @@ export const AdvancedFiltersModal: React.FC<AdvancedFiltersModalProps> = ({
             />
           </div>
 
+          {/* All Six Category Filters */}
+          <div style={{ borderTop: '1px solid var(--sh-border-subtle, #e1e4e8)', paddingTop: '12px' }}>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '0.9375rem', fontWeight: 600 }}>
+              Фильтры по категориям
+            </h3>
+            <div style={{ display: 'grid', gap: '14px' }}>
+              {CATEGORIES_CONFIG.map(({ id, name }) => {
+                const statusKey = `${id}_status` as keyof ActiveFiltersState;
+                const minKey = `${id}_min` as keyof ActiveFiltersState;
+                const maxKey = `${id}_max` as keyof ActiveFiltersState;
+
+                return (
+                  <div key={id} style={{ display: 'grid', gap: '4px' }}>
+                    <label style={{ fontWeight: 500, fontSize: '0.8125rem' }}>{name}</label>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <select
+                        value={(local[statusKey] as string) ?? ''}
+                        onChange={(e) =>
+                          setLocal({
+                            ...local,
+                            [statusKey]: e.target.value || undefined,
+                          })
+                        }
+                        style={{
+                          width: '140px',
+                          padding: '6px 8px',
+                          borderRadius: 'var(--sh-radius-sm, 6px)',
+                          border: '1px solid var(--sh-border-default, #d0d7de)',
+                          fontSize: '0.8125rem',
+                        }}
+                      >
+                        <option value="">Любой</option>
+                        <option value="available">Есть оценка</option>
+                        <option value="no_data">NO_DATA</option>
+                      </select>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        placeholder="Мин"
+                        value={(local[minKey] as number) ?? ''}
+                        onChange={(e) =>
+                          setLocal({
+                            ...local,
+                            [minKey]: e.target.value !== '' ? Number(e.target.value) : undefined,
+                          })
+                        }
+                        style={{
+                          flex: 1,
+                          padding: '6px 8px',
+                          borderRadius: 'var(--sh-radius-sm, 6px)',
+                          border: '1px solid var(--sh-border-default, #d0d7de)',
+                          fontSize: '0.8125rem',
+                        }}
+                      />
+                      <span>—</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        placeholder="Макс"
+                        value={(local[maxKey] as number) ?? ''}
+                        onChange={(e) =>
+                          setLocal({
+                            ...local,
+                            [maxKey]: e.target.value !== '' ? Number(e.target.value) : undefined,
+                          })
+                        }
+                        style={{
+                          flex: 1,
+                          padding: '6px 8px',
+                          borderRadius: 'var(--sh-radius-sm, 6px)',
+                          border: '1px solid var(--sh-border-default, #d0d7de)',
+                          fontSize: '0.8125rem',
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Origin */}
-          <div>
+          <div style={{ borderTop: '1px solid var(--sh-border-subtle, #e1e4e8)', paddingTop: '12px' }}>
             <label style={{ display: 'block', fontWeight: 600, fontSize: '0.8125rem', marginBottom: '6px' }}>
               Происхождение проекта (Origin)
             </label>
@@ -241,6 +290,8 @@ export const AdvancedFiltersModal: React.FC<AdvancedFiltersModalProps> = ({
                 padding: '8px',
                 borderRadius: 'var(--sh-radius-sm, 6px)',
                 border: '1px solid var(--sh-border-default, #d0d7de)',
+                backgroundColor: 'var(--sh-bg-surface, #ffffff)',
+                color: 'var(--sh-text-primary, #1f2328)',
               }}
             >
               <option value="">Все источники</option>

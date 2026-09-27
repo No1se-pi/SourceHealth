@@ -9,9 +9,32 @@ export interface ActiveFiltersState {
   health_min?: number;
   health_max?: number;
   coverage_min?: number;
-  security_min?: number;
-  security_status?: string;
   activity_days?: number;
+
+  // Six categories
+  security_status?: string;
+  security_min?: number;
+  security_max?: number;
+
+  cicd_status?: string;
+  cicd_min?: number;
+  cicd_max?: number;
+
+  activity_status?: string;
+  activity_min?: number;
+  activity_max?: number;
+
+  documentation_status?: string;
+  documentation_min?: number;
+  documentation_max?: number;
+
+  issues_status?: string;
+  issues_min?: number;
+  issues_max?: number;
+
+  code_health_status?: string;
+  code_health_min?: number;
+  code_health_max?: number;
 }
 
 interface ActiveFilterChipsProps {
@@ -29,8 +52,16 @@ const ORIGIN_LABELS: Record<string, string> = {
 
 const HEALTH_STATUS_LABELS: Record<string, string> = {
   available: 'С оценкой',
-  forming: 'Формируется',
   no_data: 'NO_DATA',
+};
+
+const CATEGORY_NAMES: Record<string, string> = {
+  security: 'Безопасность',
+  cicd: 'CI/CD',
+  activity: 'Активность',
+  documentation: 'Документация',
+  issues: 'Issues',
+  code_health: 'Качество кода',
 };
 
 export const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({
@@ -67,19 +98,46 @@ export const ActiveFilterChips: React.FC<ActiveFilterChipsProps> = ({
     activeChips.push({ key: 'health_min', label: `Health: ${min}–${max}` });
   }
   if (filters.coverage_min != null) {
-    activeChips.push({ key: 'coverage_min', label: `Coverage ≥ ${filters.coverage_min}%` });
-  }
-  if (filters.security_min != null) {
-    activeChips.push({ key: 'security_min', label: `Security ≥ ${filters.security_min}` });
-  }
-  if (filters.security_status) {
-    activeChips.push({
-      key: 'security_status',
-      label: `Security: ${filters.security_status === 'available' ? 'С оценкой' : 'NO_DATA'}`,
-    });
+    activeChips.push({ key: 'coverage_min', label: `Охват данных ≥ ${filters.coverage_min}%` });
   }
   if (filters.activity_days != null) {
     activeChips.push({ key: 'activity_days', label: `Активность: ≤ ${filters.activity_days} дн.` });
+  }
+
+  // Six categories status and range chips
+  const categories = [
+    { prefix: 'security', name: CATEGORY_NAMES.security },
+    { prefix: 'cicd', name: CATEGORY_NAMES.cicd },
+    { prefix: 'activity', name: CATEGORY_NAMES.activity },
+    { prefix: 'documentation', name: CATEGORY_NAMES.documentation },
+    { prefix: 'issues', name: CATEGORY_NAMES.issues },
+    { prefix: 'code_health', name: CATEGORY_NAMES.code_health },
+  ] as const;
+
+  for (const { prefix, name } of categories) {
+    const statusKey = `${prefix}_status` as keyof ActiveFiltersState;
+    const minKey = `${prefix}_min` as keyof ActiveFiltersState;
+    const maxKey = `${prefix}_max` as keyof ActiveFiltersState;
+
+    const statusVal = filters[statusKey] as string | undefined;
+    const minVal = filters[minKey] as number | undefined;
+    const maxVal = filters[maxKey] as number | undefined;
+
+    if (statusVal) {
+      activeChips.push({
+        key: statusKey,
+        label: `${name}: ${statusVal === 'available' ? 'Есть оценка' : 'NO_DATA'}`,
+      });
+    }
+
+    if (minVal != null || maxVal != null) {
+      const min = minVal ?? 0;
+      const max = maxVal ?? 100;
+      activeChips.push({
+        key: minKey,
+        label: `${name}: ${min}–${max}`,
+      });
+    }
   }
 
   if (activeChips.length === 0) {

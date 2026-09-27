@@ -18,7 +18,7 @@ def catalog_stats(
     origin: str | None = Query(None, pattern="^(native|fork|migrated|unknown)$"),
     health_min: float | None = Query(None, ge=0, le=100),
     health_max: float | None = Query(None, ge=0, le=100),
-    health_status: str | None = Query(None, pattern="^(available|forming|no_data|all)$"),
+    health_status: str | None = Query(None, pattern="^(available|no_data|all)$"),
     security_status: str | None = Query(None, pattern="^(available|no_data|any)$"),
     security_min: float | None = Query(None, ge=0, le=100),
     security_max: float | None = Query(None, ge=0, le=100),

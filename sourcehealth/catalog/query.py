@@ -11,6 +11,7 @@ from sqlalchemy import Select, case, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from sourcehealth.catalog.topics import ALL_TOPICS
+from sourcehealth.scoring.mvp import WEIGHTS
 from sourcehealth.storage.models import AnalysisRun, Repository
 
 LOG = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ class CatalogFilters:
     q: str | None = None
     limit: int = 20
     offset: int = 0
-    sort: str = "health_score"
+    sort: str | None = None
     order: str = "desc"
     language: str | None = None
     topic: str | None = None
@@ -103,6 +104,14 @@ def _category_avail_expr(cat: str):
     return CanonicalAnalysisRun.category_scores[cat]["availability"].as_string()
 
 
+def get_canonical_nominal_coverage_expr():
+    cov_cases = []
+    for cat, weight in WEIGHTS.items():
+        score_expr = _category_score_expr(cat)
+        cov_cases.append(case((score_expr.isnot(None), weight), else_=0))
+    return sum(cov_cases)
+
+
 def build_catalog_base_query() -> Select:
     """Canonical join query ensuring latest terminal mvp-v1 run is used."""
     return (
@@ -149,14 +158,8 @@ def apply_catalog_filters(query: Select, filters: CatalogFilters) -> Select:
             query = query.where(effective_health.isnot(None))
         elif filters.health_status == "no_data":
             query = query.where(effective_health.is_(None))
-        elif filters.health_status == "forming":
-            # Either health_score is null and run is active or Soul preview available
-            query = query.where(
-                effective_health.is_(None),
-                or_(Repository.latest_analysis_id.isnot(None), CanonicalAnalysisRun.id.isnot(None)),
-            )
 
-    # Category filters
+    # Category filters: available means numeric score != null, no_data means score == null
     cats = (
         ("security", filters.security_status, filters.security_min, filters.security_max),
         ("cicd", filters.cicd_status, filters.cicd_min, filters.cicd_max),
@@ -169,13 +172,13 @@ def apply_catalog_filters(query: Select, filters: CatalogFilters) -> Select:
         if status == "available":
             query = query.where(
                 CanonicalAnalysisRun.id.isnot(None),
-                _category_avail_expr(cat_name) == "available",
+                _category_score_expr(cat_name).isnot(None),
             )
         elif status == "no_data":
             query = query.where(
                 or_(
                     CanonicalAnalysisRun.id.is_(None),
-                    _category_avail_expr(cat_name) == "no_data",
+                    _category_score_expr(cat_name).is_(None),
                 )
             )
 
@@ -191,10 +194,10 @@ def apply_catalog_filters(query: Select, filters: CatalogFilters) -> Select:
             )
 
     if filters.coverage_min is not None:
-        # data_coverage -> nominal_weight_percent >= coverage_min
+        coverage_expr = get_canonical_nominal_coverage_expr()
         query = query.where(
             CanonicalAnalysisRun.id.isnot(None),
-            CanonicalAnalysisRun.data_coverage["nominal_weight_percent"].as_integer() >= filters.coverage_min,
+            coverage_expr >= filters.coverage_min,
         )
 
     if filters.activity_days is not None:
@@ -209,32 +212,38 @@ def apply_catalog_sort(query: Select, filters: CatalogFilters) -> Select:
     is_asc = filters.order.lower() == "asc"
     effective_health = func.coalesce(CanonicalAnalysisRun.health_score, Repository.health_score)
 
-    # Default sort is relevance if q is given and sort not explicitly specified
-    sort_field = filters.sort
-    if clean_q and (sort_field == "relevance" or not sort_field):
-        q_lower = clean_q.lower()
-        full_slug = func.lower(Repository.organization_slug + "/" + Repository.repository_slug)
-        repo_slug = func.lower(Repository.repository_slug)
-        org_slug = func.lower(Repository.organization_slug)
+    if filters.sort is None:
+        sort_field = "relevance" if clean_q else "health_score"
+    else:
+        sort_field = filters.sort
 
-        relevance_rank = case(
-            (full_slug == q_lower, 1),
-            (repo_slug == q_lower, 2),
-            (org_slug == q_lower, 3),
-            (full_slug.startswith(q_lower), 4),
-            (repo_slug.startswith(q_lower), 5),
-            (org_slug.startswith(q_lower), 6),
-            (func.lower(Repository.canonical_url).contains(q_lower), 7),
-            (repo_slug.contains(q_lower), 8),
-            (org_slug.contains(q_lower), 8),
-            (func.lower(Repository.description).contains(q_lower), 9),
-            else_=10,
-        )
-        return query.order_by(
-            relevance_rank.asc(),
-            effective_health.desc().nulls_last(),
-            Repository.id.asc(),
-        )
+    if sort_field == "relevance":
+        if clean_q:
+            q_lower = clean_q.lower()
+            full_slug = func.lower(Repository.organization_slug + "/" + Repository.repository_slug)
+            repo_slug = func.lower(Repository.repository_slug)
+            org_slug = func.lower(Repository.organization_slug)
+
+            relevance_rank = case(
+                (full_slug == q_lower, 1),
+                (repo_slug == q_lower, 2),
+                (org_slug == q_lower, 3),
+                (full_slug.startswith(q_lower), 4),
+                (repo_slug.startswith(q_lower), 5),
+                (org_slug.startswith(q_lower), 6),
+                (func.lower(Repository.canonical_url).contains(q_lower), 7),
+                (repo_slug.contains(q_lower), 8),
+                (org_slug.contains(q_lower), 8),
+                (func.lower(Repository.description).contains(q_lower), 9),
+                else_=10,
+            )
+            return query.order_by(
+                relevance_rank.asc(),
+                effective_health.desc().nulls_last(),
+                Repository.id.asc(),
+            )
+        else:
+            sort_field = "health_score"
 
     # Specific sorts
     if sort_field == "health_score":
@@ -253,7 +262,7 @@ def apply_catalog_sort(query: Select, filters: CatalogFilters) -> Select:
         col = _category_score_expr(sort_field)
         order_col = col.asc().nulls_last() if is_asc else col.desc().nulls_last()
     elif sort_field == "coverage":
-        col = CanonicalAnalysisRun.data_coverage["nominal_weight_percent"].as_integer()
+        col = get_canonical_nominal_coverage_expr()
         order_col = col.asc().nulls_last() if is_asc else col.desc().nulls_last()
     else:
         col = effective_health
@@ -373,8 +382,6 @@ def get_catalog_stats(
             histogram_counts[b_idx] += 1
         else:
             health_no_data_count += 1
-            if canonical_analysis_id is not None:
-                health_forming_count += 1
 
         # Language
         if lang:

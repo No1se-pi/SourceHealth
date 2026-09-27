@@ -57,27 +57,91 @@ const ORIGIN_BADGES: Record<string, { label: string; color: string }> = {
   unknown: { label: 'External', color: '#64748b' },
 };
 
+const SUPPORTED_PAGE_SIZES = [20, 50, 100] as const;
+const DEFAULT_PAGE_SIZE = 20;
+const DEFAULT_PAGE = 1;
+
+export function sanitizePage(val: unknown): number {
+  if (val === null || val === undefined) return DEFAULT_PAGE;
+  const num = typeof val === 'number' ? val : parseInt(String(val), 10);
+  if (isNaN(num) || num < 1 || !isFinite(num)) return DEFAULT_PAGE;
+  return Math.floor(num);
+}
+
+export function sanitizePageSize(val: unknown): number {
+  if (val === null || val === undefined) return DEFAULT_PAGE_SIZE;
+  const num = typeof val === 'number' ? val : parseInt(String(val), 10);
+  if (isNaN(num) || !SUPPORTED_PAGE_SIZES.includes(num as any)) return DEFAULT_PAGE_SIZE;
+  return num;
+}
+
+export function getValidImportUrl(query: string | null | undefined): string | null {
+  if (!query) return null;
+  const trimmed = query.trim();
+
+  // Case 1: canonical or standard SourceCraft URL
+  const urlMatch = trimmed.match(/^https?:\/\/(?:www\.)?sourcecraft\.dev\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)\/?$/i);
+  if (urlMatch) {
+    return `https://sourcecraft.dev/${urlMatch[1]}/${urlMatch[2]}`;
+  }
+
+  // Case 2: strict org/repo slug
+  const slugMatch = trimmed.match(/^([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)$/);
+  if (slugMatch) {
+    return `https://sourcecraft.dev/${slugMatch[1]}/${slugMatch[2]}`;
+  }
+
+  return null;
+}
+
 export const LeaderboardPage: React.FC = () => {
   usePageTitle('Каталог и поиск проектов');
 
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Read URL params
+  // Read and sanitize URL params
   const qParam = searchParams.get('q') || '';
-  const pageParam = parseInt(searchParams.get('page') || '1', 10);
-  const pageSizeParam = parseInt(searchParams.get('page_size') || '20', 10);
-  const sortParam = searchParams.get('sort') || 'health_score';
+  const rawPage = searchParams.get('page');
+  const rawPageSize = searchParams.get('page_size');
+  const pageParam = sanitizePage(rawPage);
+  const pageSizeParam = sanitizePageSize(rawPageSize);
+  const sortParam = searchParams.get('sort');
   const orderParam = searchParams.get('order') || 'desc';
+  const effectiveSort = sortParam || (qParam ? 'relevance' : 'health_score');
+
   const langParam = searchParams.get('language') || '';
   const topicParam = searchParams.get('topic') || '';
   const originParam = searchParams.get('origin') || '';
   const healthStatusParam = searchParams.get('health_status') || '';
   const healthMinParam = searchParams.get('health_min');
   const healthMaxParam = searchParams.get('health_max');
-  const secMinParam = searchParams.get('security_min');
-  const secStatusParam = searchParams.get('security_status') || '';
   const covMinParam = searchParams.get('coverage_min');
   const actDaysParam = searchParams.get('activity_days');
+
+  // Six categories
+  const secMinParam = searchParams.get('security_min');
+  const secMaxParam = searchParams.get('security_max');
+  const secStatusParam = searchParams.get('security_status') || '';
+
+  const cicdMinParam = searchParams.get('cicd_min');
+  const cicdMaxParam = searchParams.get('cicd_max');
+  const cicdStatusParam = searchParams.get('cicd_status') || '';
+
+  const actMinParam = searchParams.get('activity_min');
+  const actMaxParam = searchParams.get('activity_max');
+  const actStatusParam = searchParams.get('activity_status') || '';
+
+  const docMinParam = searchParams.get('documentation_min');
+  const docMaxParam = searchParams.get('documentation_max');
+  const docStatusParam = searchParams.get('documentation_status') || '';
+
+  const issuesMinParam = searchParams.get('issues_min');
+  const issuesMaxParam = searchParams.get('issues_max');
+  const issuesStatusParam = searchParams.get('issues_status') || '';
+
+  const codeMinParam = searchParams.get('code_health_min');
+  const codeMaxParam = searchParams.get('code_health_max');
+  const codeStatusParam = searchParams.get('code_health_status') || '';
 
   // Search input local state for debouncing
   const [searchInput, setSearchInput] = useState(qParam);
@@ -100,6 +164,31 @@ export const LeaderboardPage: React.FC = () => {
   useEffect(() => {
     setSearchInput(qParam);
   }, [qParam]);
+
+  // Canonicalize URL in background if invalid page/page_size was provided
+  useEffect(() => {
+    let changed = false;
+    const next = new URLSearchParams(searchParams);
+    if (rawPage !== null && (String(pageParam) !== rawPage || pageParam === DEFAULT_PAGE)) {
+      if (pageParam === DEFAULT_PAGE) {
+        next.delete('page');
+      } else {
+        next.set('page', String(pageParam));
+      }
+      changed = true;
+    }
+    if (rawPageSize !== null && (String(pageSizeParam) !== rawPageSize || pageSizeParam === DEFAULT_PAGE_SIZE)) {
+      if (pageSizeParam === DEFAULT_PAGE_SIZE) {
+        next.delete('page_size');
+      } else {
+        next.set('page_size', String(pageSizeParam));
+      }
+      changed = true;
+    }
+    if (changed) {
+      setSearchParams(next, { replace: true });
+    }
+  }, [rawPage, rawPageSize, pageParam, pageSizeParam, searchParams, setSearchParams]);
 
   // Debounced search query sync to URL
   useEffect(() => {
@@ -146,7 +235,7 @@ export const LeaderboardPage: React.FC = () => {
     const queryParams: Record<string, string | number | undefined> = {
       offset,
       limit: pageSizeParam,
-      sort: sortParam,
+      sort: sortParam || undefined,
       order: orderParam,
       q: qParam || undefined,
       language: langParam || undefined,
@@ -155,10 +244,32 @@ export const LeaderboardPage: React.FC = () => {
       health_status: healthStatusParam || undefined,
       health_min: healthMinParam ? Number(healthMinParam) : undefined,
       health_max: healthMaxParam ? Number(healthMaxParam) : undefined,
-      security_min: secMinParam ? Number(secMinParam) : undefined,
-      security_status: secStatusParam || undefined,
       coverage_min: covMinParam ? Number(covMinParam) : undefined,
       activity_days: actDaysParam ? Number(actDaysParam) : undefined,
+
+      security_min: secMinParam ? Number(secMinParam) : undefined,
+      security_max: secMaxParam ? Number(secMaxParam) : undefined,
+      security_status: secStatusParam || undefined,
+
+      cicd_min: cicdMinParam ? Number(cicdMinParam) : undefined,
+      cicd_max: cicdMaxParam ? Number(cicdMaxParam) : undefined,
+      cicd_status: cicdStatusParam || undefined,
+
+      activity_min: actMinParam ? Number(actMinParam) : undefined,
+      activity_max: actMaxParam ? Number(actMaxParam) : undefined,
+      activity_status: actStatusParam || undefined,
+
+      documentation_min: docMinParam ? Number(docMinParam) : undefined,
+      documentation_max: docMaxParam ? Number(docMaxParam) : undefined,
+      documentation_status: docStatusParam || undefined,
+
+      issues_min: issuesMinParam ? Number(issuesMinParam) : undefined,
+      issues_max: issuesMaxParam ? Number(issuesMaxParam) : undefined,
+      issues_status: issuesStatusParam || undefined,
+
+      code_health_min: codeMinParam ? Number(codeMinParam) : undefined,
+      code_health_max: codeMaxParam ? Number(codeMaxParam) : undefined,
+      code_health_status: codeStatusParam || undefined,
     };
 
     // 1. Fetch Repositories
@@ -203,10 +314,26 @@ export const LeaderboardPage: React.FC = () => {
     healthStatusParam,
     healthMinParam,
     healthMaxParam,
-    secMinParam,
-    secStatusParam,
     covMinParam,
     actDaysParam,
+    secMinParam,
+    secMaxParam,
+    secStatusParam,
+    cicdMinParam,
+    cicdMaxParam,
+    cicdStatusParam,
+    actMinParam,
+    actMaxParam,
+    actStatusParam,
+    docMinParam,
+    docMaxParam,
+    docStatusParam,
+    issuesMinParam,
+    issuesMaxParam,
+    issuesStatusParam,
+    codeMinParam,
+    codeMaxParam,
+    codeStatusParam,
   ]);
 
   useEffect(() => {
@@ -225,15 +352,49 @@ export const LeaderboardPage: React.FC = () => {
     health_status: healthStatusParam || undefined,
     health_min: healthMinParam ? Number(healthMinParam) : undefined,
     health_max: healthMaxParam ? Number(healthMaxParam) : undefined,
-    security_min: secMinParam ? Number(secMinParam) : undefined,
-    security_status: secStatusParam || undefined,
     coverage_min: covMinParam ? Number(covMinParam) : undefined,
     activity_days: actDaysParam ? Number(actDaysParam) : undefined,
+
+    security_min: secMinParam ? Number(secMinParam) : undefined,
+    security_max: secMaxParam ? Number(secMaxParam) : undefined,
+    security_status: secStatusParam || undefined,
+
+    cicd_min: cicdMinParam ? Number(cicdMinParam) : undefined,
+    cicd_max: cicdMaxParam ? Number(cicdMaxParam) : undefined,
+    cicd_status: cicdStatusParam || undefined,
+
+    activity_min: actMinParam ? Number(actMinParam) : undefined,
+    activity_max: actMaxParam ? Number(actMaxParam) : undefined,
+    activity_status: actStatusParam || undefined,
+
+    documentation_min: docMinParam ? Number(docMinParam) : undefined,
+    documentation_max: docMaxParam ? Number(docMaxParam) : undefined,
+    documentation_status: docStatusParam || undefined,
+
+    issues_min: issuesMinParam ? Number(issuesMinParam) : undefined,
+    issues_max: issuesMaxParam ? Number(issuesMaxParam) : undefined,
+    issues_status: issuesStatusParam || undefined,
+
+    code_health_min: codeMinParam ? Number(codeMinParam) : undefined,
+    code_health_max: codeMaxParam ? Number(codeMaxParam) : undefined,
+    code_health_status: codeStatusParam || undefined,
   };
 
   const handleRemoveFilter = (key: keyof ActiveFiltersState) => {
     if (key === 'health_min' || key === 'health_max') {
       updateParams({ health_min: undefined, health_max: undefined, page: 1 });
+    } else if (key === 'security_min' || key === 'security_max') {
+      updateParams({ security_min: undefined, security_max: undefined, page: 1 });
+    } else if (key === 'cicd_min' || key === 'cicd_max') {
+      updateParams({ cicd_min: undefined, cicd_max: undefined, page: 1 });
+    } else if (key === 'activity_min' || key === 'activity_max') {
+      updateParams({ activity_min: undefined, activity_max: undefined, page: 1 });
+    } else if (key === 'documentation_min' || key === 'documentation_max') {
+      updateParams({ documentation_min: undefined, documentation_max: undefined, page: 1 });
+    } else if (key === 'issues_min' || key === 'issues_max') {
+      updateParams({ issues_min: undefined, issues_max: undefined, page: 1 });
+    } else if (key === 'code_health_min' || key === 'code_health_max') {
+      updateParams({ code_health_min: undefined, code_health_max: undefined, page: 1 });
     } else if (key === 'q') {
       setSearchInput('');
       updateParams({ q: undefined, page: 1 });
@@ -402,7 +563,7 @@ export const LeaderboardPage: React.FC = () => {
           {/* Sort Selector */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <select
-              value={sortParam}
+              value={effectiveSort}
               onChange={(e) => updateParams({ sort: e.target.value, page: 1 })}
               style={{
                 height: '42px',
@@ -415,15 +576,18 @@ export const LeaderboardPage: React.FC = () => {
               }}
               aria-label="Сортировка репозиториев"
             >
-              {qParam && <option value="relevance">По релевантности поиска</option>}
-              <option value="health_score">По Health score</option>
-              <option value="likes">По лайкам</option>
-              <option value="last_activity">По последней активности</option>
-              <option value="name">По имени (A–Z)</option>
+              <option value="relevance">По релевантности поиска</option>
+              <option value="health_score">По общему Health score</option>
+              <option value="likes">По числу звёзд / лайков</option>
+              <option value="last_activity">По дате активности</option>
+              <option value="name">По названию (A–Z)</option>
+              <option value="coverage">По охвату данных для Health</option>
               <option value="security">По безопасности (AppSec)</option>
               <option value="cicd">По CI/CD</option>
-              <option value="code_health">По качеству кода</option>
-              <option value="coverage">По покрытию тестами</option>
+              <option value="activity">По активности разработки</option>
+              <option value="documentation">По документации</option>
+              <option value="issues">По обработке дефектов (Issues)</option>
+              <option value="code_health">По качеству кода (Code Health)</option>
             </select>
 
             <button
@@ -478,21 +642,25 @@ export const LeaderboardPage: React.FC = () => {
                 <Button variant="outline" onClick={handleResetAllFilters}>
                   Сбросить все фильтры
                 </Button>
-                {qParam && qParam.includes('/') && (
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      api
-                        .importRepository(qParam.trim())
-                        .then((res) => {
-                          window.location.href = `/repositories/${res.id}`;
-                        })
-                        .catch(setError);
-                    }}
-                  >
-                    Импортировать «{qParam.trim()}» из SourceCraft
-                  </Button>
-                )}
+                {(() => {
+                  const importUrl = getValidImportUrl(qParam);
+                  if (!importUrl) return null;
+                  return (
+                    <Button
+                      variant="primary"
+                      onClick={() => {
+                        api
+                          .importRepository(importUrl)
+                          .then((res) => {
+                            window.location.href = `/repositories/${res.id}`;
+                          })
+                          .catch(setError);
+                      }}
+                    >
+                      Импортировать «{importUrl}» из SourceCraft
+                    </Button>
+                  );
+                })()}
                 <Link to="/demo" className="btn-link" style={getButtonStyles('secondary', 'md')}>
                   Посмотреть демо
                 </Link>

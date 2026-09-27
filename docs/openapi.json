@@ -211,7 +211,7 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "pattern": "^(available|forming|no_data|all)$"
+                  "pattern": "^(available|no_data|all)$"
                 },
                 {
                   "type": "null"
@@ -816,9 +816,15 @@
             "in": "query",
             "required": false,
             "schema": {
-              "type": "string",
-              "pattern": "^(relevance|health_score|likes|last_activity|name|security|cicd|activity|documentation|issues|code_health|coverage)$",
-              "default": "health_score",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(relevance|health_score|likes|last_activity|name|security|cicd|activity|documentation|issues|code_health|coverage)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "title": "Sort"
             }
           },
@@ -928,7 +934,7 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "pattern": "^(available|forming|no_data|all)$"
+                  "pattern": "^(available|no_data|all)$"
                 },
                 {
                   "type": "null"

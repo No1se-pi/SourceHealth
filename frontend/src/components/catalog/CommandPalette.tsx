@@ -19,37 +19,73 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const reqSeqRef = useRef(0);
+  const abortCtrlRef = useRef<AbortController | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
+    reqSeqRef.current += 1;
+    if (abortCtrlRef.current) {
+      abortCtrlRef.current.abort();
+      abortCtrlRef.current = null;
+    }
+    setQuery('');
+    setResults([]);
+    setLoading(false);
+    setSelectedIndex(0);
+
     if (isOpen) {
-      setQuery('');
-      setResults([]);
-      setSelectedIndex(0);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isOpen]);
 
   useEffect(() => {
-    if (!query.trim()) {
+    if (!isOpen) return;
+
+    const trimmed = query.trim();
+    if (!trimmed) {
+      reqSeqRef.current += 1;
+      if (abortCtrlRef.current) {
+        abortCtrlRef.current.abort();
+        abortCtrlRef.current = null;
+      }
       setResults([]);
+      setLoading(false);
       return;
     }
 
-    const timer = setTimeout(() => {
-      setLoading(true);
-      api
-        .repositories({ q: query.trim(), limit: 8 })
-        .then((res) => {
-          setResults(res.items);
-          setSelectedIndex(0);
-        })
-        .catch(() => setResults([]))
-        .finally(() => setLoading(false));
-    }, 200);
+    const currentSeq = ++reqSeqRef.current;
+    if (abortCtrlRef.current) {
+      abortCtrlRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortCtrlRef.current = controller;
 
-    return () => clearTimeout(timer);
-  }, [query]);
+    setLoading(true);
+    const timer = setTimeout(() => {
+      api
+        .repositories({ q: trimmed, limit: 8 }, { signal: controller.signal })
+        .then((res) => {
+          if (currentSeq === reqSeqRef.current && !controller.signal.aborted) {
+            setResults(res.items);
+            setSelectedIndex(0);
+            setLoading(false);
+          }
+        })
+        .catch((err) => {
+          if (err?.name === 'AbortError') return;
+          if (currentSeq === reqSeqRef.current && !controller.signal.aborted) {
+            setResults([]);
+            setLoading(false);
+          }
+        });
+    }, 150);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query, isOpen]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {

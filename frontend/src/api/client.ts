@@ -82,8 +82,7 @@ export const api = {
   }),
   repositories: (
     paramsOrOffset: Record<string, string | number | boolean | undefined | null> | number = 0,
-    sort = 'health_score',
-    language = '',
+    options?: RequestInit,
   ) => {
     let qs = '';
     if (typeof paramsOrOffset === 'object' && paramsOrOffset !== null) {
@@ -97,11 +96,9 @@ export const api = {
     } else {
       qs = new URLSearchParams({
         offset: String(paramsOrOffset),
-        sort,
-        ...(language ? { language } : {}),
       }).toString();
     }
-    return request<RepositoryPage>(`/repositories${qs ? `?${qs}` : ''}`);
+    return request<RepositoryPage>(`/repositories${qs ? `?${qs}` : ''}`, options);
   },
   catalogStats: (params: Record<string, string | number | boolean | undefined | null> = {}) => {
     const cleanParams = Object.entries(params).reduce<Record<string, string>>((acc, [k, v]) => {

@@ -202,5 +202,105 @@ class CatalogQueryLogicTests(unittest.TestCase):
         self.assertNotEqual(f1.cache_key(), f3.cache_key())
 
 
+class CatalogCoverageAndValidationUnitTests(unittest.TestCase):
+    def test_nominal_coverage_50_percent_example(self):
+        from sourcehealth.scoring.coverage import calculate_nominal_coverage_percent
+
+        category_scores = {
+            "documentation": {"score": 80.0, "availability": "available"},
+            "activity": {"score": 50.0, "availability": "available"},
+            "code_health": {"score": 100.0, "availability": "available"},
+            "security": {"score": None, "availability": "no_data"},
+            "cicd": {"score": None, "availability": "no_data"},
+            "issues": {"score": None, "availability": "no_data"},
+        }
+        # documentation: 15 + activity: 15 + code_health: 20 = 50%
+        coverage = calculate_nominal_coverage_percent(category_scores)
+        self.assertEqual(coverage, 50)
+
+    def test_nominal_coverage_numeric_zero_score_counts_as_known(self):
+        from sourcehealth.scoring.coverage import calculate_nominal_coverage_percent
+
+        category_scores = {
+            "cicd": {"score": 0, "availability": "not_configured"},
+            "documentation": {"score": None, "availability": "no_data"},
+        }
+        # cicd: 15%
+        coverage = calculate_nominal_coverage_percent(category_scores)
+        self.assertEqual(coverage, 15)
+
+    def test_strict_import_url_validation_semantics(self):
+        import re
+
+        def get_valid_import_url(query: str | None) -> str | None:
+            if not query:
+                return None
+            trimmed = query.strip()
+            url_match = re.match(r"^https?://(?:www\.)?sourcecraft\.dev/([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+)/?$", trimmed, re.IGNORECASE)
+            if url_match:
+                return f"https://sourcecraft.dev/{url_match.group(1)}/{url_match.group(2)}"
+            slug_match = re.match(r"^([a-zA-Z0-9_.-]+)/([a-zA-Z0-9_.-]+)$", trimmed)
+            if slug_match:
+                return f"https://sourcecraft.dev/{slug_match.group(1)}/{slug_match.group(2)}"
+            return None
+
+        # Valid cases
+        self.assertEqual(
+            get_valid_import_url("No1se-pi/custodes"),
+            "https://sourcecraft.dev/No1se-pi/custodes",
+        )
+        self.assertEqual(
+            get_valid_import_url("https://sourcecraft.dev/No1se-pi/custodes"),
+            "https://sourcecraft.dev/No1se-pi/custodes",
+        )
+        self.assertEqual(
+            get_valid_import_url("http://sourcecraft.dev/org_1/repo-2/"),
+            "https://sourcecraft.dev/org_1/repo-2",
+        )
+
+        # Invalid cases that must NEVER become import URLs
+        self.assertIsNone(get_valid_import_url("hello world"))
+        self.assertIsNone(get_valid_import_url("react"))
+        self.assertIsNone(get_valid_import_url("foo/bar/baz"))
+        self.assertIsNone(get_valid_import_url("javascript:alert(1)"))
+        self.assertIsNone(get_valid_import_url("https://github.com/No1se-pi/custodes"))
+        self.assertIsNone(get_valid_import_url("   "))
+        self.assertIsNone(get_valid_import_url(None))
+
+    def test_pagination_sanitation_semantics(self):
+        def sanitize_page(val) -> int:
+            if val is None:
+                return 1
+            try:
+                num = int(val)
+                return num if num >= 1 else 1
+            except (ValueError, TypeError):
+                return 1
+
+        def sanitize_page_size(val) -> int:
+            supported = {20, 50, 100}
+            if val is None:
+                return 20
+            try:
+                num = int(val)
+                return num if num in supported else 20
+            except (ValueError, TypeError):
+                return 20
+
+        # Invalid pages sanitize to 1
+        self.assertEqual(sanitize_page("abc"), 1)
+        self.assertEqual(sanitize_page("0"), 1)
+        self.assertEqual(sanitize_page("-10"), 1)
+        self.assertEqual(sanitize_page(None), 1)
+        self.assertEqual(sanitize_page(5), 5)
+
+        # Invalid page sizes sanitize to 20
+        self.assertEqual(sanitize_page_size("abc"), 20)
+        self.assertEqual(sanitize_page_size("-1"), 20)
+        self.assertEqual(sanitize_page_size("999999"), 20)
+        self.assertEqual(sanitize_page_size("50"), 50)
+        self.assertEqual(sanitize_page_size("100"), 100)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sourcehealth.application.jobs import dispatch_pending
 from sourcehealth.application.services import ServiceError
 from sourcehealth.auth.sourcecraft import SourceCraftConnection
-from sourcehealth.scoring.coverage import score_preview
+from sourcehealth.scoring.coverage import calculate_nominal_coverage_percent, score_preview
 from sourcehealth.storage.models import AnalysisRun, Repository
 
 from ..dependencies import check_origin, public_repository, public_run, require_user
@@ -53,13 +53,7 @@ def _repository_dto(repository: Repository, run: AnalysisRun | None, *, details:
                 )
             else:
                 cat_scores[cat_name] = CategoryScoreMiniDTO(score=None, availability="no_data")
-        if isinstance(run.data_coverage, dict):
-            coverage_val = run.data_coverage.get("nominal_weight_percent")
-            if coverage_val is not None:
-                try:
-                    coverage_pct = int(coverage_val)
-                except Exception:
-                    coverage_pct = None
+        coverage_pct = calculate_nominal_coverage_percent(run.category_scores)
 
     return schema(
         **schema.model_validate(repository).model_dump(
@@ -100,14 +94,14 @@ def repositories(
     q: str | None = Query(None, max_length=256),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0, le=100000),
-    sort: str = Query("health_score", pattern="^(relevance|health_score|likes|last_activity|name|security|cicd|activity|documentation|issues|code_health|coverage)$"),
+    sort: str | None = Query(None, pattern="^(relevance|health_score|likes|last_activity|name|security|cicd|activity|documentation|issues|code_health|coverage)$"),
     order: str = Query("desc", pattern="^(asc|desc)$"),
     language: str | None = Query(None, max_length=64),
     topic: str | None = Query(None, max_length=64),
     origin: str | None = Query(None, pattern="^(native|fork|migrated|unknown)$"),
     health_min: float | None = Query(None, ge=0, le=100),
     health_max: float | None = Query(None, ge=0, le=100),
-    health_status: str | None = Query(None, pattern="^(available|forming|no_data|all)$"),
+    health_status: str | None = Query(None, pattern="^(available|no_data|all)$"),
     security_status: str | None = Query(None, pattern="^(available|no_data|any)$"),
     security_min: float | None = Query(None, ge=0, le=100),
     security_max: float | None = Query(None, ge=0, le=100),
@@ -129,7 +123,10 @@ def repositories(
     coverage_min: int | None = Query(None, ge=0, le=100),
     activity_days: int | None = Query(None, ge=1, le=3650),
 ):
-    from sourcehealth.catalog.query import CatalogFilters, get_catalog_repositories
+    from sourcehealth.catalog.query import CatalogFilters, clean_query_term, get_catalog_repositories
+
+    clean_q = clean_query_term(q)
+    effective_sort = sort if sort is not None else ("relevance" if clean_q else "health_score")
 
     filters = CatalogFilters(
         q=q,
@@ -174,7 +171,7 @@ def repositories(
                 else repo_row.health_score
             )
             rank = None
-            if sort == "health_score" and order == "desc" and effective_health is not None:
+            if effective_sort == "health_score" and order == "desc" and effective_health is not None:
                 rank = offset + idx + 1
             items.append(_repository_dto(repo_row, run_row, rank=rank))
 
@@ -184,7 +181,7 @@ def repositories(
             offset=offset,
             total=total,
             has_more=(offset + len(rows)) < total,
-            applied_sort=sort,
+            applied_sort=effective_sort,
             applied_order=order,
         )
 

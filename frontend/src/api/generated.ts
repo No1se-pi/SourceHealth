@@ -1310,7 +1310,7 @@ export interface operations {
                 q?: string | null;
                 limit?: number;
                 offset?: number;
-                sort?: string;
+                sort?: string | null;
                 order?: string;
                 language?: string | null;
                 topic?: string | null;
