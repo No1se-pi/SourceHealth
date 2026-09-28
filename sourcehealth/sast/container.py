@@ -65,7 +65,7 @@ def run_repository(url: str, *, image: str = "sourcehealth-sast", timeout: float
     # Общие ограничения обоих контейнеров. Default seccomp остаётся включённым.
     limits = [
         "--read-only", "--user", "10001:10001", "--cap-drop=ALL",
-        "--security-opt=no-new-privileges", "--memory=512m", "--memory-swap=512m",
+        "--security-opt=no-new-privileges", "--memory=1g", "--memory-swap=1g",
         "--cpus=1", "--pids-limit=128", "--log-driver=none",
         "--tmpfs", "/tmp:rw,noexec,nosuid,nodev,size=64m",
     ]
