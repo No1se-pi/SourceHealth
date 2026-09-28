@@ -24,14 +24,14 @@ Covers:
 21. Catalog status safe output
 22. 30k synthetic query performance remains reasonable
 23. Bootstrap and sync mutual exclusion under advisory lock
-24. Manual repository import does not get 365 days delay
+24. Shared upsert does not inject 365 days delay
 25. Metadata sync preserves existing repository schedules
 26. Default browse stats and query consistency
 """
 
 import unittest
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -473,8 +473,14 @@ class CatalogBootstrapV3RegressionTests(unittest.TestCase):
         res_sync = sync.run()
         self.assertEqual(res_sync, {"skipped": True, "reason": "catalog_sync_already_running"})
 
-    # 24. Manual repository import does not get 365 days delay
-    def test_24_manual_import_does_not_get_365_days_delay(self):
+    # 24. Shared upsert does not inject 365 days delay
+    def test_24_shared_upsert_does_not_inject_365_days_delay(self):
+        """Proves absence of artificial 365-day delay in shared upsert_sourcecraft_repository.
+
+        Note: Real PostgreSQL row insertion uses server_default=text('now()');
+        this unit test verifies that shared Python upsert logic does not override
+        or schedule next_analysis_at to a distant 365-day future.
+        """
         class MockDB:
             def __init__(self):
                 self.added = []
@@ -493,11 +499,11 @@ class CatalogBootstrapV3RegressionTests(unittest.TestCase):
             "visibility": "public",
         }
         repo = upsert_sourcecraft_repository(db, values)
-        # Does NOT set next_analysis_at to 365 days in the future
-        self.assertNotEqual(
-            getattr(repo, "next_analysis_at", None),
-            datetime.now(UTC).date(),
-        )
+        # Does NOT inject next_analysis_at into values or schedule 365 days delay
+        self.assertNotIn("next_analysis_at", values)
+        val = getattr(repo, "next_analysis_at", None)
+        if val is not None:
+            self.assertLess(val, datetime.now(UTC) + timedelta(days=30))
 
     # 25. Metadata sync preserves existing repository schedules
     def test_25_metadata_sync_preserves_existing_repository_schedule(self):
