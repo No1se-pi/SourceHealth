@@ -56,7 +56,7 @@ class PersistenceTests(unittest.TestCase):
         cls.redis = Redis.from_url(redis_url)
         cls.redis.ping()
         with cls.engine.connect() as db:
-            if db.scalar(text("select version_num from alembic_version")) != "0003_catalog_search_v2":
+            if db.scalar(text("select version_num from alembic_version")) != "0004_sourcecraft_slug_contract":
                 raise RuntimeError("apply Alembic before integration tests")
 
     @classmethod
