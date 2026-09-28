@@ -111,7 +111,7 @@ class CatalogSync:
             "repository_slug": metadata.repository_slug,
             "canonical_url": metadata.canonical_url,
             "visibility": "public",
-            "next_analysis_at": datetime.now(UTC),
+            "next_analysis_at": datetime.now(UTC) + timedelta(days=365),
             "description": metadata.description,
             "logo_url": metadata.logo_url,
             "origin": metadata.origin or "unknown",
@@ -133,6 +133,170 @@ class CatalogSync:
             return upsert_sourcecraft_repository(db, values)
         except RepositoryIdentityConflict:
             raise SourceCraftError("repository_identity_conflict") from None
+
+
+class CatalogBootstrap:
+    """Safe, fast operator public metadata bootstrap."""
+
+    def __init__(self, sessions, settings, *, client_factory=SourceCraftClient):
+        self.sessions = sessions
+        self.settings = settings
+        self.client_factory = client_factory
+
+    def run(
+        self,
+        *,
+        max_pages: int = 50,
+        time_budget_seconds: float = 300.0,
+        page_size: int = 100,
+    ) -> dict:
+        import time
+
+        start_time = time.monotonic()
+
+        with self.sessions.begin() as db:
+            state = db.get(CatalogSyncState, 1, with_for_update=True)
+            if state is None:
+                state = CatalogSyncState(id=1, cycle_started_at=datetime.now(UTC))
+                db.add(state)
+            token = state.page_token
+            if state.cycle_started_at is None:
+                state.cycle_started_at = datetime.now(UTC)
+
+        processed_pages = 0
+        imported_repos = 0
+        seen_tokens = {token} if token else set()
+        pat = self.settings.sourcecraft_pat.get_secret_value() if self.settings.sourcecraft_pat else None
+
+        effective_page_size = min(100, max(1, page_size))
+        with self.client_factory(pat=pat, deadline_seconds=45, max_pages=max_pages) as client:
+            while processed_pages < max_pages:
+                elapsed = time.monotonic() - start_time
+                if elapsed >= time_budget_seconds:
+                    LOG.info("catalog_bootstrap_time_budget_reached", extra={
+                        "component": "catalog_bootstrap", "event": "time_budget_reached",
+                        "pages": processed_pages, "repositories": imported_repos,
+                    })
+                    break
+
+                params = {"page_size": effective_page_size, "sort_by": "created_at"}
+                if token:
+                    params["page_token"] = token
+
+                try:
+                    payload = client.get("/repos", params=params)
+                except Exception as exc:
+                    LOG.warning("catalog_bootstrap_page_fetch_failed", extra={
+                        "component": "catalog_bootstrap", "event": "fetch_failed",
+                        "error": str(exc), "pages_completed": processed_pages,
+                    })
+                    break
+
+                rows = payload.get("repositories")
+                if not isinstance(rows, list):
+                    LOG.warning("catalog_bootstrap_invalid_payload", extra={
+                        "component": "catalog_bootstrap", "event": "invalid_payload",
+                    })
+                    break
+
+                safe_rows = []
+                for row in rows:
+                    if isinstance(row, dict) and row.get("visibility") in {"private", "internal"}:
+                        continue
+                    try:
+                        safe_rows.append(CatalogSync._safe(row))
+                    except SourceCraftError:
+                        continue
+
+                next_token = payload.get("next_page_token")
+                if next_token not in (None, "") and (
+                    not isinstance(next_token, str)
+                    or len(next_token) > 1024
+                    or next_token in seen_tokens
+                ):
+                    break
+
+                # Atomic per-page commit preserving checkpoint
+                with self.sessions.begin() as db:
+                    for values in safe_rows:
+                        CatalogSync._upsert(db, values)
+                    state = db.get(CatalogSyncState, 1, with_for_update=True)
+                    state.page_token = next_token or None
+                    state.updated_at = datetime.now(UTC)
+                    if not next_token:
+                        state.last_completed_at = state.updated_at
+                        state.cycle_started_at = None
+
+                processed_pages += 1
+                imported_repos += len(safe_rows)
+                token = next_token
+                if not token:
+                    break
+                seen_tokens.add(token)
+
+        return {
+            "pages": processed_pages,
+            "repositories": imported_repos,
+            "cycle_complete": not bool(token),
+            "checkpoint_token_present": bool(token),
+        }
+
+
+def get_catalog_status(sessions) -> dict:
+    """Safe, non-secret overview of catalog size and ingestion progress."""
+    from sqlalchemy import or_
+
+    from sourcehealth.catalog.topics import TOPIC_CLASSIFIER_VERSION
+    from sourcehealth.storage.models import CatalogSyncState, Repository
+
+    with sessions() as db:
+        catalog_public_rows = db.scalar(
+            select(func.count(Repository.id)).where(Repository.visibility == "public")
+        ) or 0
+
+        with_health = db.scalar(
+            select(func.count(Repository.id)).where(
+                Repository.visibility == "public",
+                Repository.health_score.isnot(None),
+            )
+        ) or 0
+        without_health = catalog_public_rows - with_health
+
+        with_topics = db.scalar(
+            select(func.count(Repository.id)).where(
+                Repository.visibility == "public",
+                Repository.topics.isnot(None),
+                Repository.topics != [],
+            )
+        ) or 0
+        without_topics = catalog_public_rows - with_topics
+
+        classifier_version_stale = db.scalar(
+            select(func.count(Repository.id)).where(
+                Repository.visibility == "public",
+                or_(
+                    Repository.topic_classifier_version != TOPIC_CLASSIFIER_VERSION,
+                    Repository.topic_classifier_version.is_(None),
+                ),
+            )
+        ) or 0
+
+        state = db.get(CatalogSyncState, 1)
+        checkpoint_present = bool(state and state.page_token)
+        last_completed_at = state.last_completed_at.isoformat() if (state and state.last_completed_at) else None
+        cycle_in_progress = bool(state and state.cycle_started_at is not None and state.page_token is not None)
+
+    return {
+        "catalog_public_rows": catalog_public_rows,
+        "with_health": with_health,
+        "without_health": without_health,
+        "with_topics": with_topics,
+        "without_topics": without_topics,
+        "classifier_version_stale": classifier_version_stale,
+        "current_page_checkpoint_present": checkpoint_present,
+        "last_completed_at": last_completed_at,
+        "cycle_in_progress": cycle_in_progress,
+    }
 
 
 def queue_backlog(sessions) -> int:

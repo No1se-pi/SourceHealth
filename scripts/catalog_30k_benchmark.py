@@ -151,12 +151,19 @@ class CatalogBenchmarkEngine:
         # 1. Filters
         if q:
             q_clean = q.lower().strip()
+            tokens = [t for t in q_clean.replace("-", " ").replace("_", " ").split() if t]
             filtered = [
                 r for r in filtered
-                if q_clean in r["full_slug"].lower()
-                or q_clean in r["repository_slug"].lower()
-                or q_clean in r["organization_slug"].lower()
-                or q_clean in r["description"].lower()
+                if (
+                    q_clean in r["full_slug"].lower()
+                    or q_clean in r["repository_slug"].lower()
+                    or q_clean in r["organization_slug"].lower()
+                    or q_clean in r["description"].lower()
+                    or (len(tokens) > 1 and all(
+                        t in r["full_slug"].lower() or t in r["description"].lower()
+                        for t in tokens
+                    ))
+                )
             ]
 
         if language:
@@ -174,7 +181,9 @@ class CatalogBenchmarkEngine:
         if health_max is not None:
             filtered = [r for r in filtered if r["health_score"] is not None and r["health_score"] <= health_max]
 
-        if health_status:
+        if health_status is None and not q:
+            filtered = [r for r in filtered if r["health_score"] is not None]
+        elif health_status:
             if health_status == "available":
                 filtered = [r for r in filtered if r["health_score"] is not None]
             elif health_status == "no_data":

@@ -3,11 +3,12 @@
 import hashlib
 import json
 import logging
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import Select, case, func, or_, select
+from sqlalchemy import Select, and_, case, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from sourcehealth.catalog.topics import ALL_TOPICS
@@ -126,15 +127,44 @@ def apply_catalog_filters(query: Select, filters: CatalogFilters) -> Select:
     clean_q = clean_query_term(filters.q)
     if clean_q:
         q_lower = clean_q.lower()
-        query = query.where(
-            or_(
-                func.lower(Repository.repository_slug).contains(q_lower),
-                func.lower(Repository.organization_slug).contains(q_lower),
-                func.lower(Repository.organization_slug + "/" + Repository.repository_slug).contains(q_lower),
-                func.lower(Repository.canonical_url).contains(q_lower),
-                func.lower(Repository.description).contains(q_lower),
-            )
-        )
+        tokens = [t for t in re.split(r"[\s\-_/]+", q_lower) if t]
+        q_compact = re.sub(r"[\s\-_/]+", "", q_lower)
+        q_hyphen = re.sub(r"\s+", "-", q_lower)
+        q_underscore = re.sub(r"\s+", "_", q_lower)
+
+        full_slug = func.lower(Repository.organization_slug + "/" + Repository.repository_slug)
+        repo_slug = func.lower(Repository.repository_slug)
+        org_slug = func.lower(Repository.organization_slug)
+        canon_url = func.lower(Repository.canonical_url)
+        desc = func.lower(func.coalesce(Repository.description, ""))
+
+        phrase_conditions = [
+            full_slug.contains(q_lower),
+            repo_slug.contains(q_lower),
+            org_slug.contains(q_lower),
+            canon_url.contains(q_lower),
+            desc.contains(q_lower),
+        ]
+        if q_hyphen != q_lower:
+            phrase_conditions.extend([full_slug.contains(q_hyphen), repo_slug.contains(q_hyphen)])
+        if q_underscore != q_lower:
+            phrase_conditions.extend([full_slug.contains(q_underscore), repo_slug.contains(q_underscore)])
+        if q_compact and len(q_compact) >= 3:
+            phrase_conditions.extend([repo_slug.contains(q_compact), full_slug.contains(q_compact)])
+
+        if len(tokens) > 1:
+            token_matches = [
+                or_(
+                    repo_slug.contains(t),
+                    org_slug.contains(t),
+                    desc.contains(t),
+                    canon_url.contains(t),
+                )
+                for t in tokens
+            ]
+            phrase_conditions.append(and_(*token_matches))
+
+        query = query.where(or_(*phrase_conditions))
 
     if filters.language:
         query = query.where(Repository.language == filters.language)
@@ -220,23 +250,47 @@ def apply_catalog_sort(query: Select, filters: CatalogFilters) -> Select:
     if sort_field == "relevance":
         if clean_q:
             q_lower = clean_q.lower()
+            tokens = [t for t in re.split(r"[\s\-_/]+", q_lower) if t]
+            q_compact = re.sub(r"[\s\-_/]+", "", q_lower)
+            q_hyphen = re.sub(r"\s+", "-", q_lower)
+
             full_slug = func.lower(Repository.organization_slug + "/" + Repository.repository_slug)
             repo_slug = func.lower(Repository.repository_slug)
             org_slug = func.lower(Repository.organization_slug)
+            canon_url = func.lower(Repository.canonical_url)
+            desc = func.lower(func.coalesce(Repository.description, ""))
 
-            relevance_rank = case(
-                (full_slug == q_lower, 1),
-                (repo_slug == q_lower, 2),
-                (org_slug == q_lower, 3),
-                (full_slug.startswith(q_lower), 4),
-                (repo_slug.startswith(q_lower), 5),
-                (org_slug.startswith(q_lower), 6),
-                (func.lower(Repository.canonical_url).contains(q_lower), 7),
-                (repo_slug.contains(q_lower), 8),
-                (org_slug.contains(q_lower), 8),
-                (func.lower(Repository.description).contains(q_lower), 9),
-                else_=10,
-            )
+            exact_full = or_(full_slug == q_lower, full_slug == q_hyphen, full_slug == q_compact)
+            exact_repo = or_(repo_slug == q_lower, repo_slug == q_hyphen, repo_slug == q_compact)
+            exact_org = or_(org_slug == q_lower, org_slug == q_compact)
+
+            prefix_full = or_(full_slug.startswith(q_lower), full_slug.startswith(q_hyphen), full_slug.startswith(q_compact))
+            prefix_repo = or_(repo_slug.startswith(q_lower), repo_slug.startswith(q_hyphen), repo_slug.startswith(q_compact))
+            prefix_org = or_(org_slug.startswith(q_lower), org_slug.startswith(q_compact))
+
+            contains_repo = or_(repo_slug.contains(q_lower), repo_slug.contains(q_hyphen), repo_slug.contains(q_compact))
+            contains_org = or_(org_slug.contains(q_lower), org_slug.contains(q_compact))
+
+            cases = [
+                (exact_full, 1),
+                (exact_repo, 2),
+                (exact_org, 3),
+                (prefix_full, 4),
+                (prefix_repo, 5),
+                (prefix_org, 6),
+                (contains_repo, 7),
+                (contains_org, 8),
+                (canon_url.contains(q_lower), 9),
+                (desc.contains(q_lower), 10),
+            ]
+            if len(tokens) > 1:
+                token_matches = [
+                    or_(repo_slug.contains(t), org_slug.contains(t), desc.contains(t))
+                    for t in tokens
+                ]
+                cases.append((and_(*token_matches), 11))
+
+            relevance_rank = case(*cases, else_=12)
             return query.order_by(
                 relevance_rank.asc(),
                 effective_health.desc().nulls_last(),
@@ -275,16 +329,27 @@ def get_catalog_repositories(
     db: Session, filters: CatalogFilters
 ) -> tuple[list[tuple[Repository, AnalysisRun | None]], int]:
     """Return paginated repositories and total matching count."""
+    clean_q = clean_query_term(filters.q)
+    effective_filters = filters
+    # Default browse excludes NO_DATA:
+    # If health_status is not explicitly set:
+    # - Default browse (no query term q): default to health_status='available'.
+    # - Search (q provided): search the entire metadata catalog (health_status=None).
+    if filters.health_status is None and not clean_q:
+        import copy
+        effective_filters = copy.copy(filters)
+        effective_filters.health_status = "available"
+
     base = build_catalog_base_query()
-    filtered = apply_catalog_filters(base, filters)
+    filtered = apply_catalog_filters(base, effective_filters)
 
     # Count total matching rows
     count_query = select(func.count()).select_from(filtered.subquery())
     total = db.scalar(count_query) or 0
 
     # Apply sort, limit, offset
-    sorted_query = apply_catalog_sort(filtered, filters)
-    paginated_query = sorted_query.offset(filters.offset).limit(filters.limit)
+    sorted_query = apply_catalog_sort(filtered, effective_filters)
+    paginated_query = sorted_query.offset(effective_filters.offset).limit(effective_filters.limit)
 
     rows = list(db.execute(paginated_query).all())
     return [(repo, run) for repo, run in rows], total

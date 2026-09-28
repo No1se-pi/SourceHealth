@@ -27,13 +27,16 @@ def upsert_sourcecraft_repository(db, values: dict) -> Repository:
             raise RepositoryIdentityConflict
         row = collision
     if row is None:
+        if "next_analysis_at" not in values:
+            from datetime import UTC, datetime, timedelta
+            values["next_analysis_at"] = datetime.now(UTC) + timedelta(days=365)
         row = Repository(**values)
         db.add(row)
     else:
         row.sourcecraft_id = sourcecraft_id
         for key in ("organization_slug", "repository_slug", "canonical_url", "visibility",
                     "default_branch", "language", "likes", "description", "logo_url",
-                    "origin", "project_slug", "topics", "topic_classifier_version", "next_analysis_at"):
+                    "origin", "project_slug", "topics", "topic_classifier_version"):
             if key in values:
                 setattr(row, key, values[key])
     if hasattr(db, "flush"):

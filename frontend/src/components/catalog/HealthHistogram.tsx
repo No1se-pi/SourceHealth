@@ -18,11 +18,8 @@ export const HealthHistogram: React.FC<HealthHistogramProps> = ({
   selectedNoData = false,
   onSelectBucket,
 }) => {
-  const maxBucketCount = Math.max(
-    1,
-    ...buckets.map((b) => b.count),
-    noDataCount,
-  );
+  // Numeric buckets only for scaling, preventing NO_DATA from flattening score bars
+  const maxBucketCount = Math.max(1, ...buckets.map((b) => b.count));
 
   return (
     <div
@@ -50,7 +47,7 @@ export const HealthHistogram: React.FC<HealthHistogramProps> = ({
             color: 'var(--sh-text-primary, #1f2328)',
           }}
         >
-          Распределение Health
+          Распределение Health (0–100)
         </span>
         <span
           style={{
@@ -58,10 +55,11 @@ export const HealthHistogram: React.FC<HealthHistogramProps> = ({
             color: 'var(--sh-text-muted, #64748b)',
           }}
         >
-          Нажмите на столбец для фильтрации
+          Нажмите на столбец диапазона для фильтрации
         </span>
       </div>
 
+      {/* 10 Numeric Score Buckets */}
       <div
         style={{
           display: 'flex',
@@ -105,7 +103,7 @@ export const HealthHistogram: React.FC<HealthHistogramProps> = ({
                 opacity: selectedRange && !isSelected ? 0.35 : 1,
                 transition: 'opacity 0.15s ease',
               }}
-              title={`${b.range_label}: ${b.count} проектов (${percentOfAnalyzed}% от с оценкой)`}
+              title={`${b.range_label}: ${b.count} проектов (${percentOfAnalyzed}% от оценённых)`}
             >
               <div
                 style={{
@@ -131,56 +129,52 @@ export const HealthHistogram: React.FC<HealthHistogramProps> = ({
             </div>
           );
         })}
+      </div>
 
-        {/* NO_DATA Column / Separator */}
-        <div
-          style={{
-            width: '1px',
-            height: '70%',
-            backgroundColor: 'var(--sh-border-subtle, #e1e4e8)',
-            margin: '0 4px',
-          }}
-        />
+      {/* Discrete Metadata Line: Evaluated vs NO_DATA */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: '12px',
+          paddingTop: '8px',
+          borderTop: '1px solid var(--sh-border-subtle, #f0f2f5)',
+          fontSize: '0.8rem',
+        }}
+      >
+        <span style={{ color: 'var(--sh-text-muted, #64748b)' }}>
+          С официальной оценкой: <strong style={{ color: 'var(--sh-text-primary, #1f2328)' }}>{totalAnalyzed}</strong>
+        </span>
 
-        <div
-          className="sh-histogram-bar-nodata"
-          data-testid="histogram-bucket-nodata"
-          onClick={() => onSelectBucket(undefined, undefined, true)}
-          style={{
-            width: '36px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'flex-end',
-            alignItems: 'center',
-            height: '100%',
-            cursor: 'pointer',
-            opacity: (selectedRange || selectedNoData) && !selectedNoData ? 0.35 : 1,
-            transition: 'opacity 0.15s ease',
-          }}
-          title={`NO_DATA: ${noDataCount} проектов`}
-        >
-          <div
+        {noDataCount > 0 && (
+          <button
+            type="button"
+            className="sh-histogram-bar-nodata"
+            data-testid="histogram-bucket-nodata"
+            onClick={() => onSelectBucket(undefined, undefined, true)}
             style={{
-              width: '100%',
-              height: `${Math.max(4, (noDataCount / maxBucketCount) * 100)}%`,
-              backgroundColor: 'var(--sh-health-unavailable, #57606a)',
-              borderRadius: '3px 3px 0 0',
-              border: selectedNoData ? '2px solid var(--sh-text-primary, #1f2328)' : 'none',
-              transition: 'height 0.25s ease',
-            }}
-          />
-          <span
-            style={{
-              fontSize: '9px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '3px 10px',
+              borderRadius: 'var(--sh-radius-sm, 6px)',
+              cursor: 'pointer',
+              fontSize: '0.78rem',
+              fontWeight: selectedNoData ? 600 : 500,
+              border: '1px solid',
+              borderColor: selectedNoData ? 'var(--sh-text-primary, #1f2328)' : 'var(--sh-border-default, #d0d7de)',
+              backgroundColor: selectedNoData ? 'var(--sh-bg-surface-hover, #f3f4f6)' : 'transparent',
               color: selectedNoData ? 'var(--sh-text-primary, #1f2328)' : 'var(--sh-text-muted, #64748b)',
-              fontWeight: selectedNoData ? 700 : 400,
-              marginTop: '4px',
-              whiteSpace: 'nowrap',
+              transition: 'all 0.15s ease',
             }}
+            title="Показать репозитории без рассчитанной оценки Health"
           >
-            NO DATA
-          </span>
-        </div>
+            <span>Без рассчитанного Health:</span>
+            <strong>{noDataCount.toLocaleString('ru-RU')}</strong>
+            {selectedNoData && <span style={{ color: 'var(--sh-brand, #f93333)' }}>●</span>}
+          </button>
+        )}
       </div>
     </div>
   );
