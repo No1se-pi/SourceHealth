@@ -53,6 +53,7 @@ const ORIGIN_LABELS: Record<string, string> = {
 const HEALTH_STATUS_LABELS: Record<string, string> = {
   available: 'С оценкой',
   no_data: 'NO_DATA',
+  all: 'Все проекты',
 };
 
 const CATEGORY_NAMES: Record<string, string> = {

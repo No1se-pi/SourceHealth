@@ -114,7 +114,8 @@ export const AdvancedFiltersModal: React.FC<AdvancedFiltersModalProps> = ({
                 color: 'var(--sh-text-primary, #1f2328)',
               }}
             >
-              <option value="">Все проекты</option>
+              <option value="">По умолчанию (официальный Health)</option>
+              <option value="all">Все проекты (включая без оценки)</option>
               <option value="available">Только с рассчитанным Health</option>
               <option value="no_data">Только NO_DATA (без оценки)</option>
             </select>

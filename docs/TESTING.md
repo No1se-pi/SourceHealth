@@ -145,3 +145,19 @@ disconnect/logout и import → persisted likes/null. HTTP SourceCraft в эти
 Системный Python 3.11.2 из Node Bookworm воспроизводил regex regression; используем
 актуальный Python 3.11 image. Docker/Compose smoke остаются в GitHub, поскольку
 доступ к Docker daemon в SourceCraft runner не подтверждён.
+
+## Каталог, поиск и bootstrap v3 (`tests/test_catalog_bootstrap_v3.py`)
+
+Набор регрессионных тестов покрывает все 22 критерия приёмки Task 3:
+1. **Desktop vs Mobile UI**: устранение inline `display: flex`, строгое управление видимостью через CSS `.leaderboard-mobile` / `.leaderboard-desktop`.
+2. **Default Browse NO_DATA**: выдача каталога без `q` по умолчанию возвращает все публичные репозитории метаданных, сортируя проекты с числовым Health выше (`effective_health DESC NULLS LAST`), а NO_DATA — ниже, гарантируя полную консистентность строк таблицы, пагинации и фасетов.
+3. **Text Search Metadata**: поиск по текстовому запросу `q` находит проекты по всей базе метаданных, включая неанализированные со статусом NO_DATA.
+4. **Explicit Health Filters**: явная фильтрация по `health_status=all` и `health_status=no_data`.
+5. **Histogram Numeric Scaling**: гистограмма Health масштабируется строго по 10 числовым диапазонам; NO_DATA отображается отдельным интерактивным счётчиком под графиком.
+6. **Multilingual Topics**: классификация тем по ключевым словам на русском и английском (ML, Mobile, Web, Security) и подсказкам языка (`Dart` -> `mobile`, `Jupyter Notebook` -> `ml_data`).
+7. **Idempotent Reclassification**: пакетная функция `reclassify_catalog_topics` на keyset-пагинации обновляет записи без вызовов к сети и коммитит каждый батч независимо.
+8. **Tokenized Search & Relevance**: 12-уровневое детерминированное ранжирование (точные совпадения org/repo, префиксы, подстроки, мульти-токены) с тайбрейкером по `health_score DESC`.
+9. **Catalog Bootstrap**: сохранение и возобновление с чекпоинта `catalog_sync_state`, сохранение прогресса при прерывании или ошибке.
+10. **Decoupled Discovery & Concurrency**: сохранение метаданных через `upsert_sourcecraft_repository` сохраняет существующие расписания `next_analysis_at`, не навязывает 365-дневные задержки и не ставит задачи на Docker/Git/SAST. `CatalogBootstrap` и `CatalogSync` взаимно исключают друг друга через advisory lock `CATALOG_SYNC_LOCK_KEY`.
+11. **Catalog Status**: безопасный сбор 9 операторских метрик без раскрытия секретов.
+12. **30k Synthetic Benchmark**: `scripts/catalog_30k_benchmark.py` подтверждает выполнение сценариев фильтрации и поиска в пределах 3.5–26 мс.

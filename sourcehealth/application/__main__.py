@@ -26,13 +26,21 @@ def worker_class(platform=None):
 def main(argv=None):
     configure_logging()
     parser = SafeParser()
-    parser.add_argument("command", choices=("worker", "worker-code", "enqueue-due", "dispatch", "register", "discover",
-                                          "catalog-sync", "maintain", "queue-status",
-                                          "probe-sourcecraft", "accept-public", "doctor"))
+    parser.add_argument("command", choices=(
+        "worker", "worker-code", "enqueue-due", "dispatch", "register", "discover",
+        "catalog-sync", "maintain", "queue-status",
+        "probe-sourcecraft", "accept-public", "doctor",
+        "catalog-reclassify-topics", "catalog-bootstrap", "catalog-status",
+    ))
     parser.add_argument("url", nargs="?")
     parser.add_argument("--organization", help="Ограничить discovery одной организацией")
     parser.add_argument("--limit", type=int, default=20, help="Максимум импортов discovery (1..100)")
     parser.add_argument("--timeout", type=float, default=900, help="Лимит ожидания accept-public, секунды (0..86400)")
+    parser.add_argument("--batch-size", type=int, default=500, help="Размер батча для переклассификации (1..5000)")
+    parser.add_argument("--max-pages", type=int, default=50, help="Максимум страниц bootstrap (1..10000)")
+    parser.add_argument("--time-budget", type=float, default=300.0, help="Бюджет времени bootstrap, сек")
+    parser.add_argument("--page-size", type=int, default=100, help="Размер страницы bootstrap (1..100)")
+    parser.add_argument("--force", action="store_true", help="Принудительная переклассификация всех репозиториев")
     args = parser.parse_args(argv)
     try:
         settings = Settings()
@@ -108,6 +116,30 @@ def main(argv=None):
                 result["scheduled"] = len(scheduled)
                 result["dispatched"] = dispatch_pending(sessions, redis, settings.analysis_timeout)
             print(json.dumps(result))
+        elif args.command == "catalog-reclassify-topics":
+            from sourcehealth.catalog.topics import reclassify_catalog_topics
+
+            result = reclassify_catalog_topics(
+                sessions,
+                batch_size=args.batch_size,
+                limit=args.limit if args.limit and args.limit > 0 else None,
+                force=args.force,
+            )
+            print(json.dumps(result, ensure_ascii=True))
+        elif args.command == "catalog-bootstrap":
+            from sourcehealth.catalog.sync import CatalogBootstrap
+
+            result = CatalogBootstrap(sessions, settings).run(
+                max_pages=args.max_pages,
+                time_budget_seconds=args.time_budget,
+                page_size=args.page_size,
+            )
+            print(json.dumps(result, ensure_ascii=True))
+        elif args.command == "catalog-status":
+            from sourcehealth.catalog.sync import get_catalog_status
+
+            result = get_catalog_status(sessions)
+            print(json.dumps(result, indent=2, ensure_ascii=True))
         else:
             recover_abandoned(engine, sessions, settings)
             if args.command == "enqueue-due":

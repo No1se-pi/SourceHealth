@@ -868,7 +868,7 @@ export const LeaderboardPage: React.FC = () => {
             </div>
 
             {/* Mobile Card List View (< 768px) */}
-            <div className="leaderboard-mobile" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div className="leaderboard-mobile">
               {page.items.map((repo, index) => {
                 const offset = (Math.max(1, pageParam) - 1) * pageSizeParam;
                 const position = offset + index + 1;
