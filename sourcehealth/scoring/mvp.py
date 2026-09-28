@@ -118,7 +118,7 @@ class MVPPolicy:
             assign("activity", [(1, 0)], [git], explanation="Полностью наблюдаемая пустая Git-история: 0.")
 
         debt, sast = results.get("technical_debt"), results.get("sast")
-        components, checks = [], []
+        components, checks, sast_penalty = [], [], 0
         if usable(debt) and debt.metrics.get("code_files", 0) > 0:
             m = debt.metrics
             components += [(40, 100 * (1 - clamp(m["marker_density"] / 5))),
@@ -130,8 +130,27 @@ class MVPPolicy:
             summary = sast.metrics["summary"]
             components.append((40, max(0, 100 - 15 * summary["high"] - 5 * summary["medium"] - summary["low"])))
             checks.append(sast)
+        elif (sast and sast.status in {"ok", "partial"}
+              and sast.availability in {A.AVAILABLE, A.PARTIAL}):
+            summary = sast.metrics.get("summary")
+            if (isinstance(summary, dict)
+                    and all(type(summary.get(level)) is int and summary[level] >= 0
+                            for level in ("high", "medium", "low"))
+                    and any(summary[level] for level in ("high", "medium", "low"))):
+                # Partial coverage cannot earn the clean-scan baseline. Confirmed findings still reduce
+                # the independently supported debt score; unobserved files receive no positive credit.
+                sast_penalty = 15 * summary["high"] + 5 * summary["medium"] + summary["low"]
+                checks.append(sast)
         assign("code_health", components, checks, minimum=50,
                explanation="TODO/FIXME density 40, large files 10, marker age 10, local SAST 40; нужно ≥50 внутренних весов.")
+        if sast_penalty and categories["code_health"].score is not None:
+            current = categories["code_health"]
+            coverage_note = "PARTIAL SAST" if sast.availability == A.PARTIAL else "SAST без clean-scan baseline"
+            categories["code_health"] = CategoryScore(
+                Category.CODE_HEALTH, max(0, current.score - sast_penalty), current.availability,
+                current.explanation + f" {coverage_note}: подтверждённые находки учтены как штраф; непроверенная часть не получает положительный credit.",
+                current.evidence_refs,
+            )
 
         # Reserved normalized AppSec input, not an external client or a fabricated production finding.
         security = [r for r in results.values() if r.category == "security" and r.source == "sourcecraft_appsec" and usable(r)]

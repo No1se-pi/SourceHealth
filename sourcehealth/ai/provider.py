@@ -8,6 +8,10 @@ from .contracts import AISummaryContext, AISummaryResult
 class AIValidationError(ValueError):
     """Raised when an AI summary violates grounding constraints or limits."""
 
+    def __init__(self, code: str):
+        self.code = code
+        super().__init__(code)
+
 
 class AISummaryProvider(Protocol):
     def summarize(self, context: AISummaryContext) -> AISummaryResult:
@@ -22,31 +26,33 @@ class DisabledAIProvider:
         raise RuntimeError("ai_provider_disabled")
 
 
-def validate_ai_output(context: AISummaryContext, result: AISummaryResult) -> None:
-    """Validate that AI output is strictly grounded in the context and obeys limits."""
-    # 1. Collect all valid evidence IDs from context
-    valid_evidence_ids: set[str] = set()
+def allowed_grounding_ids(context: AISummaryContext) -> tuple[set[str], set[str]]:
+    """Return the exact identifiers that generated text may reference."""
+    evidence_ids: set[str] = set()
     for fact in context.facts:
-        valid_evidence_ids.add(fact.id)
+        evidence_ids.add(fact.id)
     for cat in context.categories:
         for ref in cat.evidence_refs:
-            valid_evidence_ids.add(ref)
+            evidence_ids.add(ref)
+    return evidence_ids, {rec.id for rec in context.recommendations}
 
-    # 2. Collect all valid recommendation IDs from context
-    valid_rec_ids: set[str] = {rec.id for rec in context.recommendations}
+
+def validate_ai_output(context: AISummaryContext, result: AISummaryResult) -> None:
+    """Validate that AI output is strictly grounded in the context and obeys limits."""
+    valid_evidence_ids, valid_rec_ids = allowed_grounding_ids(context)
 
     # 3. Check array limits
     if len(result.strengths) > 5:
-        raise AIValidationError(f"Too many strengths: {len(result.strengths)} (max 5)")
+        raise AIValidationError("other_grounding_failure")
     if len(result.risks) > 5:
-        raise AIValidationError(f"Too many risks: {len(result.risks)} (max 5)")
+        raise AIValidationError("other_grounding_failure")
     if len(result.actions) > 5:
-        raise AIValidationError(f"Too many actions: {len(result.actions)} (max 5)")
+        raise AIValidationError("other_grounding_failure")
     if len(result.limitations) > 5:
-        raise AIValidationError(f"Too many limitations: {len(result.limitations)} (max 5)")
+        raise AIValidationError("other_grounding_failure")
 
     if len(result.executive_summary) > 1000:
-        raise AIValidationError(f"Executive summary too long: {len(result.executive_summary)} chars (max 1000)")
+        raise AIValidationError("other_grounding_failure")
 
     # 4. Check evidence refs in statements
     # Strengths and risks MUST cite at least one valid evidence reference
@@ -56,44 +62,39 @@ def validate_ai_output(context: AISummaryContext, result: AISummaryResult) -> No
     ):
         for stmt in statements:
             if len(stmt.text) > 500:
-                raise AIValidationError(f"{group_name} statement too long: {len(stmt.text)} chars (max 500)")
+                raise AIValidationError("other_grounding_failure")
             if not stmt.evidence_refs:
-                singular = "Strength" if group_name == "strengths" else "Risk"
-                raise AIValidationError(
-                    f"{singular} '{stmt.text[:50]}...' must contain at least one valid evidence reference"
-                )
+                raise AIValidationError("missing_statement_evidence")
             for ref in stmt.evidence_refs:
                 if ref not in valid_evidence_ids:
-                    raise AIValidationError(f"Unknown evidence reference '{ref}' in {group_name}")
+                    raise AIValidationError("unknown_evidence_ref")
 
     # Limitations may remain without refs when describing missing coverage, but any cited refs must be valid
     for stmt in result.limitations:
         if len(stmt.text) > 500:
-            raise AIValidationError(f"limitations statement too long: {len(stmt.text)} chars (max 500)")
+            raise AIValidationError("other_grounding_failure")
         for ref in stmt.evidence_refs:
             if ref not in valid_evidence_ids:
-                raise AIValidationError(f"Unknown evidence reference '{ref}' in limitations")
+                raise AIValidationError("unknown_evidence_ref")
 
     # 5. Check actions: must have at least one valid rec_id OR evidence_ref
     for action in result.actions:
         if len(action.text) > 500:
-            raise AIValidationError(f"Action text too long: {len(action.text)} chars (max 500)")
+            raise AIValidationError("other_grounding_failure")
 
         has_grounding = False
         for rec_id in action.recommendation_ids:
             if rec_id not in valid_rec_ids:
-                raise AIValidationError(f"Unknown recommendation ID '{rec_id}' in action")
+                raise AIValidationError("unknown_recommendation_id")
             has_grounding = True
 
         for ev_ref in action.evidence_refs:
             if ev_ref not in valid_evidence_ids:
-                raise AIValidationError(f"Unknown evidence reference '{ev_ref}' in action")
+                raise AIValidationError("unknown_evidence_ref")
             has_grounding = True
 
         if not has_grounding:
-            raise AIValidationError(
-                f"Action '{action.text[:50]}...' must reference at least one valid recommendation ID or evidence reference"
-            )
+            raise AIValidationError("missing_action_grounding")
 
 
 def build_future_prompt(context: AISummaryContext) -> str:

@@ -25,9 +25,12 @@ def result(context, name, category, metrics, availability):
                              reference=context.repository.id,
                              summary=f"Платформенное наблюдение {name}; только recent/stale метрики используют 30 дней. Полнота набора указана отдельно.",
                              url=context.repository.canonical_url, timestamp=context.started_at.isoformat())]
+    collection_error = context.metadata.get("collection", {}).get(name, {}).get("error")
     return AnalyzerResult(name, status="ok" if availability in {A.AVAILABLE, A.NOT_CONFIGURED} else "partial",
                           category=category, source="sourcecraft", metrics=metrics, availability=availability,
-                          evidence=evidence, metadata={"recent_window_days": 30, "observation_scope": "entire_collected_set",
+                          evidence=evidence, error=collection_error,
+                          metadata={"recent_window_days": 30, "observation_scope": "entire_collected_set",
+                                                       "collection_error": collection_error,
                                                        "reference_time": context.started_at.isoformat()})
 
 

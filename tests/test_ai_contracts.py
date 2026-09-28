@@ -148,7 +148,7 @@ class AIContractsTests(unittest.TestCase):
             limitations=[],
         )
 
-        with self.assertRaisesRegex(AIValidationError, "Unknown evidence reference 'fake:evidence:id'"):
+        with self.assertRaisesRegex(AIValidationError, "unknown_evidence_ref"):
             validate_ai_output(context, invalid_result)
 
     def test_validate_ai_output_rejects_unknown_recommendation_id(self):
@@ -164,7 +164,7 @@ class AIContractsTests(unittest.TestCase):
             limitations=[],
         )
 
-        with self.assertRaisesRegex(AIValidationError, "Unknown recommendation ID 'rec-nonexistent'"):
+        with self.assertRaisesRegex(AIValidationError, "unknown_recommendation_id"):
             validate_ai_output(context, invalid_result)
 
     def test_validate_ai_output_rejects_action_without_grounding(self):
@@ -180,7 +180,7 @@ class AIContractsTests(unittest.TestCase):
             limitations=[],
         )
 
-        with self.assertRaisesRegex(AIValidationError, "must reference at least one valid recommendation ID"):
+        with self.assertRaisesRegex(AIValidationError, "missing_action_grounding"):
             validate_ai_output(context, invalid_result)
 
     def test_validate_ai_output_rejects_oversized_elements(self):
@@ -228,7 +228,7 @@ class AIContractsTests(unittest.TestCase):
             actions=[],
             limitations=[],
         )
-        with self.assertRaisesRegex(AIValidationError, "Risk 'Risk without evidence citations...' must contain at least one valid evidence reference"):
+        with self.assertRaisesRegex(AIValidationError, "missing_statement_evidence"):
             validate_ai_output(context, invalid_result)
 
     def test_validate_ai_output_rejects_ungrounded_strength(self):
@@ -243,7 +243,7 @@ class AIContractsTests(unittest.TestCase):
             actions=[],
             limitations=[],
         )
-        with self.assertRaisesRegex(AIValidationError, "Strength 'Strength without citations...' must contain at least one valid evidence reference"):
+        with self.assertRaisesRegex(AIValidationError, "missing_statement_evidence"):
             validate_ai_output(context, invalid_result)
 
     def test_validate_ai_output_allows_limitations_without_refs(self):
@@ -437,7 +437,7 @@ class AIContractsTests(unittest.TestCase):
             actions=[],
             limitations=[],
         )
-        with self.assertRaisesRegex(AIValidationError, "Unknown evidence reference 'security' in risks"):
+        with self.assertRaisesRegex(AIValidationError, "unknown_evidence_ref"):
             validate_ai_output(context, invalid_result)
 
     def test_validate_ai_output_accepts_numeric_category_with_real_evidence_refs(self):
