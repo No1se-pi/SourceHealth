@@ -1,4 +1,4 @@
-# Детерминированная методика mvp-score-v1.2
+﻿# Детерминированная методика mvp-score-v1.2
 
 `MVPPolicy` включена для `mvp-v1`. `platform-v1` и `code-v1` сохраняют
 `UnconfiguredPolicy / unconfigured-v1` с nullable score. Policy не выполняет I/O,
@@ -112,25 +112,24 @@ Duration/recent failures/latest status информативны, не меняю
 
 ## Security boundary
 
-В production остаётся `score=null, availability=no_data,
-error=appsec_credential_unavailable`. Manual run с user PAT получает official AppSec aggregate.
-Local SAST никогда не входит в Security.
+При публичном анализе без токена пользователя категория Security сохраняет `score=null, availability=no_data,
+error=appsec_credential_unavailable`.
+При запуске с сессионным user PAT клиент `SourceCraftAppSecClient` опрашивает API `https://appsec.sourcecraft.tech`
+и передаёт официальный агрегат уязвимостей. Local SAST никогда не входит в категорию Security (он остаётся в Code Health).
 
-Зарезервирован **внутренний нормализованный**, а не внешний wire DTO:
+Внутренний нормализованный формат:
 source=sourcecraft_appsec, complete=true, open_by_severity с неотрицательными
-critical/high/medium/low и официальным evidence. Только такой полный result допускает
-`max(0,100 − 40×critical − 20×high − 5×medium − low)`; resolved не включаются.
-Synthetic fixture проверяет готовность policy, но не является подключённым AppSec.
-Перед подключением нужны подтверждённые mappings и реальная sanitized fixture из
-[SOURCECRAFT_SECURITY_DRAFT](SOURCECRAFT_SECURITY_DRAFT.md).
+critical/high/medium/low и официальным evidence. Полный валидный результат рассчитывается по формуле:
+`max(0, 100 − 40×critical − 20×high − 5×medium − low)`; resolved-дефекты не включаются.
+При отсутствии токена категория Security остаётся в `no_data`, и общий балл честно ренормализуется по остальным
+доступным категориям (при весе $\ge 50\%$).
 
 ## Рекомендации и replay
 
 Детерминированные правила: отсутствуют README/run/build/test/license; CI не настроен
-или success_rate<0.8; stale_open_count>0; TODO/FIXME>0; local SAST findings>0.
-Отдельное правило official AppSec работает только с указанным выше подтверждённым
-source/input, сейчас в production не срабатывает. Каждая рекомендация содержит
-валидные evidence_refs, priority, suggested_action и qualitative High/Medium impact.
+или success_rate<0.8; stale_open_count>0; TODO/FIXME>0; local SAST findings>0;
+критические или высокие уязвимости официального AppSec при наличии данных.
+Каждая рекомендация содержит валидные evidence_refs, priority, suggested_action и qualitative High/Medium impact.
 Численные обещания «+7 Health» не используются. Сортировка стабильна по priority/id.
 
 Fixtures покрывают healthy/bad/empty/partial/outage, порог coverage, все шесть
