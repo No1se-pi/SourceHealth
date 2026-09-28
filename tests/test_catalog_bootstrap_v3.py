@@ -60,10 +60,53 @@ from sourcehealth.catalog.topics import (
     reclassify_catalog_topics,
 )
 from sourcehealth.integrations.sourcecraft.client import SourceCraftClient, SourceCraftError
+from sourcehealth.storage.models import Repository
 from sourcehealth.storage.repositories import upsert_sourcecraft_repository
 
 
 class CatalogBootstrapV3RegressionTests(unittest.TestCase):
+    def test_catalog_preserves_long_slug_and_advances_checkpoint(self):
+        long_slug = "r" * 125
+        captured = []
+        state = SimpleNamespace(page_token="before", cycle_started_at=datetime.now(UTC),
+                                updated_at=None, last_completed_at=None)
+
+        class FactoryClient:
+            def __init__(self, **kwargs): pass
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def get(self, path, params=None):
+                return {"repositories": [{
+                    "id": "long-slug-id", "slug": long_slug,
+                    "organization": {"slug": "team"},
+                    "project": {"slug": "project"}, "visibility": "public",
+                }], "next_page_token": "after"}
+
+        class FakeDB:
+            def get(self, model, key, **kwargs): return state
+            def add(self, row): pass
+
+        class FakeSessions:
+            @contextmanager
+            def begin(self): yield FakeDB()
+
+        settings = SimpleNamespace(sourcecraft_pat=None, catalog_sync_max_pages=1,
+                                   catalog_sync_page_size=100,
+                                   catalog_cycle_interval_seconds=3600)
+        original = CatalogSync._upsert
+        try:
+            CatalogSync._upsert = staticmethod(lambda db, values: captured.append(values))
+            result = CatalogSync(FakeSessions(), settings, client_factory=FactoryClient)._run_locked()
+        finally:
+            CatalogSync._upsert = staticmethod(original)
+
+        self.assertEqual(result, {"pages": 1, "repositories": 1, "cycle_complete": False})
+        self.assertEqual(state.page_token, "after")
+        self.assertEqual(captured[0]["repository_slug"], long_slug)
+        self.assertEqual(captured[0]["canonical_url"], f"https://sourcecraft.dev/team/{long_slug}")
+        self.assertLessEqual(len(captured[0]["repository_slug"]),
+                             Repository.__table__.c.repository_slug.type.length)
+
     def test_catalog_uses_bulk_only_bounded_response_limit(self):
         self.assertEqual(CATALOG_MAX_RESPONSE_BYTES, 64 * 1024 * 1024)
         self.assertGreater(CATALOG_MAX_RESPONSE_BYTES, 8_581_717)

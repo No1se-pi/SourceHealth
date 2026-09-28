@@ -6,6 +6,8 @@ reusable catalog query filtering, and statistical aggregations.
 
 import unittest
 
+from sqlalchemy import String
+
 from sourcehealth.catalog.query import (
     CatalogFilters,
     clean_query_term,
@@ -22,6 +24,7 @@ from sourcehealth.integrations.sourcecraft.validation import (
     normalize_origin,
     normalize_repository_metadata,
 )
+from sourcehealth.storage.models import Repository
 
 
 class TopicClassifierTests(unittest.TestCase):
@@ -92,6 +95,41 @@ class TopicClassifierTests(unittest.TestCase):
 
 
 class MetadataNormalizationTests(unittest.TestCase):
+    def test_sourcecraft_slug_contract_accepts_128_and_rejects_129(self):
+        maximum = "s" * 128
+        meta = normalize_repository_metadata({
+            "id": "repo-id", "slug": maximum,
+            "organization": {"slug": maximum},
+            "project": {"slug": maximum}, "visibility": "public",
+        })
+        self.assertEqual(meta.repository_slug, maximum)
+        self.assertEqual(meta.organization_slug, maximum)
+        self.assertEqual(meta.project_slug, maximum)
+
+        from sourcehealth.integrations.sourcecraft.client import SourceCraftError
+
+        for field in ("repository", "organization"):
+            raw = {"id": "repo-id", "slug": "repo",
+                   "organization": {"slug": "org"}, "visibility": "public"}
+            if field == "repository":
+                raw["slug"] = "s" * 129
+            else:
+                raw["organization"]["slug"] = "s" * 129
+            with self.assertRaisesRegex(SourceCraftError, "invalid_response"):
+                normalize_repository_metadata(raw)
+
+        rejected_project = normalize_repository_metadata({
+            "id": "repo-id", "slug": "repo", "organization": {"slug": "org"},
+            "project": {"slug": "s" * 129}, "visibility": "public",
+        })
+        self.assertIsNone(rejected_project.project_slug)
+
+    def test_repository_model_slug_columns_match_contract(self):
+        for name in ("organization_slug", "repository_slug", "project_slug"):
+            column_type = Repository.__table__.c[name].type
+            self.assertIsInstance(column_type, String)
+            self.assertEqual(column_type.length, 128)
+
     def test_description_normalization(self):
         desc = normalize_description("  Hello\x00\x08   world!\nThis is a test.  ")
         self.assertEqual(desc, "Hello world! This is a test.")

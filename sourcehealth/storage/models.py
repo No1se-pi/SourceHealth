@@ -77,8 +77,8 @@ class Repository(Base):
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     sourcecraft_id: Mapped[str | None] = mapped_column(String(128), unique=True)
-    organization_slug: Mapped[str] = mapped_column(String(100))
-    repository_slug: Mapped[str] = mapped_column(String(100))
+    organization_slug: Mapped[str] = mapped_column(String(128))
+    repository_slug: Mapped[str] = mapped_column(String(128))
     canonical_url: Mapped[str] = mapped_column(String(512), unique=True)
     visibility: Mapped[str] = mapped_column(String(16), default="unknown", server_default="unknown")
     default_branch: Mapped[str | None] = mapped_column(String(256))
@@ -90,7 +90,7 @@ class Repository(Base):
     description: Mapped[str | None] = mapped_column(String(512))
     logo_url: Mapped[str | None] = mapped_column(String(512))
     origin: Mapped[str | None] = mapped_column(String(32), default="unknown", server_default="unknown")
-    project_slug: Mapped[str | None] = mapped_column(String(100))
+    project_slug: Mapped[str | None] = mapped_column(String(128))
     topics: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
     topic_classifier_version: Mapped[str | None] = mapped_column(String(32))
     latest_analysis_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey(
