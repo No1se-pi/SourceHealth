@@ -1,169 +1,96 @@
 /**
- * Data structures and adapters for Analysis Stack Visualization.
+ * Data structures and adapters for Analysis Queue Architecture Visualization (/queue).
  *
- * Ground truth:
- * - Uses existing public API (api.catalogStats(), api.repositories()) where available.
- * - Does not invent false completed events or mock backend routes.
- * - Clearly isolates simulation presets for empty states demonstration.
+ * Truth invariants:
+ * - Real live values are strictly limited to verified catalog stats from /catalog/stats.
+ * - If the API is unreachable, catalog metrics evaluate to null/unavailable ("—"),
+ *   never falling back to stale historical production snapshots (e.g. 4829, 2995).
+ * - Priority, Timed, and Planned tiers are explicitly typed as conceptual architecture models,
+ *   not live Redis/RQ queue telemetry.
+ * - No fake repository names, mock statuses, or artificial countdown timers are generated.
  */
 
-import { api, type CatalogStats, type Repository } from './client';
+import { api, type CatalogStats } from './client';
 
-export interface StackItem {
-  id: string;
+export interface CatalogLiveMetrics {
+  catalogTotal: number | null;
+  healthAnalyzed: number | null;
+  loaded: boolean;
+}
+
+export interface QueueTier {
+  id: 'priority' | 'timed' | 'planned';
   name: string;
-  organization: string;
-  slug: string;
-  status: 'queued' | 'analyzing' | 'scheduled';
-  estimatedTime?: string;
-  url?: string;
+  badge: string;
+  badgeVariant: 'priority' | 'timed' | 'planned';
+  role: string;
+  subtitle: string;
+  description: string;
+  mode: 'conceptual';
 }
 
-export interface AnalysisStackData {
+export interface QueuePageData {
+  catalogMetrics: CatalogLiveMetrics;
+  tiers: Record<'priority' | 'timed' | 'planned', QueueTier>;
+}
+
+export const CONCEPTUAL_TIERS: Record<'priority' | 'timed' | 'planned', QueueTier> = {
   priority: {
-    count: number;
-    items: StackItem[];
-  };
+    id: 'priority',
+    name: 'Приоритет',
+    badge: 'Срочные проверки',
+    badgeVariant: 'priority',
+    role: 'Запуск по требованию',
+    subtitle: 'Ручные запуски пользователей — исполняются в первую очередь',
+    description:
+      'Проверки, запущенные пользователем или мейнтейнером вручную через кнопку анализа. Они получают наивысший приоритет и обрабатываются в первую очередь в обход планового расписания, обеспечивая мгновенную обратную связь.',
+    mode: 'conceptual',
+  },
   timed: {
-    count: number;
-    items: StackItem[];
-    nextBatchEstimateMinutes: number;
-  };
+    id: 'timed',
+    name: 'По расписанию',
+    badge: 'Интервалы',
+    badgeVariant: 'timed',
+    role: 'Интервальный обход',
+    subtitle: 'Репозитории с наступившим сроком межпроверочного интервала',
+    description:
+      'Репозитории возвращаются в очередь, когда наступает срок их периодической актуализации (refresh interval). Проекты с высокой активностью коммитов и отслеживаемые репозитории проверяются чаще, экономя вычислительные ресурсы платформы.',
+    mode: 'conceptual',
+  },
   planned: {
-    count: number;
-    items: StackItem[];
-  };
-  catalogTotal: number;
-  healthAnalyzed: number;
-  schedulerActive: boolean;
-  isRealData: boolean;
-}
-
-export type QueueDataPreset = 'real' | 'normal' | 'zero-priority' | 'zero-timed' | 'zero-both';
-
-const FALLBACK_REAL_ITEMS: StackItem[] = [
-  { id: '1', name: 'sourcehealth', organization: 'no1se', slug: 'sourcehealth', status: 'analyzing' },
-  { id: '2', name: 'gromozeka', organization: 'notacompany', slug: 'gromozeka', status: 'queued' },
-  { id: '3', name: 'case-18-repo-health', organization: 'lct-hackaton-2026', slug: 'case-18-repo-health', status: 'queued' },
-];
-
-export function getInitialQueueData(preset: QueueDataPreset = 'real'): AnalysisStackData {
-  if (preset === 'zero-priority') {
-    return {
-      priority: { count: 0, items: [] },
-      timed: { count: 126, items: [], nextBatchEstimateMinutes: 15 },
-      planned: { count: 4829, items: [] },
-      catalogTotal: 4829,
-      healthAnalyzed: 2995,
-      schedulerActive: true,
-      isRealData: false,
-    };
-  }
-
-  if (preset === 'zero-timed') {
-    return {
-      priority: { count: 3, items: FALLBACK_REAL_ITEMS },
-      timed: { count: 0, items: [], nextBatchEstimateMinutes: 0 },
-      planned: { count: 4829, items: [] },
-      catalogTotal: 4829,
-      healthAnalyzed: 2995,
-      schedulerActive: true,
-      isRealData: false,
-    };
-  }
-
-  if (preset === 'zero-both') {
-    return {
-      priority: { count: 0, items: [] },
-      timed: { count: 0, items: [], nextBatchEstimateMinutes: 0 },
-      planned: { count: 4829, items: [] },
-      catalogTotal: 4829,
-      healthAnalyzed: 2995,
-      schedulerActive: true,
-      isRealData: false,
-    };
-  }
-
-  return {
-    priority: {
-      count: 3,
-      items: FALLBACK_REAL_ITEMS,
-    },
-    timed: {
-      count: 126,
-      items: [],
-      nextBatchEstimateMinutes: 18,
-    },
-    planned: {
-      count: 4829,
-      items: [],
-    },
-    catalogTotal: 4829,
-    healthAnalyzed: 2995,
-    schedulerActive: true,
-    isRealData: true,
-  };
-}
+    id: 'planned',
+    name: 'Плановый обход',
+    badge: 'Фоновый каталог',
+    badgeVariant: 'planned',
+    role: 'Фоновая проверка',
+    subtitle: 'Постепенная фоновая проверка каталога для поддержания свежести оценок',
+    description:
+      'Фоновый плановый обход помогает постепенно и детерминированно актуализировать состояние всех публичных репозиториев каталога. Задачи ставятся порционно, исключая пиковые перегрузки инфраструктуры.',
+    mode: 'conceptual',
+  },
+};
 
 /**
- * Loads real catalog stats and repositories to derive the stack data.
+ * Loads verified live catalog metrics from the existing /catalog/stats endpoint.
+ * On failure, returns loaded=false with null counts. Never uses stale fallback numbers.
  */
-export async function loadQueueData(preset: QueueDataPreset = 'real'): Promise<AnalysisStackData> {
-  const initial = getInitialQueueData(preset);
-  if (preset !== 'real' && preset !== 'normal') {
-    return initial;
-  }
-
-  // Real data loading from existing API endpoints
-  let catalogTotal = 4829;
-  let healthAnalyzed = 2995;
-  let recentRepos: Repository[] = [];
-
+export async function loadCatalogMetrics(): Promise<CatalogLiveMetrics> {
   try {
     const stats: CatalogStats = await api.catalogStats();
-    catalogTotal = stats.catalog_total_public || catalogTotal;
-    healthAnalyzed = stats.health_available_count || healthAnalyzed;
-  } catch {
-    // Graceful fallback to verified catalog baseline
-  }
-
-  try {
-    const reposPage = await api.repositories({ limit: 6, sort: 'last_activity' });
-    if (reposPage?.items && reposPage.items.length > 0) {
-      recentRepos = reposPage.items;
+    if (typeof stats.catalog_total_public === 'number') {
+      return {
+        catalogTotal: stats.catalog_total_public,
+        healthAnalyzed: typeof stats.health_available_count === 'number' ? stats.health_available_count : null,
+        loaded: true,
+      };
     }
   } catch {
-    // Graceful fallback to default items
+    // API is offline or network error: return unloaded metrics without fake numbers
   }
 
-  const priorityItems: StackItem[] = recentRepos.length > 0
-    ? recentRepos.slice(0, 3).map((r, i) => ({
-        id: r.id,
-        name: `${r.organization_slug}/${r.repository_slug}`,
-        organization: r.organization_slug,
-        slug: r.repository_slug,
-        status: i === 0 ? 'analyzing' : 'queued',
-        url: `/repositories/${r.id}`,
-      }))
-    : FALLBACK_REAL_ITEMS;
-
   return {
-    priority: {
-      count: preset === 'normal' ? 3 : Math.max(priorityItems.length, 1),
-      items: priorityItems,
-    },
-    timed: {
-      count: 126,
-      items: [],
-      nextBatchEstimateMinutes: 18,
-    },
-    planned: {
-      count: catalogTotal,
-      items: [],
-    },
-    catalogTotal,
-    healthAnalyzed,
-    schedulerActive: true,
-    isRealData: preset === 'real',
+    catalogTotal: null,
+    healthAnalyzed: null,
+    loaded: false,
   };
 }

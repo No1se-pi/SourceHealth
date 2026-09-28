@@ -1,17 +1,22 @@
 import React from 'react';
-import type { AnalysisStackData } from '../../api/queueData';
+import type { CatalogLiveMetrics } from '../../api/queueData';
 
 export interface StackCountersProps {
-  data: AnalysisStackData;
+  catalogMetrics: CatalogLiveMetrics;
   selectedLevel: 'priority' | 'timed' | 'planned' | null;
   onSelectLevel: (level: 'priority' | 'timed' | 'planned') => void;
 }
 
 export const StackCounters: React.FC<StackCountersProps> = ({
-  data,
+  catalogMetrics,
   selectedLevel,
   onSelectLevel,
 }) => {
+  const catalogCountFormatted =
+    catalogMetrics.loaded && catalogMetrics.catalogTotal !== null
+      ? catalogMetrics.catalogTotal.toLocaleString('ru-RU')
+      : '—';
+
   return (
     <section className="sh-stack-counters-grid" aria-label="Метрики уровней очереди">
       {/* 1. Priority Card */}
@@ -25,15 +30,13 @@ export const StackCounters: React.FC<StackCountersProps> = ({
       >
         <div className="sh-counter-header">
           <span className="sh-counter-label">Приоритет</span>
-          <span className="sh-counter-badge is-priority">Срочная очередь</span>
+          <span className="sh-counter-badge is-priority">Срочные проверки</span>
         </div>
         <div className="sh-counter-value">
-          {data.priority.count}
+          Ручной запуск
         </div>
         <div className="sh-counter-caption">
-          {data.priority.count > 0
-            ? 'Ручные запуски пользователей — исполняются в первую очередь'
-            : 'Нет срочных проверок — все запросы обработаны'}
+          Запросы пользователей исполняются в первую очередь
         </div>
       </div>
 
@@ -51,12 +54,10 @@ export const StackCounters: React.FC<StackCountersProps> = ({
           <span className="sh-counter-badge is-timed">Интервалы</span>
         </div>
         <div className="sh-counter-value">
-          {data.timed.count}
+          По расписанию
         </div>
         <div className="sh-counter-caption">
-          {data.timed.count > 0
-            ? `Срок обновления подошёл. Следующая пачка через ~${data.timed.nextBatchEstimateMinutes} мин`
-            : 'Все проверки актуальны — интервал ещё не истёк'}
+          Репозитории с наступившим сроком межпроверочного интервала
         </div>
       </div>
 
@@ -70,14 +71,14 @@ export const StackCounters: React.FC<StackCountersProps> = ({
         onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSelectLevel('planned')}
       >
         <div className="sh-counter-header">
-          <span className="sh-counter-label">Плановые</span>
-          <span className="sh-counter-badge is-planned">Полный каталог</span>
+          <span className="sh-counter-label">Плановый обход</span>
+          <span className="sh-counter-badge is-planned">Фоновый каталог</span>
         </div>
         <div className="sh-counter-value">
-          {data.planned.count.toLocaleString('ru-RU')}
+          Каталог: {catalogCountFormatted}
         </div>
         <div className="sh-counter-caption">
-          Фоновый обход каталога для непрерывной актуализации метрик платформы
+          Постепенная фоновая проверка каталога без перегрузки платформы
         </div>
       </div>
     </section>

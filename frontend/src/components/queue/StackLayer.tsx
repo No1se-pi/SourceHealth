@@ -1,5 +1,4 @@
 import React from 'react';
-import type { StackItem } from '../../api/queueData';
 
 export interface StackLayerProps {
   level: 'priority' | 'timed' | 'planned';
@@ -9,7 +8,6 @@ export interface StackLayerProps {
   isCycling: boolean;
   isSelectedLevel: boolean;
   emptyText?: string;
-  chips?: StackItem[];
   onSelect: () => void;
 }
 
@@ -21,7 +19,6 @@ export const StackLayer: React.FC<StackLayerProps> = ({
   isCycling,
   isSelectedLevel,
   emptyText,
-  chips,
   onSelect,
 }) => {
   const levelClass = `sh-level-${level}`;
@@ -36,7 +33,7 @@ export const StackLayer: React.FC<StackLayerProps> = ({
       onClick={onSelect}
       role="button"
       tabIndex={0}
-      aria-label={`Слой ${level}`}
+      aria-label={`Уровень ${level}`}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
@@ -46,26 +43,16 @@ export const StackLayer: React.FC<StackLayerProps> = ({
     >
       {/* 3D Top Surface */}
       <div className="sh-slab-top">
-        {emptyText && (
+        {emptyText ? (
           <div className="sh-empty-slab-text">{emptyText}</div>
-        )}
-
-        {!emptyText && isTopOverall && chips && chips.length > 0 && (
+        ) : isTopOverall ? (
           <div className="sh-slab-content">
-            <div className="sh-task-chips-row">
-              {chips.slice(0, 3).map((chip) => (
-                <span
-                  key={chip.id}
-                  className={`sh-task-chip ${chip.status === 'analyzing' ? 'is-analyzing' : ''}`}
-                  title={`${chip.name} (${chip.status === 'analyzing' ? 'Выполняется' : 'В очереди'})`}
-                >
-                  <span className="sh-task-chip-dot" aria-hidden="true" />
-                  <span>{chip.name}</span>
-                </span>
-              ))}
+            <div className="sh-top-slab-pill">
+              <span className="sh-top-slab-dot" aria-hidden="true" />
+              <span>Приоритетный запуск</span>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* 3D Front Thickness Face */}

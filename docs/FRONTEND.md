@@ -26,6 +26,7 @@ PUBLIC_ORIGIN/redirect/COOKIE_SECURE по [AUTH](AUTH.md), не редактир
 | / | Repository list, sort, offset pagination, empty/loading/error |
 | /repositories/:id | Детали, последний report, async запуск |
 | /analyses/:id | Polling lifecycle, nullable categories, Markdown download |
+| /queue | Архитектурная визуализация очереди анализа (Priority / Timed / Planned) |
 | /auth/callback | Проверка server session через /me; code/token не читает |
 | * | 404 |
 
@@ -60,3 +61,13 @@ semantics, пагинации, lifecycle названий и API version — о�
 Не добавлять analyzer-specific обязательный endpoint ради новой метрики: перечислять
 checks и работать через общий контракт. Компиляция не заменяет browser acceptance:
 проверить loading/error/empty/no-data/partial на desktop и узком экране.
+
+### Analysis Queue Visualization
+
+- **Route:** `/queue`
+- Визуализация состоит из трёх концептуальных уровней: `Priority` (ручной запуск), `Timed` (интервалы), `Planned` (фоновый обход каталога).
+- Данные уровни представляют концептуальную архитектурную модель планирования и **НЕ** являются прямым отображением трёх отдельных backend RQ queues (в бэкенде сохраняется единая семантика планирования).
+- Backend scheduler semantics, RQ worker logic и Redis очереди **НЕ** меняются.
+- Текущий frontend API не предоставляет точных счётчиков задач в реальном времени для очередей Priority / Timed / Planned; уровни отображаются как архитектурные категории.
+- Единственные живые данные на странице — это статистика публичного каталога (`catalogTotal`, `healthAnalyzed`), загружаемая напрямую из `GET /api/v1/catalog/stats`. При недоступности бэкенда отображается статус недоступности данных («—»), без использования устаревших статических снимков (4829, 2995).
+- Фоновая анимация растворения верхнего элемента стека является чисто декоративной (ambient CSS-анимация) и не заявляет о завершении реального анализа конкретного репозитория.

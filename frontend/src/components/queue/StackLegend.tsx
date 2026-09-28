@@ -1,20 +1,14 @@
 import React from 'react';
-import type { QueueDataPreset } from '../../api/queueData';
 
 export interface StackLegendProps {
   selectedLevel: 'priority' | 'timed' | 'planned';
   onSelectLevel: (level: 'priority' | 'timed' | 'planned') => void;
-  activePreset: QueueDataPreset;
-  onSelectPreset: (preset: QueueDataPreset) => void;
   isAnimationPaused: boolean;
   onToggleAnimation: () => void;
 }
 
 export const StackLegend: React.FC<StackLegendProps> = ({
   selectedLevel,
-  onSelectLevel,
-  activePreset,
-  onSelectPreset,
   isAnimationPaused,
   onToggleAnimation,
 }) => {
@@ -24,7 +18,7 @@ export const StackLegend: React.FC<StackLegendProps> = ({
   > = {
     priority: {
       title: 'Уровень: Приоритетные проверки (Priority)',
-      text: 'Проверки, запущенные вручную пользователем или мейнтейнером через кнопку анализа, получают наивысший приоритет. Они исполняются в первую очередь в обход планового расписания, чтобы автор репозитория получил мгновенную обратную связь.',
+      text: 'Проверки, запущенные пользователем или мейнтейнером вручную через кнопку анализа, получают наивысший приоритет. Они исполняются в первую очередь в обход планового расписания, чтобы автор репозитория получил мгновенную обратную связь.',
       badge: 'Приоритет 1 (Мгновенный запуск)',
       badgeClass: 'is-priority',
     },
@@ -36,7 +30,7 @@ export const StackLegend: React.FC<StackLegendProps> = ({
     },
     planned: {
       title: 'Уровень: Плановый фоновый обход (Planned)',
-      text: 'Фоновый обход помогает постепенно и детерминированно актуализировать состояние всего публичного каталога. Планировщик плавно распределяет 4 829 репозиториев по времени, обеспечивая равномерную нагрузку на анализаторы.',
+      text: 'Фоновый обход помогает постепенно и детерминированно актуализировать состояние всего публичного каталога. Планировщик плавно распределяет репозитории каталога по времени, обеспечивая равномерную нагрузку на анализаторы.',
       badge: 'Приоритет 3 (Фоновый цикл)',
       badgeClass: 'is-planned',
     },
@@ -57,51 +51,15 @@ export const StackLegend: React.FC<StackLegendProps> = ({
       <div className="sh-invariants-box">
         <div className="sh-invariants-title">Принципы честного планирования SourceHealth:</div>
         <div>
-          • <strong>Строгая приоритизация:</strong> Priority &gt; Timed &gt; Planned. Задачи ручного анализа не стоят в конце 4000+ очереди каталога.
+          • <strong>Строгая приоритизация:</strong> Priority &gt; Timed &gt; Planned. Задачи ручного анализа не стоят в хвосте очереди каталога.
         </div>
         <div>
-          • <strong>Честность данных:</strong> Визуализация очереди отражает архитектурную динамику стека. Платформа не фабрикует фиктивные события «repository X completed», если статус не подтверждён фактическим анализом.
+          • <strong>Честность данных:</strong> Визуализация очереди отражает архитектурную модель стека. Платформа не фабрикует фиктивные события «repository completed», если статус не подтверждён фактическим анализом.
         </div>
       </div>
 
-      {/* Interactive Controls & Presets for Reviewers & Jury */}
-      <div className="sh-presets-bar" aria-label="Демонстрационные пресеты">
-        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--sh-text-muted)' }}>
-          Режимы отображения:
-        </span>
-
-        <button
-          type="button"
-          className={`sh-preset-btn ${activePreset === 'real' ? 'is-active' : ''}`}
-          onClick={() => onSelectPreset('real')}
-        >
-          Каталог SourceHealth
-        </button>
-
-        <button
-          type="button"
-          className={`sh-preset-btn ${activePreset === 'normal' ? 'is-active' : ''}`}
-          onClick={() => onSelectPreset('normal')}
-        >
-          Штатный стек (3 / 126 / 4 829)
-        </button>
-
-        <button
-          type="button"
-          className={`sh-preset-btn ${activePreset === 'zero-priority' ? 'is-active' : ''}`}
-          onClick={() => onSelectPreset('zero-priority')}
-        >
-          Пустой приоритет (0)
-        </button>
-
-        <button
-          type="button"
-          className={`sh-preset-btn ${activePreset === 'zero-timed' ? 'is-active' : ''}`}
-          onClick={() => onSelectPreset('zero-timed')}
-        >
-          Все актуальны (0)
-        </button>
-
+      {/* Controls for Accessibility / Reduced Motion */}
+      <div className="sh-presets-bar" aria-label="Управление анимацией">
         <button
           type="button"
           className="sh-preset-btn"
