@@ -3,8 +3,9 @@
 import json
 
 from .contracts import AISummaryContext
+from .provider import allowed_grounding_ids
 
-PROMPT_VERSION = "sourcehealth-analyst-v1.1"
+PROMPT_VERSION = "sourcehealth-analyst-v1.2"
 SCHEMA_VERSION = "ai-summary-v1"
 
 
@@ -28,22 +29,32 @@ NO_DATA означает неизвестные или недостаточны�
 Пиши на русском языке ясно, кратко и профессионально для разработчика, тимлида или менеджера. Не используй маркетинговые преувеличения, запугивание и неподтверждённые оценки вроде «отлично» или «ужасно».
 
 Верни только JSON без Markdown-ограждений и текста вокруг. Ответ обязан соответствовать ai-summary-v1."""
+    system += "\n\nКопируй evidence_refs и recommendation_ids буквально из входного JSON. Никогда не создавай новые идентификаторы."
     user = json.dumps(context.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":"))
     return system, user
 
 
-def response_schema() -> dict:
+def response_schema(context: AISummaryContext) -> dict:
+    evidence_ids, recommendation_ids = allowed_grounding_ids(context)
+    evidence_items = {"type": "string"}
+    recommendation_items = {"type": "string"}
+    if evidence_ids:
+        evidence_items["enum"] = sorted(evidence_ids)
+    if recommendation_ids:
+        recommendation_items["enum"] = sorted(recommendation_ids)
     statement = {
         "type": "object", "additionalProperties": False,
         "properties": {"text": {"type": "string", "maxLength": 500},
-                       "evidence_refs": {"type": "array", "items": {"type": "string"}, "minItems": 1}},
+                       "evidence_refs": {"type": "array", "items": evidence_items, "minItems": 1}},
         "required": ["text", "evidence_refs"],
     }
     action = {
         "type": "object", "additionalProperties": False,
         "properties": {"text": {"type": "string", "maxLength": 500},
-                       "recommendation_ids": {"type": "array", "items": {"type": "string"}},
-                       "evidence_refs": {"type": "array", "items": {"type": "string"}}},
+                       "recommendation_ids": {"type": "array", "items": recommendation_items,
+                                              **({} if recommendation_ids else {"maxItems": 0})},
+                       "evidence_refs": {"type": "array", "items": evidence_items,
+                                         **({} if evidence_ids else {"maxItems": 0})}},
         "required": ["text", "recommendation_ids", "evidence_refs"],
     }
     return {
@@ -51,13 +62,15 @@ def response_schema() -> dict:
         "properties": {
             "schema_version": {"type": "string", "const": SCHEMA_VERSION},
             "executive_summary": {"type": "string", "maxLength": 1000},
-            "strengths": {"type": "array", "items": statement, "maxItems": 5},
-            "risks": {"type": "array", "items": statement, "maxItems": 5},
-            "actions": {"type": "array", "items": action, "maxItems": 5},
+            "strengths": {"type": "array", "items": statement, "maxItems": 5 if evidence_ids else 0},
+            "risks": {"type": "array", "items": statement, "maxItems": 5 if evidence_ids else 0},
+            "actions": {"type": "array", "items": action,
+                        "maxItems": 5 if evidence_ids or recommendation_ids else 0},
             "limitations": {"type": "array", "items": {
                 "type": "object", "additionalProperties": False,
                 "properties": {"text": {"type": "string", "maxLength": 500},
-                               "evidence_refs": {"type": "array", "items": {"type": "string"}}},
+                               "evidence_refs": {"type": "array", "items": evidence_items,
+                                                 **({} if evidence_ids else {"maxItems": 0})}},
                 "required": ["text", "evidence_refs"],
             }, "maxItems": 5},
         },

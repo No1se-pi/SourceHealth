@@ -162,3 +162,8 @@ severity задаётся строками `CRITICAL/HIGH/MEDIUM/LOW`, поэт�
 Сохраняется только агрегат `complete`, `scan_uuid`, `open_by_severity`, `total_open`.
 Raw response, SARIF, descriptions, paths, snippets и secret values не сохраняются. Без run credential,
 для scheduled runs и при 401/403/404 Security остаётся `NO_DATA`. Детали: [APPSEC_ACCEPTANCE](APPSEC_ACCEPTANCE.md).
+
+Read-only production-проверка 28.09.2026 подтвердила границу прав service `SOURCECRAFT_PAT`: официальный AppSec и
+CI runs доступны для team-41, но другой публичный team-14 отвечает `access_denied` для обоих интерфейсов. Поэтому
+service PAT нельзя считать глобальным правом на AppSec всех публичных репозиториев и нельзя автоматически применять
+к catalog runs. Такие runs честно сохраняют `NO_DATA` с безопасным reason; local SAST не заменяет Security.

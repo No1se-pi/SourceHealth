@@ -134,6 +134,24 @@ class MVPAnalyticsTests(unittest.TestCase):
         self.assertEqual(after.category_scores["cicd"]["score"], 0)
         self.assertEqual(after.health_score, 53.06)
 
+    def test_ci_api_failure_preserves_safe_collection_reason_and_is_not_scored(self):
+        context = replace(
+            self.context,
+            sourcecraft_facts={**self.context.sourcecraft_facts, "cicd": {"items": [], "complete": False}},
+            collection_statuses={**self.context.collection_statuses, "cicd": A.SOURCE_UNAVAILABLE},
+            metadata={**self.context.metadata, "ci_configured": True, "ci_config_complete": True,
+                      "collection": {**self.context.metadata.get("collection", {}),
+                                     "cicd": {"error": "access_denied"}}},
+        )
+
+        check = CIAnalyzer().analyze(context)
+        category = self.score(replace(self.report(), checks={"cicd": check})).category_scores["cicd"]
+
+        self.assertEqual(check.error, "access_denied")
+        self.assertEqual(check.metadata["collection_error"], "access_denied")
+        self.assertEqual(check.availability, A.SOURCE_UNAVAILABLE)
+        self.assertIsNone(category["score"])
+
     def test_unanswered_issues_lower_response_component_and_partial_is_unknown(self):
         healthy = self.score(self.report()).category_scores["issues"]["score"]
         issue = self.context.sourcecraft_facts["issues"]["items"][0]

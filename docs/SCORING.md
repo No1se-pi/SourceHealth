@@ -78,6 +78,8 @@ Partial pagination не оценивается. Семантика первог�
 Конфигурация есть, полный список runs пуст — 40 (настроено, но исполнение не доказано).
 Только canceled/skipped/in-progress runs — null. Outage/partial — null.
 Duration/recent failures/latest status информативны, не меняют формулу v1.
+`access_denied`, `not_found`, transport и pagination failures сохраняются в `checks.cicd.error` и
+`metadata.collection_error`: наличие CI-конфигурации при недоступной истории runs не превращается в 40.
 
 ## Activity
 
@@ -109,10 +111,15 @@ Duration/recent failures/latest status информативны, не меняю
 компоненту. Local SAST требует полного check и code_files_lexed>0. Один SAST без debt
 не даёт численного Code Health. Debt без SAST может дать partial score по ≥50 весам.
 Репозиторий без поддерживаемых code files не получает фиктивный 100.
+Если SAST неполон либо нашёл подтверждённые findings без clean-scan baseline, сначала считается ограниченный
+`raw_penalty = min(100, 15×high + 5×medium + low)`, затем он приводится к номинальному весу SAST:
+`effective_penalty = raw_penalty × 40 / (debt_weight + 40)`. Именно `effective_penalty` вычитается из независимо
+поддержанного debt score. Непроверенная часть не получает положительный credit, а максимальный штраф эквивалентен
+нулевому SAST-компоненту веса 40. Availability остаётся `partial`; формула полного SAST не меняется.
 
 ## Security boundary
 
-При публичном анализе без токена пользователя категория Security сохраняет `score=null, availability=no_data,
+При background/public анализе без явно leased токена пользователя категория Security сохраняет `score=null, availability=no_data,
 error=appsec_credential_unavailable`.
 При запуске с сессионным user PAT клиент `SourceCraftAppSecClient` опрашивает API `https://appsec.sourcecraft.tech`
 и передаёт официальный агрегат уязвимостей. Local SAST никогда не входит в категорию Security (он остаётся в Code Health).

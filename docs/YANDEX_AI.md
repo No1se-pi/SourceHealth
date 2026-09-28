@@ -15,7 +15,7 @@ AI-разбор — отдельный пользовательский отчё
 - Точные ID: `aliceai-llm-flash`, `yandexgpt-5-lite`, `yandexgpt-5.1` для режимов `flash`, `lite`, `pro`.
 - Структурированный ответ задаётся `response_format.type=json_schema`; результат дополнительно валидируется Pydantic и
   `validate_ai_output()`.
-- Prompt version: `sourcehealth-analyst-v1.1`; schema version: `ai-summary-v1`.
+- Prompt version: `sourcehealth-analyst-v1.2`; schema version: `ai-summary-v1`.
 
 Контекст формирует только `build_ai_context()`: агрегированные оценки, availability, безопасные evidence и
 рекомендации. Исходники, snippets, raw payload, commit messages, имена/email, PAT, OAuth cookies и секреты в
@@ -37,9 +37,11 @@ provider не отправляются. `NO_DATA` остаётся неизве�
 `ai_provider_disabled`; автоматического fallback нет. Дополнительно доступны `YANDEX_AI_TIMEOUT` (45 секунд),
 `YANDEX_AI_CACHE_TTL` (24 часа) и `YANDEX_AI_RATE_LIMIT` (10 оплачиваемых генераций на пользователя в час).
 
-Кеш Redis учитывает analysis ID, режим, версии prompt и schema. Ошибка кеша не отменяет генерацию. Повторяется
-не более одного раза только transport error, HTTP 429 и выбранные 5xx. Ошибки авторизации, плохой JSON и
-нарушение grounding не повторяются. Логи содержат только стабильный код события, без prompt, ответа и ключа.
+Кеш Redis учитывает analysis ID, режим, версии prompt и schema. Ошибка кеша не отменяет генерацию. Общий предел —
+два provider requests на нажатие: повтор разрешён для transport error, HTTP 429, выбранных 5xx либо единственного
+grounding repair той же моделью. Ошибки авторизации и плохой JSON не повторяются. Предыдущий ответ при repair не
+передаётся. JSON Schema ограничивает ссылки точными ID из контекста. Логи содержат только стабильный код события,
+режим и безопасную категорию причины, без prompt, ответа и ключа.
 
 Живой вызов Yandex AI не входит в CI: unit/API тесты используют transport/provider doubles. Для ручной проверки
 используют завершённый публичный анализ и явное нажатие кнопки в браузере.

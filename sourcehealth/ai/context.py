@@ -147,6 +147,10 @@ def build_ai_context(report: Any) -> AISummaryContext:
         for check_name, check_data in checks.items():
             if not isinstance(check_data, dict):
                 continue
+            # Unavailable checks describe coverage limitations, not repository quality.
+            # PARTIAL and NOT_CONFIGURED can still carry genuinely observed facts.
+            if check_data.get("availability") in {"no_data", "source_unavailable"}:
+                continue
             # Extract safe evidence list if available
             ev_list = check_data.get("evidence", [])
             if isinstance(ev_list, list):

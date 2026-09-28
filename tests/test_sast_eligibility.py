@@ -2,10 +2,10 @@
 
 Демонстрирует для Case A (Python AST) и Case B (Secret/Text):
 1. technical debt в одиночку формирует детерминированный базовый балл Code Health (100.0);
-2. добавление SAST-результата с находками, но code_files_lexed == 0 НЕ меняет итоговый балл Code Health (100.0 == 100.0);
-3. парный контроль с теми же метриками и находками, но code_files_lexed > 0 МЕНЯЕТ (понижает) балл Code Health (98.0 / 94.0 < 100.0).
+2. SAST-находки без clean-scan baseline уменьшают итоговый балл в масштабе номинального веса SAST;
+3. парный complete-контроль с теми же находками даёт тот же effective severity impact (98.0 / 94.0 < 100.0).
 
-Это доказывает, что именно предикат code_files_lexed > 0 исключает компонент SAST из скоринга.
+Это фиксирует одинаковый severity scale для partial и complete SAST без positive credit неполному сканированию.
 """
 
 import tempfile
@@ -80,18 +80,18 @@ class SASTEligibilityAndSecurityTests(unittest.TestCase):
             self.assertEqual(sast_check.metrics["python_files_parsed"], 1)
             self.assertGreater(sast_check.metrics["summary"]["medium"], 0)
 
-            # 2. Добавление SAST-результата с находками, но code_files_lexed == 0 НЕ меняет итоговый балл Code Health
+            # Findings remain negative evidence even when this scanner path has no clean-scan baseline.
             res_actual = policy.evaluate({"technical_debt": debt_check, "sast": sast_check})
             actual_score = res_actual.categories["code_health"].score
-            self.assertEqual(actual_score, base_score)
+            self.assertEqual(actual_score, 98.0)
 
-            # 3. Парный контроль с теми же метриками/находками, но code_files_lexed == 1 МЕНЯЕТ (понижает) балл
+            # Complete-контроль с теми же находками использует тот же effective severity scale.
             sast_control = deepcopy(sast_check)
             sast_control.metrics["code_files_lexed"] = 1
             res_control = policy.evaluate({"technical_debt": debt_check, "sast": sast_control})
             control_score = res_control.categories["code_health"].score
 
-            self.assertNotEqual(control_score, base_score)
+            self.assertEqual(control_score, actual_score)
             self.assertLess(control_score, base_score)
             # Взвешенный расчет: (60 * 100.0 + 40 * 95.0) / 100 = 98.0
             self.assertEqual(control_score, 98.0)
@@ -128,21 +128,75 @@ class SASTEligibilityAndSecurityTests(unittest.TestCase):
             self.assertEqual(sast_check.metrics["code_files_lexed"], 0)
             self.assertGreater(sast_check.metrics["summary"]["high"], 0)
 
-            # 2. Добавление SAST с code_files_lexed == 0 не меняет балл Code Health
+            # A detected secret must not disappear merely because no lexer-based files were counted.
             res_actual = policy.evaluate({"technical_debt": debt_check, "sast": sast_check})
             actual_score = res_actual.categories["code_health"].score
-            self.assertEqual(actual_score, base_score)
+            self.assertEqual(actual_score, 94.0)
 
-            # 3. Парный контроль с code_files_lexed == 1 понижает балл Code Health
+            # Complete-контроль с теми же находками использует тот же effective severity scale.
             sast_control = deepcopy(sast_check)
             sast_control.metrics["code_files_lexed"] = 1
             res_control = policy.evaluate({"technical_debt": debt_check, "sast": sast_control})
             control_score = res_control.categories["code_health"].score
 
-            self.assertNotEqual(control_score, base_score)
+            self.assertEqual(control_score, actual_score)
             self.assertLess(control_score, base_score)
             # Взвешенный расчет: (60 * 100.0 + 40 * 85.0) / 100 = 94.0
             self.assertEqual(control_score, 94.0)
+
+    def test_partial_sast_findings_reduce_code_health_without_clean_scan_credit(self):
+        debt_check = _clean_technical_debt_check()
+        sast_check = AnalyzerResult(
+            "sast", status="partial", category="code_health", source="sourcehealth_local",
+            availability=DataAvailability.PARTIAL,
+            metrics={"code_files_lexed": 100, "summary": {"high": 2, "medium": 3, "low": 4}},
+            evidence=(Evidence(id="sast:snapshot", source="sourcehealth_local", type="static_analysis",
+                               reference="local", summary="Observed partial SAST findings"),),
+        )
+
+        score = MVPPolicy().evaluate({"technical_debt": debt_check, "sast": sast_check}).categories["code_health"]
+
+        self.assertEqual(score.score, 80.4)
+        self.assertEqual(score.availability, DataAvailability.PARTIAL)
+        self.assertIn("PARTIAL SAST", score.explanation)
+        self.assertIn("sast:snapshot", score.evidence_refs)
+
+    def test_partial_sast_penalty_is_capped_at_nominal_sast_weight(self):
+        sast_check = AnalyzerResult(
+            "sast", status="partial", category="code_health", source="sourcehealth_local",
+            availability=DataAvailability.PARTIAL,
+            metrics={"code_files_lexed": 1, "summary": {"high": 100, "medium": 100, "low": 100}},
+            evidence=(Evidence(id="sast:many", source="sourcehealth_local", type="static_analysis",
+                               reference="local", summary="Many observed findings"),),
+        )
+
+        score = MVPPolicy().evaluate({
+            "technical_debt": _clean_technical_debt_check(), "sast": sast_check,
+        }).categories["code_health"]
+
+        self.assertEqual(score.score, 60.0)
+
+    def test_partial_bad_case_keeps_scaled_penalty(self):
+        debt_check = _clean_technical_debt_check()
+        target_score = 96.19
+        marker_component = (target_score * 60 - 20 * 100) / 40
+        debt_check.metrics["marker_density"] = 5 * (1 - marker_component / 100)
+        baseline = MVPPolicy().evaluate({"technical_debt": debt_check}).categories["code_health"]
+        self.assertEqual(baseline.score, 96.19)
+        sast_check = AnalyzerResult(
+            "sast", status="partial", category="code_health", source="sourcehealth_local",
+            availability=DataAvailability.PARTIAL,
+            metrics={"code_files_lexed": 10, "summary": {"high": 2, "medium": 3, "low": 4}},
+            evidence=(Evidence(id="sast:bad-case", source="sourcehealth_local", type="static_analysis",
+                               reference="local", summary="Observed findings"),),
+        )
+
+        score = MVPPolicy().evaluate({
+            "technical_debt": debt_check, "sast": sast_check,
+        }).categories["code_health"]
+
+        self.assertEqual(score.score, 76.59)
+        self.assertGreater(score.score, 0)
 
     def test_stale_security_explanation_removed_and_official_appsec_wording_present(self):
         """Проверка, что устаревшая формулировка 'interface is not confirmed' полностью удалена."""
