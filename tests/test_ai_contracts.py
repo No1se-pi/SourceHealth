@@ -440,6 +440,46 @@ class AIContractsTests(unittest.TestCase):
         with self.assertRaisesRegex(AIValidationError, "unknown_evidence_ref"):
             validate_ai_output(context, invalid_result)
 
+    def test_no_data_check_cannot_ground_risk(self):
+        context = build_ai_context({
+            "organization_slug": "sourcecraft",
+            "repository_slug": "custodes",
+            "category_scores": {
+                "security": {
+                    "score": None,
+                    "availability": "no_data",
+                    "explanation": "Official AppSec unavailable",
+                    "evidence_refs": ["security:unavailable"],
+                }
+            },
+            "checks": {
+                "sourcecraft_appsec": {
+                    "status": "partial",
+                    "availability": "no_data",
+                    "metrics": {"high": 9},
+                    "evidence": [{
+                        "id": "security:unavailable", "kind": "security",
+                        "summary": "Unverified scalar", "value": 9,
+                    }],
+                }
+            },
+            "recommendations": [],
+        })
+        self.assertNotIn("sourcecraft_appsec:high", {fact.id for fact in context.facts})
+        self.assertNotIn("security:unavailable", {fact.id for fact in context.facts})
+        invalid_result = AISummaryResult(
+            schema_version="ai-summary-v1",
+            executive_summary="Summary",
+            strengths=[],
+            risks=[GroundedStatement(
+                text="AppSec found nine high risks.", evidence_refs=["security:unavailable"],
+            )],
+            actions=[],
+            limitations=[],
+        )
+        with self.assertRaisesRegex(AIValidationError, "unknown_evidence_ref"):
+            validate_ai_output(context, invalid_result)
+
     def test_validate_ai_output_accepts_numeric_category_with_real_evidence_refs(self):
         # Positive case: numeric category with real evidence_refs remains valid
         context = build_ai_context({

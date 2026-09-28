@@ -32,6 +32,8 @@ def allowed_grounding_ids(context: AISummaryContext) -> tuple[set[str], set[str]
     for fact in context.facts:
         evidence_ids.add(fact.id)
     for cat in context.categories:
+        if cat.availability in {"no_data", "source_unavailable"}:
+            continue
         for ref in cat.evidence_refs:
             evidence_ids.add(ref)
     return evidence_ids, {rec.id for rec in context.recommendations}

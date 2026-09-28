@@ -111,9 +111,11 @@ Duration/recent failures/latest status информативны, не меняю
 компоненту. Local SAST требует полного check и code_files_lexed>0. Один SAST без debt
 не даёт численного Code Health. Debt без SAST может дать partial score по ≥50 весам.
 Репозиторий без поддерживаемых code files не получает фиктивный 100.
-Если SAST неполон либо нашёл подтверждённые findings без clean-scan baseline, эти findings уменьшают независимо
-поддержанный debt score теми же штрафами `15×high + 5×medium + low`. Непроверенная часть не получает положительный
-credit, availability остаётся `partial`, а полный SAST сохраняет прежнюю 40-весовую формулу.
+Если SAST неполон либо нашёл подтверждённые findings без clean-scan baseline, сначала считается ограниченный
+`raw_penalty = min(100, 15×high + 5×medium + low)`, затем он приводится к номинальному весу SAST:
+`effective_penalty = raw_penalty × 40 / (debt_weight + 40)`. Именно `effective_penalty` вычитается из независимо
+поддержанного debt score. Непроверенная часть не получает положительный credit, а максимальный штраф эквивалентен
+нулевому SAST-компоненту веса 40. Availability остаётся `partial`; формула полного SAST не меняется.
 
 ## Security boundary
 
