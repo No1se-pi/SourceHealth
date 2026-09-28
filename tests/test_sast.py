@@ -277,6 +277,12 @@ class ContainerWorkflowTests(unittest.TestCase):
             with patch("sourcehealth.sast.container.subprocess.run", return_value=completed):
                 report = run_repository("https://sourcecraft.dev/team/repo")
         creates = [call.args[0] for call in docker.call_args_list if call.args[0][0] == "create"]
+        for command in creates:
+            self.assertIn("--memory=1g", command)
+            self.assertIn("--memory-swap=1g", command)
+            self.assertIn("--cpus=1", command)
+            self.assertIn("--pids-limit=128", command)
+            self.assertIn("--read-only", command)
         self.assertIn("--network=none", creates[1])
         self.assertTrue(any("target=/workspace,readonly" in arg for arg in creates[1]))
         self.assertIn("--cap-drop=ALL", creates[0])

@@ -76,7 +76,7 @@ When executing code analysis on untrusted repositories, the worker guarantees to
   - Workspaces are mounted read-only (`:ro`) into the scanner container.
   - Job cleanup only removes its own designated workspace; other concurrent workspaces remain untouched.
 - **Resource Constraints:**
-  - Analyzer and clone containers enforce strict memory limits (`--memory=512m`, `--memory-swap=512m`), CPU limits (`--cpus=1`), process limits (`--pids-limit=128`), and temporary storage limits (`--tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m`).
+  - Analyzer and clone containers enforce strict memory limits (`--memory=1g`, `--memory-swap=1g`), CPU limits (`--cpus=1`), process limits (`--pids-limit=128`), and temporary storage limits (`--tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m`).
   - No network egress is permitted in the scanner container (`--network=none`).
 - **Target Code Execution:**
   - Target code is NEVER executed, compiled, or evaluated. Only verified static analyzers inspect file trees.
@@ -137,7 +137,7 @@ Below is an example synthetic run conducted on a local development environment (
 The following sizing recommendations represent **planning guidance and estimates**, not measured production maximums:
 
 - **Per-Container Footprint:**
-  - Memory: 512 MB RAM + 512 MB swap (`--memory=512m --memory-swap=512m`).
+  - Memory ceiling: 1 GiB RAM with total memory+swap capped at 1 GiB (`--memory=1g --memory-swap=1g`).
   - CPU: 1 CPU limit (`--cpus=1`).
   - Processes: 128 PIDs (`--pids-limit=128`).
   - Tmpfs: 64 MB (`--tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m`).
