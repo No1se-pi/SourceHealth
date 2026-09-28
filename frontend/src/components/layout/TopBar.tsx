@@ -21,6 +21,16 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleMobile, onOpenAppearance
     breadcrumbTitle = `Анализ / #${analysisId.slice(0, 8)}`;
   } else if (path === '/sourcecraft') {
     breadcrumbTitle = 'Интеграция SourceCraft';
+  } else if (path === '/queue' || path === '/stack') {
+    breadcrumbTitle = 'Очередь анализа';
+  } else if (path === '/demo') {
+    breadcrumbTitle = 'Демонстрация';
+  } else if (path === '/profile') {
+    breadcrumbTitle = 'Профиль';
+  } else if (path === '/developers') {
+    breadcrumbTitle = 'Разработчикам';
+  } else if (path === '/compare') {
+    breadcrumbTitle = 'Сравнение';
   } else if (path === '/auth/callback') {
     breadcrumbTitle = 'Авторизация';
   }

@@ -1,0 +1,728 @@
+/**
+ * Analysis Stack Visualization Styles
+ * 
+ * 3D Isometric Queue Stack with 60 FPS CSS transforms, authentic Stack game feel,
+ * dark-graphite design tokens, WCAG compliance, and prefers-reduced-motion support.
+ */
+
+/* ==========================================================================
+   Page & Hero Layout
+   ========================================================================== */
+
+.sh-queue-page {
+  padding: var(--sh-space-6) var(--sh-space-4) var(--sh-space-12);
+  max-width: 1100px;
+  margin: 0 auto;
+  overflow-x: hidden;
+}
+
+.sh-queue-header {
+  margin-bottom: var(--sh-space-6);
+  text-align: center;
+}
+
+.sh-queue-title-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sh-space-2);
+}
+
+.sh-queue-title {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--sh-text-primary);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.sh-queue-subtitle {
+  font-size: 1rem;
+  color: var(--sh-text-secondary);
+  max-width: 640px;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+.sh-queue-status-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sh-space-3);
+  margin-top: var(--sh-space-4);
+  padding: var(--sh-space-2) var(--sh-space-4);
+  background: var(--sh-bg-surface);
+  border: 1px solid var(--sh-border-default);
+  border-radius: var(--sh-radius-full);
+  font-size: 0.8125rem;
+  color: var(--sh-text-secondary);
+  box-shadow: var(--sh-shadow-sm);
+}
+
+.sh-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--sh-health-good);
+}
+
+.sh-status-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--sh-health-good);
+  box-shadow: 0 0 8px var(--sh-health-good);
+  animation: shStatusPulse 2s infinite ease-in-out;
+}
+
+@keyframes shStatusPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.55;
+  }
+}
+
+.sh-status-divider {
+  width: 1px;
+  height: 12px;
+  background: var(--sh-border-default);
+}
+
+/* ==========================================================================
+   3D Isometric Stack Hero (55-65% Viewport Area)
+   ========================================================================== */
+
+.sh-stack-hero-section {
+  position: relative;
+  width: 100%;
+  min-height: 480px;
+  height: 56vh;
+  max-height: 600px;
+  margin: 0 auto var(--sh-space-8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 45%, var(--sh-bg-surface-elevated) 0%, transparent 70%);
+  border-radius: var(--sh-radius-lg);
+  overflow: visible;
+}
+
+.sh-stack-viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1300px;
+  perspective-origin: 50% 18%;
+  user-select: none;
+}
+
+.sh-stack-stage {
+  position: relative;
+  width: 320px;
+  height: 190px;
+  transform-style: preserve-3d;
+  transform: rotateX(56deg) rotateZ(-36deg);
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Hover separation: layers spread apart gracefully */
+.sh-stack-viewport:hover .sh-level-priority {
+  transform: translateZ(calc(var(--slab-z) + 16px));
+}
+
+.sh-stack-viewport:hover .sh-level-timed {
+  transform: translateZ(calc(var(--slab-z) + 6px));
+}
+
+.sh-stack-viewport:hover .sh-level-planned {
+  transform: translateZ(var(--slab-z));
+}
+
+/* ==========================================================================
+   3D Isometric Slab Plate (Top Face + Front Face + Right Face)
+   ========================================================================== */
+
+.sh-stack-slab {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transform: translateZ(var(--slab-z));
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease;
+  cursor: pointer;
+}
+
+/* Slight horizontal offset between layers to mimic Stack game tactile slabs */
+.sh-stack-slab:nth-child(even) {
+  margin-left: 2px;
+  margin-top: -1px;
+}
+
+/* Dimming unselected layers when a level is focused */
+.sh-stack-stage.has-selected .sh-stack-slab:not(.is-selected-level) {
+  opacity: 0.55;
+}
+
+.sh-stack-stage.has-selected .sh-stack-slab.is-selected-level {
+  opacity: 1;
+}
+
+/* Top Face */
+.sh-slab-top {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.25), 0 0 1px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  backface-visibility: hidden;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Front Edge Face (Thickness rotated along X axis) */
+.sh-slab-front {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 12px;
+  transform-origin: bottom center;
+  transform: rotateX(-90deg);
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+/* Right Edge Face (Thickness rotated along Y axis) */
+.sh-slab-right {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 12px;
+  height: 100%;
+  transform-origin: right center;
+  transform: rotateY(90deg);
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+/* Bottom Cast Shadow for Base and Floating Elements */
+.sh-slab-shadow {
+  position: absolute;
+  inset: 0;
+  transform: translateZ(-8px);
+  filter: blur(14px);
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* ==========================================================================
+   Level Color Schemes
+   ========================================================================== */
+
+/* 1. PRIORITY / ПРИОРИТЕТ (Top Slabs — Bright SourceHealth Red Accent) */
+.sh-level-priority .sh-slab-top {
+  background: linear-gradient(135deg, #ff4d4d 0%, #dc2626 100%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.sh-level-priority .sh-slab-front {
+  background: #b91c1c;
+}
+
+.sh-level-priority .sh-slab-right {
+  background: #991b1b;
+}
+
+.sh-level-priority .sh-slab-shadow {
+  background: rgba(220, 38, 38, 0.5);
+}
+
+.sh-level-priority.is-selected-level .sh-slab-top {
+  box-shadow: inset 0 0 0 2px #ffffff, 0 0 24px rgba(239, 68, 68, 0.6);
+}
+
+/* 2. TIMED / ПО РАСПИСАНИЮ (Middle Slabs — Calm Mint / Emerald) */
+.sh-level-timed .sh-slab-top {
+  background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.sh-level-timed .sh-slab-front {
+  background: #047857;
+}
+
+.sh-level-timed .sh-slab-right {
+  background: #065f46;
+}
+
+.sh-level-timed .sh-slab-shadow {
+  background: rgba(5, 150, 105, 0.4);
+}
+
+.sh-level-timed.is-selected-level .sh-slab-top {
+  box-shadow: inset 0 0 0 2px #ffffff, 0 0 24px rgba(16, 185, 129, 0.55);
+}
+
+/* 3. PLANNED / ПЛАНОВЫЕ (Base Slabs — Dark Slate / Deep Graphite) */
+.sh-level-planned .sh-slab-top {
+  background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.sh-level-planned .sh-slab-front {
+  background: #0f172a;
+}
+
+.sh-level-planned .sh-slab-right {
+  background: #090d16;
+}
+
+.sh-level-planned .sh-slab-shadow {
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.sh-level-planned.is-selected-level .sh-slab-top {
+  box-shadow: inset 0 0 0 2px #94a3b8, 0 0 20px rgba(51, 65, 85, 0.6);
+}
+
+/* ==========================================================================
+   Empty States for Slabs (Priority=0 or Timed=0)
+   ========================================================================== */
+
+.sh-slab-empty .sh-slab-top {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1.5px dashed var(--sh-border-strong);
+  backdrop-filter: blur(2px);
+}
+
+.sh-slab-empty .sh-slab-front {
+  background: rgba(40, 40, 40, 0.4);
+}
+
+.sh-slab-empty .sh-slab-right {
+  background: rgba(30, 30, 30, 0.4);
+}
+
+.sh-empty-slab-text {
+  font-size: 0.8125rem;
+  font-style: italic;
+  font-weight: 500;
+  color: var(--sh-text-muted);
+  text-align: center;
+}
+
+/* ==========================================================================
+   Task Chips on Top Slab
+   ========================================================================== */
+
+.sh-slab-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.sh-task-chips-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  max-width: 90%;
+}
+
+.sh-task-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: var(--sh-radius-full);
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #ffffff;
+  backdrop-filter: blur(4px);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.sh-task-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.sh-task-chip.is-analyzing .sh-task-chip-dot {
+  background: #4ade80;
+  box-shadow: 0 0 6px #4ade80;
+}
+
+/* ==========================================================================
+   Ambient Processing Cycle Animation (Top Plate Dissolves Every 6s)
+   ========================================================================== */
+
+.sh-slab-cycling {
+  animation: shStackCycleDissolve 0.85s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes shStackCycleDissolve {
+  0% {
+    transform: translateZ(var(--slab-z)) translateY(0) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translateZ(calc(var(--slab-z) + 18px)) translateY(-8px) scale(1.02);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateZ(calc(var(--slab-z) + 52px)) translateY(-28px) scale(0.96);
+    opacity: 0;
+  }
+}
+
+/* ==========================================================================
+   2D HUD Callout Overlay (Crystal-Clear Legibility Alongside 3D Stack)
+   ========================================================================== */
+
+.sh-stack-hud {
+  position: absolute;
+  right: var(--sh-space-6);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sh-space-4);
+  z-index: 10;
+  pointer-events: auto;
+}
+
+.sh-hud-tag {
+  display: flex;
+  align-items: center;
+  gap: var(--sh-space-2);
+  background: var(--sh-bg-surface);
+  border: 1px solid var(--sh-border-default);
+  padding: 8px 14px;
+  border-radius: var(--sh-radius-md);
+  box-shadow: var(--sh-shadow-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.8125rem;
+}
+
+.sh-hud-tag:hover,
+.sh-hud-tag.is-active {
+  border-color: var(--sh-border-strong);
+  transform: translateX(-4px);
+}
+
+.sh-hud-tag.is-priority {
+  border-left: 4px solid #ef4444;
+}
+
+.sh-hud-tag.is-timed {
+  border-left: 4px solid #10b981;
+}
+
+.sh-hud-tag.is-planned {
+  border-left: 4px solid #475569;
+}
+
+.sh-hud-tag-title {
+  font-weight: 700;
+  color: var(--sh-text-primary);
+}
+
+.sh-hud-tag-count {
+  font-size: 0.75rem;
+  padding: 1px 6px;
+  border-radius: var(--sh-radius-full);
+  background: var(--sh-bg-surface-elevated);
+  color: var(--sh-text-secondary);
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   Counters Section (3 Summary Cards Below Stack)
+   ========================================================================== */
+
+.sh-stack-counters-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sh-space-4);
+  margin-bottom: var(--sh-space-6);
+}
+
+.sh-counter-card {
+  background: var(--sh-bg-surface);
+  border: 1px solid var(--sh-border-default);
+  border-radius: var(--sh-radius-md);
+  padding: var(--sh-space-4);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--sh-shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sh-space-2);
+  text-align: left;
+}
+
+.sh-counter-card:hover {
+  border-color: var(--sh-border-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--sh-shadow-md);
+}
+
+.sh-counter-card.is-active {
+  border-color: var(--sh-brand);
+  background: var(--sh-bg-surface-elevated);
+  box-shadow: 0 0 0 2px var(--sh-brand-border), var(--sh-shadow-md);
+}
+
+.sh-counter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sh-counter-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--sh-text-secondary);
+}
+
+.sh-counter-badge {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--sh-radius-full);
+}
+
+.sh-counter-badge.is-priority {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+
+.sh-counter-badge.is-timed {
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+}
+
+.sh-counter-badge.is-planned {
+  background: rgba(100, 116, 139, 0.15);
+  color: #475569;
+}
+
+.sh-counter-value {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: var(--sh-text-primary);
+  line-height: 1.1;
+}
+
+.sh-counter-caption {
+  font-size: 0.8125rem;
+  color: var(--sh-text-muted);
+  line-height: 1.4;
+}
+
+/* ==========================================================================
+   Details & Architecture Legend
+   ========================================================================== */
+
+.sh-stack-legend-card {
+  background: var(--sh-bg-surface);
+  border: 1px solid var(--sh-border-default);
+  border-radius: var(--sh-radius-md);
+  padding: var(--sh-space-5);
+  margin-bottom: var(--sh-space-6);
+  box-shadow: var(--sh-shadow-sm);
+}
+
+.sh-legend-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sh-space-3);
+}
+
+.sh-legend-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--sh-text-primary);
+  margin: 0;
+}
+
+.sh-legend-desc {
+  font-size: 0.9rem;
+  color: var(--sh-text-secondary);
+  line-height: 1.6;
+  margin: 0 0 var(--sh-space-4);
+}
+
+.sh-invariants-box {
+  background: var(--sh-bg-base);
+  border: 1px solid var(--sh-border-subtle);
+  border-radius: var(--sh-radius-sm);
+  padding: var(--sh-space-3) var(--sh-space-4);
+  font-size: 0.8125rem;
+  color: var(--sh-text-secondary);
+  line-height: 1.5;
+}
+
+.sh-invariants-title {
+  font-weight: 700;
+  color: var(--sh-text-primary);
+  margin-bottom: 4px;
+}
+
+/* Controls for Preset Switching (Interactive Testing / Demo) */
+.sh-presets-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sh-space-2);
+  flex-wrap: wrap;
+  margin-top: var(--sh-space-4);
+  padding-top: var(--sh-space-4);
+  border-top: 1px solid var(--sh-border-subtle);
+}
+
+.sh-preset-btn {
+  background: var(--sh-bg-surface-elevated);
+  border: 1px solid var(--sh-border-default);
+  border-radius: var(--sh-radius-sm);
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--sh-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sh-preset-btn:hover {
+  background: var(--sh-bg-surface-hover);
+  color: var(--sh-text-primary);
+}
+
+.sh-preset-btn.is-active {
+  background: var(--sh-btn-primary-bg);
+  color: var(--sh-btn-primary-text);
+  border-color: var(--sh-btn-primary-border);
+}
+
+/* ==========================================================================
+   Prefers-Reduced-Motion (A11y Requirement)
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .sh-stack-stage,
+  .sh-stack-slab,
+  .sh-status-pulse-dot,
+  .sh-slab-cycling {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ==========================================================================
+   Responsive Adaptations
+   ========================================================================== */
+
+@media (max-width: 900px) {
+  .sh-stack-viewport {
+    flex-direction: column;
+    height: auto;
+    padding: var(--sh-space-4) 0;
+  }
+
+  .sh-stack-hud {
+    position: static;
+    transform: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--sh-space-2);
+    margin-top: var(--sh-space-6);
+    width: 100%;
+    padding: 0 var(--sh-space-2);
+  }
+
+  .sh-hud-tag {
+    padding: 6px 12px;
+    font-size: 0.75rem;
+  }
+
+  .sh-stack-hero-section {
+    height: auto;
+    min-height: 480px;
+  }
+}
+
+@media (max-width: 640px) {
+  .sh-queue-header {
+    padding: 0 var(--sh-space-2);
+  }
+
+  .sh-queue-title {
+    font-size: 1.45rem;
+  }
+
+  .sh-queue-subtitle {
+    font-size: 0.875rem;
+  }
+
+  .sh-queue-status-bar {
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 12px;
+    border-radius: var(--sh-radius-md);
+  }
+
+  .sh-status-divider {
+    display: none;
+  }
+
+  .sh-stack-stage {
+    width: 200px;
+    height: 120px;
+    transform: translateY(24px) rotateX(54deg) rotateZ(-34deg) scale(0.78);
+    margin: 0 auto;
+  }
+
+  .sh-stack-hero-section {
+    min-height: 420px;
+    padding-top: var(--sh-space-4);
+  }
+
+  .sh-stack-counters-grid {
+    grid-template-columns: 1fr;
+    gap: var(--sh-space-3);
+  }
+
+  .sh-counter-card {
+    padding: var(--sh-space-3);
+  }
+
+  .sh-counter-value {
+    font-size: 1.45rem;
+  }
+}

@@ -11,6 +11,7 @@ import { DemoPage } from '../pages/DemoPage';
 import { ProfilePage } from '../pages/ProfilePage';
 import { DevelopersPage } from '../pages/DevelopersPage';
 import { ComparePage } from '../pages/ComparePage';
+import { QueuePage } from '../pages/QueuePage';
 import { ScrollToTop } from '../components/common/ScrollToTop';
 
 export const AppRouter: React.FC = () => {
@@ -20,11 +21,15 @@ export const AppRouter: React.FC = () => {
       <Routes>
         <Route element={<AppLayout />}>
           <Route path="/" element={<LeaderboardPage />} />
+          <Route path="/catalog" element={<LeaderboardPage />} />
+          <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/repositories/:id" element={<RepositoryPage />} />
           <Route path="/analyses/:id" element={<AnalysisPage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/sourcecraft" element={<SourceCraftPage />} />
           <Route path="/demo" element={<DemoPage />} />
+          <Route path="/queue" element={<QueuePage />} />
+          <Route path="/stack" element={<QueuePage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/developers" element={<DevelopersPage />} />
           <Route path="/compare" element={<ComparePage />} />

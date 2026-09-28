@@ -125,6 +125,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onClose, onOpenApp
           </NavLink>
 
           <NavLink
+            to="/queue"
+            className={({ isActive }) => `sc-nav-item ${isActive ? 'active' : ''}`}
+          >
+            <svg className="sc-nav-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+              <path d="m8 1.5 6 3-6 3-6-3 6-3zm-6.5 6 6 3 6-3v1.5l-6 3-6-3V7.5zm0 3.5 6 3 6-3v1.5l-6 3-6-3V11z" />
+            </svg>
+            <span className="sc-nav-label">Очередь</span>
+          </NavLink>
+
+          <NavLink
             to="/demo"
             className={({ isActive }) => `sc-nav-item ${isActive ? 'active' : ''}`}
           >
