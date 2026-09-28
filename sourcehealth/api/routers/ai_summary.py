@@ -22,8 +22,10 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def _cache_key(analysis_id: UUID, mode: str) -> str:
-    digest = hashlib.sha256(f"{analysis_id}:{mode}:{PROMPT_VERSION}:{SCHEMA_VERSION}".encode()).hexdigest()
+def _cache_key(analysis_id: UUID, mode: str, detail: str = "brief") -> str:
+    digest = hashlib.sha256(
+        f"{analysis_id}:{mode}:{detail}:{PROMPT_VERSION}:{SCHEMA_VERSION}".encode(),
+    ).hexdigest()
     return f"ai-summary:{digest}"
 
 
@@ -48,7 +50,7 @@ def ai_summary(analysis_id: UUID, body: AISummaryRequest, request: Request):
             "score_coverage": score_coverage(run.scoring_policy_version, run.category_scores),
         })
 
-    key = _cache_key(analysis_id, body.model)
+    key = _cache_key(analysis_id, body.model, body.detail)
     try:
         cached = redis.get(key)
         if cached:
@@ -68,17 +70,21 @@ def ai_summary(analysis_id: UUID, body: AISummaryRequest, request: Request):
     except RedisError:
         logger.warning("ai_rate_limit_unavailable", extra={"component": "ai", "event": "rate_limit_unavailable"})
 
-    context = build_ai_context(report)
+    context = build_ai_context(report, body.detail)
     provider = getattr(request.app.state, "ai_provider", None) or YandexAISummaryProvider(
         settings.yandex_ai_api_key.get_secret_value(), settings.yandex_ai_folder_id,
         timeout=settings.yandex_ai_timeout,
     )
     try:
-        result = provider.summarize(context, body.model)
+        result = provider.summarize(context, body.model, body.detail)
     except YandexAIError as exc:
-        logger.warning("ai_request_failed", extra={"component": "ai", "event": exc.code})
+        logger.warning("ai_request_failed", extra={
+            "component": "ai", "event": exc.code, "mode": body.model, "detail": body.detail,
+        })
         raise ServiceError(exc.code, exc.status) from None
-    response = AISummaryResponse(mode=body.model, model_name=MODEL_NAMES[body.model], cached=False, summary=result)
+    response = AISummaryResponse(
+        mode=body.model, detail=body.detail, model_name=MODEL_NAMES[body.model], cached=False, summary=result,
+    )
     try:
         redis.set(key, response.model_dump_json(), ex=settings.yandex_ai_cache_ttl)
     except RedisError:

@@ -3,6 +3,7 @@
 import re
 from typing import Any
 
+from .config import DETAIL_PROFILES, AIReportDetail
 from .contracts import (
     AISummaryContext,
     GroundedCategory,
@@ -78,7 +79,7 @@ def _is_safe_fact(fact_id: str, kind: str, summary: str) -> bool:
     return True
 
 
-def build_ai_context(report: Any) -> AISummaryContext:
+def build_ai_context(report: Any, detail: AIReportDetail = "brief") -> AISummaryContext:
     """Build a strictly grounded and sanitized AI context from an analysis report or dictionary."""
     if isinstance(report, dict):
         data = report
@@ -123,11 +124,13 @@ def build_ai_context(report: Any) -> AISummaryContext:
                     evidence_refs=[str(ref) for ref in cat_data.get("evidence_refs", [])[:10]],
                 ))
 
-    # 4. Recommendations (capped at 20)
+    profile = DETAIL_PROFILES[detail]
+
+    # 4. Recommendations are bounded per requested report depth.
     grounded_recommendations: list[GroundedRecommendation] = []
     raw_recommendations = data.get("recommendations", [])
     if isinstance(raw_recommendations, list):
-        for rec in raw_recommendations[:20]:
+        for rec in raw_recommendations[:profile.recommendations]:
             if isinstance(rec, dict):
                 grounded_recommendations.append(GroundedRecommendation(
                     id=str(rec.get("id", "")),
@@ -140,7 +143,7 @@ def build_ai_context(report: Any) -> AISummaryContext:
                     evidence_refs=[str(ref) for ref in rec.get("evidence_refs", [])[:10]],
                 ))
 
-    # 5. Safe facts extracted from checks (capped at 50)
+    # 5. Safe facts extracted from checks, bounded per requested report depth.
     grounded_facts: list[GroundedFact] = []
     checks = data.get("checks", {})
     if isinstance(checks, dict):
@@ -155,7 +158,7 @@ def build_ai_context(report: Any) -> AISummaryContext:
             ev_list = check_data.get("evidence", [])
             if isinstance(ev_list, list):
                 for ev in ev_list:
-                    if len(grounded_facts) >= 50:
+                    if len(grounded_facts) >= profile.facts:
                         break
                     if isinstance(ev, dict):
                         ev_id = str(ev.get("id", ""))
@@ -176,9 +179,9 @@ def build_ai_context(report: Any) -> AISummaryContext:
 
             # Also add high-level summary metrics as grounded facts if facts list is small
             metrics = check_data.get("metrics", {})
-            if isinstance(metrics, dict) and len(grounded_facts) < 50:
+            if isinstance(metrics, dict) and len(grounded_facts) < profile.facts:
                 for metric_key, metric_val in metrics.items():
-                    if len(grounded_facts) >= 50:
+                    if len(grounded_facts) >= profile.facts:
                         break
                     # Strictly allow only scalar bool, int, float; skip dict, list, str, object, None
                     if isinstance(metric_val, bool):
@@ -208,6 +211,6 @@ def build_ai_context(report: Any) -> AISummaryContext:
         official_health=official_health,
         score_coverage=score_coverage,
         categories=grounded_categories,
-        facts=grounded_facts[:50],
-        recommendations=grounded_recommendations[:20],
+        facts=grounded_facts[:profile.facts],
+        recommendations=grounded_recommendations[:profile.recommendations],
     )

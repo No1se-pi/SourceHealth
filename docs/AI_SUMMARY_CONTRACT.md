@@ -1,142 +1,56 @@
-# Контракт интеграции AI-саммаризатора (YandexGPT Ready Foundation)
+# Контракт grounded AI-отчёта
 
-## 1. Назначение и рамки
+AI-отчёт — отдельный reporting layer над завершённым детерминированным анализом. Он не меняет
+`health_score`, оценки категорий, coverage, scoring policy или сохранённые рекомендации.
 
-Данный документ фиксирует нейтральный к провайдеру контракт (`provider-neutral contract foundation`) для интеграции моделей машинного обучения (в частности, YandexGPT) в качестве отчётного слоя (`reporting layer`) платформы SourceHealth.
+## Вход
 
-### Ключевые ограничения архитектуры:
-1. **Никаких сетевых вызовов в текущей фазе:** Реализован только валидационный и контрактовый слой. Никаких сетевых запросов к внешним AI-сервисам без явного решения мейнтейнера не выполняется.
-2. **Иммутабельность оценок:** Ни одна языковая модель не имеет права рассчитывать, корректировать или переопределять рейтинг Health, Source Soul или баллы категорий. Оценки рассчитываются исключительно детерминированным движком `sourcehealth.scoring`.
-3. **Строгая фактологическая привязка (Grounding):** Все выводы модели (сильные стороны, риски, рекомендации) обязаны ссылаться на верифицированные идентификаторы фактов (`evidence_refs`) или рекомендаций (`recommendation_ids`), переданные во входном контексте.
-4. **Запрет прямой записи в базу данных:** Ответ модели не может быть сохранён в хранилище без предварительной валидации через `validate_ai_output`.
+`build_ai_context(report, detail)` формирует `ai-context-v1`. Модель получает только slugs,
+официальный Health, coverage, категории, агрегированные безопасные факты и рекомендации.
 
----
+| Глубина | Facts | Recommendations |
+|---|---:|---:|
+| `brief` | 50 | 20 |
+| `detailed` | 100 | 50 |
+| `expert` | 200 | 100 |
 
-## 2. Входной контракт: `AISummaryContext`
+Лимиты являются верхней границей: отсутствующие данные не синтезируются. В контекст не попадают
+исходники, snippets, raw SAST/AppSec payload, commit messages, имена/email авторов, PAT, cookies,
+OAuth данные и другие секреты. Checks с `NO_DATA`/`SOURCE_UNAVAILABLE` не создают assertion evidence.
 
-Модель получает строго изолированный контекст `ai-context-v1`, формируемый функцией `build_ai_context`:
+## Выход `ai-report-v2`
 
-```json
-{
-  "schema_version": "ai-context-v1",
-  "repository": {
-    "org": "sourcecraft",
-    "repo": "platform"
-  },
-  "analysis_id": "b0000001-0000-0000-0000-000000000001",
-  "scoring_policy_version": "mvp-score-v1.2",
-  "official_health": 85.0,
-  "score_coverage": 80.0,
-  "categories": [
-    {
-      "name": "documentation",
-      "score": 90.0,
-      "availability": "available",
-      "explanation": "README и лицензия присутствуют",
-      "evidence_refs": ["doc:readme", "doc:license"]
-    }
-  ],
-  "facts": [
-    {
-      "id": "doc:readme",
-      "kind": "documentation",
-      "summary": "Файл README.md найден в корне проекта",
-      "value": true,
-      "unit": null,
-      "evidence_refs": []
-    }
-  ],
-  "recommendations": [
-    {
-      "id": "rec-docs-1",
-      "priority": 1,
-      "category": "documentation",
-      "title": "Добавить руководство для контрибьюторов",
-      "description": "Файл CONTRIBUTING.md отсутствует",
-      "suggested_action": "Создать CONTRIBUTING.md в корне репозитория",
-      "expected_impact": "Повысит прозрачность процесса разработки",
-      "evidence_refs": ["doc:contributing"]
-    }
-  ]
-}
-```
+Структура пригодна для последующего Markdown/PDF/DOCX export без изменения смысла:
 
-### Белый список безопасности (Privacy Allowlist):
-В контекст **категорически запрещено** передавать:
-- Исходный код файлов, сниппеты, диффы.
-- Персональные токены (SourceCraft PAT, GitHub PAT).
-- Сессионные куки, OAuth-токены, приватные ключи.
-- Сырые пейлоады AppSec / SAST с фрагментами уязвимого кода.
-- Тексты коммит-сообщений, имена авторов, адреса электронной почты.
-- Тексты задач (issues) и пулл-реквестов.
+- `executive_summary`;
+- `category_analysis[]`: категория, точная сохранённая оценка и availability, assessment,
+  подтверждённые положительные наблюдения и проблемы;
+- `strengths[]`, `risks[]`;
+- `actions[]`: title, priority, why, action, implementation steps, expected result и grounding IDs;
+- `roadmap.immediate/short_term/later`: точные `action-N` IDs существующих actions;
+- `limitations[]`.
 
-Ограничения объёма:
-- Количество фактов: `facts <= 50`.
-- Количество рекомендаций: `recommendations <= 20`.
-- Максимальная длина описаний: `summary <= 500` символов.
+Каждая strength/risk/category finding обязана ссылаться на известный `evidence_ref`. Каждое действие
+содержит известный `recommendation_id` и/или `evidence_ref`. Roadmap ссылается только на grounded actions
+по их локальным ID и не создаёт новые действия.
+`validate_ai_output()` отклоняет неизвестные IDs, изменение score/availability, утверждения по
+недоступной категории, незаземлённые actions и превышение depth budget.
 
----
+## Бюджеты
 
-## 3. Выходной контракт: `AISummaryResult`
+| Detail | Target/hard chars | Completion tokens | Timeout | Actions |
+|---|---:|---:|---:|---:|
+| `brief` | 10 000 | 3 000 | 45 s | 5 |
+| `detailed` | 20 000 | 6 000 | 75 s | 12 |
+| `expert` | 50 000 | 14 000 | 120 s | 15 |
 
-Модель обязана вернуть валидный JSON по схеме `ai-summary-v1`:
+Размер проверяется до JSON parsing; строковое обрезание ответа запрещено. Локальный live probe
+28.09.2026 подтвердил, что `aliceai-llm-flash`, `yandexgpt-5-lite` и `yandexgpt-5.1` принимают
+`max_completion_tokens=16_000`; production ceilings намеренно не превышают 14 000.
 
-```json
-{
-  "schema_version": "ai-summary-v1",
-  "executive_summary": "Краткая выжимка для руководителя (до 1000 символов)...",
-  "strengths": [
-    {
-      "text": "Надёжно настроенная автоматизация CI/CD",
-      "evidence_refs": ["ci:pipeline"]
-    }
-  ],
-  "risks": [
-    {
-      "text": "Отсутствие руководства для внешних контрибьюторов",
-      "evidence_refs": ["doc:license"]
-    }
-  ],
-  "actions": [
-    {
-      "text": "Создать файл CONTRIBUTING.md",
-      "recommendation_ids": ["rec-docs-1"],
-      "evidence_refs": []
-    }
-  ],
-  "limitations": [
-    {
-      "text": "Официальная проверка безопасности AppSec не проводилась",
-      "evidence_refs": []
-    }
-  ]
-}
-```
+## Надёжность provider
 
-### Ограничения выходных данных:
-- `executive_summary`: до 1000 символов.
-- `strengths`: не более 5 пунктов, до 500 символов каждый. Обязательна привязка минимум к одному валидному `evidence_refs`.
-- `risks`: не более 5 пунктов, до 500 символов каждый. Обязательна привязка минимум к одному валидному `evidence_refs`.
-- `actions`: не более 5 пунктов, до 500 символов каждый. Обязательна привязка минимум к одному `recommendation_ids` или `evidence_refs`.
-- `limitations`: не более 5 пунктов, до 500 символов каждый. Может содержать пустой `evidence_refs`, если описывает отсутствие данных/покрытия.
-
----
-
-## 4. Валидатор заземления (`validate_ai_output`)
-
-Перед использованием результатов саммаризации выполняется строгая верификация:
-1. Любой `evidence_ref`, указанный в `strengths`, `risks`, `actions` или `limitations`, должен присутствовать среди идентификаторов `facts` или `category.evidence_refs` контекста (имена категорий являются метаданными и не считаются доказательствами).
-2. Каждый пункт сильных сторон (`strengths`) и рисков (`risks`) обязан содержать как минимум одну подтверждённую ссылку `evidence_ref`.
-3. Любой `recommendation_id`, указанный в `actions`, обязан существовать среди `recommendations` контекста.
-4. Каждое действие (`action`) должно содержать хотя бы одну валидную ссылку на рекомендацию или факт.
-5. Превышение любого лимита длины или количества элементов немедленно вызывает ошибку `AIValidationError`.
-
----
-
-## 5. Требования к будущему адаптеру YandexGPT
-
-При реализации сетевого адаптера `YandexGPTSummaryProvider`:
-1. Использовать строгий режим JSON-схемы (`response_format: {"type": "json_object"}`).
-2. Использовать низкую температуру генерации (`temperature: 0.0 - 0.2`) для исключения галлюцинаций.
-3. Аутентификация через `API-Key` или `IAM-токен` сервисного аккаунта Yandex Cloud без сохранения секрета в репозитории.
-4. При ошибках сети или валидации — мягкий откат к отображению стандартного детерминированного отчёта.
+На одну генерацию разрешено максимум четыре HTTP-вызова, общих для transport retry и единственного
+grounding repair. Timeout, transport errors, 429 и 500/502/503/504 повторяются с bounded backoff
+0.5/1.5/3 s. Корректный `Retry-After` ограничивается пятью секундами. 400/422, 401/403 и локальная
+валидация не повторяются. Логи содержат только mode, detail, attempt и стабильную причину.

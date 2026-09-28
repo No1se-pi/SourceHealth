@@ -4,12 +4,11 @@ import unittest
 from copy import deepcopy
 from uuid import uuid4
 
-from pydantic import ValidationError
-
 from sourcehealth.ai.context import build_ai_context
 from sourcehealth.ai.contracts import (
     AISummaryResult,
     GroundedAction,
+    GroundedCategoryAnalysis,
     GroundedStatement,
 )
 from sourcehealth.ai.provider import (
@@ -21,6 +20,15 @@ from sourcehealth.ai.provider import (
 
 
 class AIContractsTests(unittest.TestCase):
+    @staticmethod
+    def action(*, recommendation_ids=None, evidence_refs=None, title="Update documentation", action_id="action-1"):
+        return GroundedAction(
+            id=action_id, title=title, priority=2, why="A confirmed issue needs attention.",
+            action="Apply the documented improvement.", implementation_steps=["Make the change."],
+            expected_result="The confirmed issue is addressed.",
+            recommendation_ids=recommendation_ids or [], evidence_refs=evidence_refs or [],
+        )
+
     def setUp(self):
         self.raw_report = {
             "id": str(uuid4()),
@@ -111,7 +119,7 @@ class AIContractsTests(unittest.TestCase):
     def test_validate_ai_output_accepts_valid_grounded_result(self):
         context = build_ai_context(self.raw_report)
         valid_result = AISummaryResult(
-            schema_version="ai-summary-v1",
+            schema_version="ai-report-v2",
             executive_summary="The repository has strong CI/CD automation and clean documentation.",
             strengths=[
                 GroundedStatement(text="CI pipeline is fully configured and passing.", evidence_refs=["ci:pipeline"]),
@@ -121,11 +129,7 @@ class AIContractsTests(unittest.TestCase):
                 GroundedStatement(text="Contributing guidelines are missing.", evidence_refs=["doc:license"]),
             ],
             actions=[
-                GroundedAction(
-                    text="Add CONTRIBUTING guide to streamline open-source contributions.",
-                    recommendation_ids=["rec-docs-1"],
-                    evidence_refs=[],
-                )
+                self.action(recommendation_ids=["rec-docs-1"])
             ],
             limitations=[
                 GroundedStatement(text="AppSec coverage was not evaluated.", evidence_refs=[]),
@@ -138,7 +142,7 @@ class AIContractsTests(unittest.TestCase):
     def test_validate_ai_output_rejects_unknown_evidence_ref(self):
         context = build_ai_context(self.raw_report)
         invalid_result = AISummaryResult(
-            schema_version="ai-summary-v1",
+            schema_version="ai-report-v2",
             executive_summary="Summary",
             strengths=[
                 GroundedStatement(text="Claim with fake citation", evidence_refs=["fake:evidence:id"]),
@@ -154,12 +158,12 @@ class AIContractsTests(unittest.TestCase):
     def test_validate_ai_output_rejects_unknown_recommendation_id(self):
         context = build_ai_context(self.raw_report)
         invalid_result = AISummaryResult(
-            schema_version="ai-summary-v1",
+            schema_version="ai-report-v2",
             executive_summary="Summary",
             strengths=[],
             risks=[],
             actions=[
-                GroundedAction(text="Action citing ghost recommendation", recommendation_ids=["rec-nonexistent"]),
+                self.action(recommendation_ids=["rec-nonexistent"]),
             ],
             limitations=[],
         )
@@ -170,12 +174,12 @@ class AIContractsTests(unittest.TestCase):
     def test_validate_ai_output_rejects_action_without_grounding(self):
         context = build_ai_context(self.raw_report)
         invalid_result = AISummaryResult(
-            schema_version="ai-summary-v1",
+            schema_version="ai-report-v2",
             executive_summary="Summary",
             strengths=[],
             risks=[],
             actions=[
-                GroundedAction(text="Action without any citations", recommendation_ids=[], evidence_refs=[]),
+                self.action(),
             ],
             limitations=[],
         )
@@ -184,31 +188,10 @@ class AIContractsTests(unittest.TestCase):
             validate_ai_output(context, invalid_result)
 
     def test_validate_ai_output_rejects_oversized_elements(self):
-        # Executive summary too long (>1000)
-
-        with self.assertRaises(ValidationError):
-            AISummaryResult(
-                schema_version="ai-summary-v1",
-                executive_summary="A" * 1001,
-                strengths=[],
-                risks=[],
-                actions=[],
-                limitations=[],
-            )
-
-        # Too many actions (>5)
-        with self.assertRaises(ValidationError):
-            AISummaryResult(
-                schema_version="ai-summary-v1",
-                executive_summary="Summary",
-                strengths=[],
-                risks=[],
-                actions=[
-                    GroundedAction(text=f"Action {i}", recommendation_ids=["rec-docs-1"])
-                    for i in range(6)
-                ],
-                limitations=[],
-            )
+        context = build_ai_context(self.raw_report)
+        result = AISummaryResult(executive_summary="A" * 1001)
+        with self.assertRaisesRegex(AIValidationError, "ai_output_limit_exceeded"):
+            validate_ai_output(context, result, "brief")
 
     def test_disabled_ai_provider_raises_expected_error(self):
         context = build_ai_context(self.raw_report)
@@ -219,7 +202,7 @@ class AIContractsTests(unittest.TestCase):
     def test_validate_ai_output_rejects_ungrounded_risk(self):
         context = build_ai_context(self.raw_report)
         invalid_result = AISummaryResult(
-            schema_version="ai-summary-v1",
+            schema_version="ai-report-v2",
             executive_summary="Summary",
             strengths=[],
             risks=[
@@ -234,7 +217,7 @@ class AIContractsTests(unittest.TestCase):
     def test_validate_ai_output_rejects_ungrounded_strength(self):
         context = build_ai_context(self.raw_report)
         invalid_result = AISummaryResult(
-            schema_version="ai-summary-v1",
+            schema_version="ai-report-v2",
             executive_summary="Summary",
             strengths=[
                 GroundedStatement(text="Strength without citations", evidence_refs=[]),
@@ -249,11 +232,11 @@ class AIContractsTests(unittest.TestCase):
     def test_validate_ai_output_allows_limitations_without_refs(self):
         context = build_ai_context(self.raw_report)
         valid_result = AISummaryResult(
-            schema_version="ai-summary-v1",
+            schema_version="ai-report-v2",
             executive_summary="Summary",
             strengths=[GroundedStatement(text="Strong docs", evidence_refs=["doc:readme"])],
             risks=[GroundedStatement(text="Docs need update", evidence_refs=["doc:readme"])],
-            actions=[GroundedAction(text="Update docs", recommendation_ids=["rec-docs-1"])],
+            actions=[self.action(recommendation_ids=["rec-docs-1"])],
             limitations=[GroundedStatement(text="Coverage missing for SAST", evidence_refs=[])],
         )
         validate_ai_output(context, valid_result)
@@ -428,7 +411,7 @@ class AIContractsTests(unittest.TestCase):
         self.assertEqual(context.categories[0].name, "security")
 
         invalid_result = AISummaryResult(
-            schema_version="ai-summary-v1",
+            schema_version="ai-report-v2",
             executive_summary="Summary",
             strengths=[],
             risks=[
@@ -468,7 +451,7 @@ class AIContractsTests(unittest.TestCase):
         self.assertNotIn("sourcecraft_appsec:high", {fact.id for fact in context.facts})
         self.assertNotIn("security:unavailable", {fact.id for fact in context.facts})
         invalid_result = AISummaryResult(
-            schema_version="ai-summary-v1",
+            schema_version="ai-report-v2",
             executive_summary="Summary",
             strengths=[],
             risks=[GroundedStatement(
@@ -477,8 +460,25 @@ class AIContractsTests(unittest.TestCase):
             actions=[],
             limitations=[],
         )
-        with self.assertRaisesRegex(AIValidationError, "unknown_evidence_ref"):
-            validate_ai_output(context, invalid_result)
+        for detail in ("brief", "detailed", "expert"):
+            with self.subTest(detail=detail):
+                with self.assertRaisesRegex(AIValidationError, "unknown_evidence_ref"):
+                    validate_ai_output(context, invalid_result, detail)
+
+    def test_detailed_and_expert_actions_require_grounding(self):
+        context = build_ai_context(self.raw_report, "expert")
+        categories = [GroundedCategoryAnalysis(
+            category=category.name, score=category.score, availability=category.availability,
+            assessment="Grounded assessment.", evidence_refs=category.evidence_refs,
+        ) for category in context.categories]
+        for detail in ("detailed", "expert"):
+            with self.subTest(detail=detail):
+                invalid = AISummaryResult(
+                    executive_summary="Summary", category_analysis=categories,
+                    actions=[self.action(title=f"Ungrounded {detail}")],
+                )
+                with self.assertRaisesRegex(AIValidationError, "missing_action_grounding"):
+                    validate_ai_output(context, invalid, detail)
 
     def test_validate_ai_output_accepts_numeric_category_with_real_evidence_refs(self):
         # Positive case: numeric category with real evidence_refs remains valid
@@ -497,7 +497,7 @@ class AIContractsTests(unittest.TestCase):
             "recommendations": [],
         })
         valid_result = AISummaryResult(
-            schema_version="ai-summary-v1",
+            schema_version="ai-report-v2",
             executive_summary="Summary",
             strengths=[
                 GroundedStatement(text="Security is well-configured.", evidence_refs=["sec:headers"]),

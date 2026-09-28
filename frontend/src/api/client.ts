@@ -27,15 +27,23 @@ export type ProfileSummary = components['schemas']['ProfileSummaryDTO'];
 export type ShareInfo = components['schemas']['ShareInfo'];
 export type IntegrityResponse = components['schemas']['IntegrityResponse'];
 export type AISummaryMode = 'flash' | 'lite' | 'pro';
+export type AISummaryDetail = 'brief' | 'detailed' | 'expert';
+export interface GroundedStatement { text: string; evidence_refs: string[] }
 export interface AISummaryResult {
-  schema_version: 'ai-summary-v1'; executive_summary: string;
-  strengths: Array<{ text: string; evidence_refs: string[] }>;
-  risks: Array<{ text: string; evidence_refs: string[] }>;
-  actions: Array<{ text: string; recommendation_ids: string[]; evidence_refs: string[] }>;
-  limitations: Array<{ text: string; evidence_refs: string[] }>;
+  schema_version: 'ai-report-v2'; executive_summary: string;
+  category_analysis: Array<{ category: string; score: number | null; availability: string;
+    assessment: string; positive_findings: string[]; problems: string[];
+    evidence_refs: string[] }>;
+  strengths: GroundedStatement[];
+  risks: GroundedStatement[];
+  actions: Array<{ id: string; title: string; priority: number; why: string; action: string;
+    implementation_steps: string[]; expected_result: string;
+    recommendation_ids: string[]; evidence_refs: string[] }>;
+  roadmap: { immediate: string[]; short_term: string[]; later: string[] };
+  limitations: GroundedStatement[];
 }
 export interface AISummaryResponse {
-  provider: 'yandex-ai-studio'; mode: AISummaryMode; model_name: string;
+  provider: 'yandex-ai-studio'; mode: AISummaryMode; detail: AISummaryDetail; model_name: string;
   grounding_validated: true; cached: boolean; summary: AISummaryResult;
 }
 
@@ -139,9 +147,9 @@ export const api = {
     request<AnalysisPage>(`/repositories/${encodeURIComponent(repositoryId)}/analyses?limit=${limit}&offset=${offset}`),
   analysis: (id: string) =>
     request<Analysis>(`/analyses/${encodeURIComponent(id)}`),
-  aiSummary: (id: string, model: AISummaryMode) =>
+  aiSummary: (id: string, model: AISummaryMode, detail: AISummaryDetail = 'brief') =>
     request<AISummaryResponse>(`/analyses/${encodeURIComponent(id)}/ai-summary`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model, detail }),
     }),
   publicity: (repositoryId: string) =>
     request<ShareInfo>(`/publicity/repositories/${encodeURIComponent(repositoryId)}`),

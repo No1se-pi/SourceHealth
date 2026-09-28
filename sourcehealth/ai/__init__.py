@@ -6,8 +6,10 @@ from .contracts import (
     AISummaryResult,
     GroundedAction,
     GroundedCategory,
+    GroundedCategoryAnalysis,
     GroundedFact,
     GroundedRecommendation,
+    GroundedRoadmap,
     GroundedStatement,
 )
 from .provider import AISummaryProvider, DisabledAIProvider, build_future_prompt, validate_ai_output
@@ -19,8 +21,10 @@ __all__ = [
     "DisabledAIProvider",
     "GroundedAction",
     "GroundedCategory",
+    "GroundedCategoryAnalysis",
     "GroundedFact",
     "GroundedRecommendation",
+    "GroundedRoadmap",
     "GroundedStatement",
     "build_ai_context",
     "build_future_prompt",

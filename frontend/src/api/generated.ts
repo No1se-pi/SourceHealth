@@ -416,6 +416,12 @@ export interface components {
              * @enum {string}
              */
             model: "flash" | "lite" | "pro";
+            /**
+             * Detail
+             * @default brief
+             * @enum {string}
+             */
+            detail: "brief" | "detailed" | "expert";
         };
         /** AISummaryResponse */
         AISummaryResponse: {
@@ -430,6 +436,11 @@ export interface components {
              * @enum {string}
              */
             mode: "flash" | "lite" | "pro";
+            /**
+             * Detail
+             * @enum {string}
+             */
+            detail: "brief" | "detailed" | "expert";
             /** Model Name */
             model_name: string;
             /**
@@ -446,18 +457,21 @@ export interface components {
         AISummaryResult: {
             /**
              * Schema Version
-             * @default ai-summary-v1
+             * @default ai-report-v2
              * @constant
              */
-            schema_version: "ai-summary-v1";
+            schema_version: "ai-report-v2";
             /** Executive Summary */
             executive_summary: string;
+            /** Category Analysis */
+            category_analysis?: components["schemas"]["GroundedCategoryAnalysis"][];
             /** Strengths */
             strengths?: components["schemas"]["GroundedStatement"][];
             /** Risks */
             risks?: components["schemas"]["GroundedStatement"][];
             /** Actions */
             actions?: components["schemas"]["GroundedAction"][];
+            roadmap?: components["schemas"]["GroundedRoadmap"];
             /** Limitations */
             limitations?: components["schemas"]["GroundedStatement"][];
         };
@@ -832,12 +846,50 @@ export interface components {
         };
         /** GroundedAction */
         GroundedAction: {
-            /** Text */
-            text: string;
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Priority */
+            priority: number;
+            /** Why */
+            why: string;
+            /** Action */
+            action: string;
+            /** Implementation Steps */
+            implementation_steps?: string[];
+            /** Expected Result */
+            expected_result: string;
             /** Recommendation Ids */
             recommendation_ids?: string[];
             /** Evidence Refs */
             evidence_refs?: string[];
+        };
+        /** GroundedCategoryAnalysis */
+        GroundedCategoryAnalysis: {
+            /** Category */
+            category: string;
+            /** Score */
+            score?: number | null;
+            /** Availability */
+            availability: string;
+            /** Assessment */
+            assessment: string;
+            /** Positive Findings */
+            positive_findings?: string[];
+            /** Problems */
+            problems?: string[];
+            /** Evidence Refs */
+            evidence_refs?: string[];
+        };
+        /** GroundedRoadmap */
+        GroundedRoadmap: {
+            /** Immediate */
+            immediate?: string[];
+            /** Short Term */
+            short_term?: string[];
+            /** Later */
+            later?: string[];
         };
         /** GroundedStatement */
         GroundedStatement: {

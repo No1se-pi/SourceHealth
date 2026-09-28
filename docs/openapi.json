@@ -3969,6 +3969,16 @@
               "pro"
             ],
             "title": "Model"
+          },
+          "detail": {
+            "type": "string",
+            "enum": [
+              "brief",
+              "detailed",
+              "expert"
+            ],
+            "title": "Detail",
+            "default": "brief"
           }
         },
         "additionalProperties": false,
@@ -3995,6 +4005,15 @@
             ],
             "title": "Mode"
           },
+          "detail": {
+            "type": "string",
+            "enum": [
+              "brief",
+              "detailed",
+              "expert"
+            ],
+            "title": "Detail"
+          },
           "model_name": {
             "type": "string",
             "title": "Model Name"
@@ -4016,6 +4035,7 @@
         "type": "object",
         "required": [
           "mode",
+          "detail",
           "model_name",
           "cached",
           "summary"
@@ -4026,21 +4046,29 @@
         "properties": {
           "schema_version": {
             "type": "string",
-            "const": "ai-summary-v1",
+            "const": "ai-report-v2",
             "title": "Schema Version",
-            "default": "ai-summary-v1"
+            "default": "ai-report-v2"
           },
           "executive_summary": {
             "type": "string",
-            "maxLength": 1000,
+            "maxLength": 4000,
             "title": "Executive Summary"
+          },
+          "category_analysis": {
+            "items": {
+              "$ref": "#/components/schemas/GroundedCategoryAnalysis"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Category Analysis"
           },
           "strengths": {
             "items": {
               "$ref": "#/components/schemas/GroundedStatement"
             },
             "type": "array",
-            "maxItems": 5,
+            "maxItems": 12,
             "title": "Strengths"
           },
           "risks": {
@@ -4048,7 +4076,7 @@
               "$ref": "#/components/schemas/GroundedStatement"
             },
             "type": "array",
-            "maxItems": 5,
+            "maxItems": 12,
             "title": "Risks"
           },
           "actions": {
@@ -4056,15 +4084,18 @@
               "$ref": "#/components/schemas/GroundedAction"
             },
             "type": "array",
-            "maxItems": 5,
+            "maxItems": 15,
             "title": "Actions"
+          },
+          "roadmap": {
+            "$ref": "#/components/schemas/GroundedRoadmap"
           },
           "limitations": {
             "items": {
               "$ref": "#/components/schemas/GroundedStatement"
             },
             "type": "array",
-            "maxItems": 5,
+            "maxItems": 10,
             "title": "Limitations"
           }
         },
@@ -5216,16 +5247,52 @@
       },
       "GroundedAction": {
         "properties": {
-          "text": {
+          "id": {
             "type": "string",
-            "maxLength": 500,
-            "title": "Text"
+            "maxLength": 20,
+            "pattern": "^action-[1-9][0-9]*$",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Title"
+          },
+          "priority": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Priority"
+          },
+          "why": {
+            "type": "string",
+            "maxLength": 1500,
+            "title": "Why"
+          },
+          "action": {
+            "type": "string",
+            "maxLength": 1500,
+            "title": "Action"
+          },
+          "implementation_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Implementation Steps"
+          },
+          "expected_result": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Expected Result"
           },
           "recommendation_ids": {
             "items": {
               "type": "string"
             },
             "type": "array",
+            "maxItems": 20,
             "title": "Recommendation Ids"
           },
           "evidence_refs": {
@@ -5233,21 +5300,120 @@
               "type": "string"
             },
             "type": "array",
+            "maxItems": 20,
             "title": "Evidence Refs"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "text"
+          "id",
+          "title",
+          "priority",
+          "why",
+          "action",
+          "expected_result"
         ],
         "title": "GroundedAction"
+      },
+      "GroundedCategoryAnalysis": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "availability": {
+            "type": "string",
+            "title": "Availability"
+          },
+          "assessment": {
+            "type": "string",
+            "maxLength": 3000,
+            "title": "Assessment"
+          },
+          "positive_findings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Positive Findings"
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Problems"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Evidence Refs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "category",
+          "availability",
+          "assessment"
+        ],
+        "title": "GroundedCategoryAnalysis"
+      },
+      "GroundedRoadmap": {
+        "properties": {
+          "immediate": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 15,
+            "title": "Immediate"
+          },
+          "short_term": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 15,
+            "title": "Short Term"
+          },
+          "later": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 15,
+            "title": "Later"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "GroundedRoadmap"
       },
       "GroundedStatement": {
         "properties": {
           "text": {
             "type": "string",
-            "maxLength": 500,
+            "maxLength": 1500,
             "title": "Text"
           },
           "evidence_refs": {
@@ -5255,6 +5421,7 @@
               "type": "string"
             },
             "type": "array",
+            "maxItems": 20,
             "title": "Evidence Refs"
           }
         },
