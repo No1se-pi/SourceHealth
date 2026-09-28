@@ -12,6 +12,10 @@ from sourcehealth.storage.repositories import RepositoryIdentityConflict, upsert
 
 LOG = logging.getLogger(__name__)
 CATALOG_SYNC_LOCK_KEY = 0x534F555243454843
+# Public catalog rows can contain substantially more embedded metadata than
+# ordinary collector responses. Keep this bulk-only allowance finite without
+# weakening SourceCraftClient's 4 MiB default for every other endpoint.
+CATALOG_MAX_RESPONSE_BYTES = 64 * 1024 * 1024
 
 
 class CatalogSync:
@@ -52,7 +56,8 @@ class CatalogSync:
         seen_tokens = {token} if token else set()
         pat = self.settings.sourcecraft_pat.get_secret_value() if self.settings.sourcecraft_pat else None
         with self.client_factory(pat=pat, deadline_seconds=45,
-                                 max_pages=self.settings.catalog_sync_max_pages) as client:
+                                 max_pages=self.settings.catalog_sync_max_pages,
+                                 max_response_bytes=CATALOG_MAX_RESPONSE_BYTES) as client:
             for _ in range(self.settings.catalog_sync_max_pages):
                 params = {"page_size": self.settings.catalog_sync_page_size, "sort_by": "created_at"}
                 if token:
@@ -197,7 +202,12 @@ class CatalogBootstrap:
         pat = self.settings.sourcecraft_pat.get_secret_value() if self.settings.sourcecraft_pat else None
 
         effective_page_size = min(100, max(1, page_size))
-        with self.client_factory(pat=pat, deadline_seconds=45, max_pages=max_pages) as client:
+        with self.client_factory(
+            pat=pat,
+            deadline_seconds=45,
+            max_pages=max_pages,
+            max_response_bytes=CATALOG_MAX_RESPONSE_BYTES,
+        ) as client:
             while processed_pages < max_pages:
                 elapsed = time.monotonic() - start_time
                 if elapsed >= time_budget_seconds:

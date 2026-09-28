@@ -81,6 +81,12 @@ class SourceCraftClient:
                             response.status_code, "source_request_failed")
                         raise SourceCraftError(code)
                     else:
+                        try:
+                            declared_size = int(response.headers.get("Content-Length", ""))
+                        except ValueError:
+                            declared_size = None
+                        if declared_size is not None and declared_size > self.max_response_bytes:
+                            raise SourceCraftError("response_limit")
                         content = bytearray()
                         for chunk in response.iter_bytes(chunk_size=65536):
                             if self._deadline is not None and time.monotonic() >= self._deadline:

@@ -29,12 +29,15 @@ Covers:
 26. Default browse stats and query consistency
 """
 
+import json
 import unittest
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+
+import httpx
 
 from sourcehealth.catalog.query import (
     CatalogFilters,
@@ -45,6 +48,7 @@ from sourcehealth.catalog.query import (
     get_catalog_stats,
 )
 from sourcehealth.catalog.sync import (
+    CATALOG_MAX_RESPONSE_BYTES,
     CATALOG_SYNC_LOCK_KEY,
     CatalogBootstrap,
     CatalogSync,
@@ -55,10 +59,81 @@ from sourcehealth.catalog.topics import (
     classify_topics,
     reclassify_catalog_topics,
 )
+from sourcehealth.integrations.sourcecraft.client import SourceCraftClient, SourceCraftError
 from sourcehealth.storage.repositories import upsert_sourcecraft_repository
 
 
 class CatalogBootstrapV3RegressionTests(unittest.TestCase):
+    def test_catalog_uses_bulk_only_bounded_response_limit(self):
+        self.assertEqual(CATALOG_MAX_RESPONSE_BYTES, 64 * 1024 * 1024)
+        self.assertGreater(CATALOG_MAX_RESPONSE_BYTES, 8_581_717)
+
+        captured = []
+
+        class FactoryClient:
+            def __init__(self, **kwargs):
+                captured.append(kwargs)
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def get(self, path, params=None):
+                return {"repositories": [], "next_page_token": None}
+
+        state = SimpleNamespace(page_token=None, cycle_started_at=None,
+                                updated_at=None, last_completed_at=None)
+
+        class FakeDB:
+            def get(self, model, key, **kwargs): return state
+            def add(self, row): pass
+
+        class FakeSessions:
+            @contextmanager
+            def begin(self): yield FakeDB()
+
+        settings = SimpleNamespace(
+            sourcecraft_pat=None,
+            catalog_sync_max_pages=1,
+            catalog_sync_page_size=1,
+            catalog_cycle_interval_seconds=3600,
+        )
+        CatalogSync(FakeSessions(), settings, client_factory=FactoryClient)._run_locked()
+        CatalogBootstrap(FakeSessions(), settings, client_factory=FactoryClient)._run_locked(
+            max_pages=1, time_budget_seconds=10, page_size=1
+        )
+        self.assertEqual(
+            [kwargs["max_response_bytes"] for kwargs in captured],
+            [CATALOG_MAX_RESPONSE_BYTES, CATALOG_MAX_RESPONSE_BYTES],
+        )
+
+    def test_generic_default_rejects_response_over_four_mib(self):
+        payload = json.dumps({"payload": "x" * (4 * 1024 * 1024)}).encode()
+        with SourceCraftClient(transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, content=payload)
+        )) as client:
+            self.assertEqual(client.max_response_bytes, 4_194_304)
+            with self.assertRaisesRegex(SourceCraftError, "^response_limit$"):
+                client.get("/user")
+
+    def test_catalog_large_response_and_boundary(self):
+        payload = json.dumps({"payload": "x" * (5 * 1024 * 1024)}).encode()
+        with SourceCraftClient(
+            max_response_bytes=CATALOG_MAX_RESPONSE_BYTES,
+            transport=httpx.MockTransport(lambda request: httpx.Response(200, content=payload)),
+        ) as client:
+            self.assertEqual(len(client.get("/repos")["payload"]), 5 * 1024 * 1024)
+
+        # Content-Length proves the 64 MiB catalog allowance is still bounded
+        # without allocating an oversized fixture in the test process.
+        with SourceCraftClient(
+            max_response_bytes=CATALOG_MAX_RESPONSE_BYTES,
+            transport=httpx.MockTransport(lambda request: httpx.Response(
+                200,
+                headers={"Content-Length": str(CATALOG_MAX_RESPONSE_BYTES + 1)},
+                content=b"{}",
+            )),
+        ) as client:
+            with self.assertRaisesRegex(SourceCraftError, "^response_limit$"):
+                client.get("/repos")
+
     # 1. Desktop renders no mobile duplicate
     def test_01_desktop_renders_no_mobile_duplicate(self):
         page_src = (Path(__file__).parents[1] / "frontend/src/pages/LeaderboardPage.tsx").read_text(encoding="utf-8")
