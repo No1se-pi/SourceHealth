@@ -27,9 +27,6 @@ def upsert_sourcecraft_repository(db, values: dict) -> Repository:
             raise RepositoryIdentityConflict
         row = collision
     if row is None:
-        if "next_analysis_at" not in values:
-            from datetime import UTC, datetime, timedelta
-            values["next_analysis_at"] = datetime.now(UTC) + timedelta(days=365)
         row = Repository(**values)
         db.add(row)
     else:

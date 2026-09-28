@@ -155,27 +155,28 @@ def reclassify_catalog_topics(
 
     scanned = 0
     updated = 0
+    last_id = None
 
-    with sessions.begin() as db:
-        query = select(Repository).where(Repository.visibility == "public")
-        if not force:
-            query = query.where(
-                or_(
-                    Repository.topic_classifier_version != TOPIC_CLASSIFIER_VERSION,
-                    Repository.topic_classifier_version.is_(None),
-                    Repository.topics == [],
+    while True:
+        with sessions.begin() as db:
+            query = select(Repository).where(Repository.visibility == "public")
+            if not force:
+                query = query.where(
+                    or_(
+                        Repository.topic_classifier_version != TOPIC_CLASSIFIER_VERSION,
+                        Repository.topic_classifier_version.is_(None),
+                        Repository.topics == [],
+                    )
                 )
-            )
-        query = query.order_by(Repository.id.asc())
-
-        offset = 0
-        while True:
-            batch_query = query.offset(offset).limit(batch_size)
-            batch = list(db.scalars(batch_query).all())
+            if last_id is not None:
+                query = query.where(Repository.id > last_id)
+            query = query.order_by(Repository.id.asc()).limit(batch_size)
+            batch = list(db.scalars(query).all())
             if not batch:
                 break
 
             for repo in batch:
+                last_id = repo.id
                 scanned += 1
                 new_topics = classify_topics(
                     repo.repository_slug,
@@ -188,9 +189,11 @@ def reclassify_catalog_topics(
                     repo.topic_classifier_version = TOPIC_CLASSIFIER_VERSION
                     updated += 1
 
-            offset += len(batch)
-            if limit and scanned >= limit:
-                break
+                if limit and scanned >= limit:
+                    break
+
+        if limit and scanned >= limit:
+            break
 
     return {
         "scanned": scanned,

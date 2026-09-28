@@ -487,7 +487,7 @@ class PersistenceTests(unittest.TestCase):
                 db.get(Repository, preview_id).latest_analysis_id = run.id
                 db.commit()
             with TestClient(create_app(self.settings, sessions=self.sessions, redis=self.redis)) as client:
-                items = client.get("/api/v1/repositories", params={"limit": 100, "health_status": "all"}).json()["items"]
+                items = client.get("/api/v1/repositories", params={"limit": 100}).json()["items"]
             positions = {item["id"]: index for index, item in enumerate(items)}
             self.assertLess(positions[str(self.repository_id)], positions[str(preview_id)])
             preview = next(item for item in items if item["id"] == str(preview_id))

@@ -111,7 +111,6 @@ class CatalogSync:
             "repository_slug": metadata.repository_slug,
             "canonical_url": metadata.canonical_url,
             "visibility": "public",
-            "next_analysis_at": datetime.now(UTC) + timedelta(days=365),
             "description": metadata.description,
             "logo_url": metadata.logo_url,
             "origin": metadata.origin or "unknown",
@@ -144,6 +143,35 @@ class CatalogBootstrap:
         self.client_factory = client_factory
 
     def run(
+        self,
+        *,
+        max_pages: int = 50,
+        time_budget_seconds: float = 300.0,
+        page_size: int = 100,
+    ) -> dict:
+        """Run metadata bootstrap under CATALOG_SYNC_LOCK_KEY mutual exclusion."""
+        if not callable(self.sessions):
+            return self._run_locked(
+                max_pages=max_pages,
+                time_budget_seconds=time_budget_seconds,
+                page_size=page_size,
+            )
+        with self.sessions() as guard:
+            acquired = guard.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": CATALOG_SYNC_LOCK_KEY})
+            guard.commit()
+            if not acquired:
+                return {"skipped": True, "reason": "catalog_sync_already_running"}
+            try:
+                return self._run_locked(
+                    max_pages=max_pages,
+                    time_budget_seconds=time_budget_seconds,
+                    page_size=page_size,
+                )
+            finally:
+                guard.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": CATALOG_SYNC_LOCK_KEY})
+                guard.commit()
+
+    def _run_locked(
         self,
         *,
         max_pages: int = 50,

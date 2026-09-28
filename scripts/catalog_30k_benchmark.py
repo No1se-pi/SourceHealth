@@ -181,13 +181,10 @@ class CatalogBenchmarkEngine:
         if health_max is not None:
             filtered = [r for r in filtered if r["health_score"] is not None and r["health_score"] <= health_max]
 
-        if health_status is None and not q:
+        if health_status == "available":
             filtered = [r for r in filtered if r["health_score"] is not None]
-        elif health_status:
-            if health_status == "available":
-                filtered = [r for r in filtered if r["health_score"] is not None]
-            elif health_status == "no_data":
-                filtered = [r for r in filtered if r["health_score"] is None]
+        elif health_status == "no_data":
+            filtered = [r for r in filtered if r["health_score"] is None]
 
         if security_min is not None:
             filtered = [

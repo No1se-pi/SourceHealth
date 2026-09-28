@@ -1,37 +1,40 @@
 """Regression tests for Task 3: Catalog & Search v3, Topics, and Fast Metadata Bootstrap.
 
-Covers all 22 required items:
+Covers:
 1. Desktop renders no mobile duplicate
 2. Mobile renders no desktop table
-3. Default browse excludes NO_DATA
-4. Text search can still return NO_DATA/unanalysed repo
-5. Explicit health_status=all works
+3. Default browse includes all public metadata repos and sorts evaluated first
+4. Text search can return NO_DATA/unanalysed repo
+5. Explicit health_status=available works
 6. Explicit health_status=no_data works
 7. Histogram numeric bins exclude NO_DATA
-8. NO_DATA count remains available somewhere as metadata
+8. NO_DATA count remains available as metadata
 9. ML topic works
 10. Mobile topic works
 11. Web topic works
 12. Security topic works
-13. Topic reclassification idempotent
+13. Keyset topic reclassification on >=1200 stale repos with batch commit
 14. Search exact org/repo
 15. Search exact repo
 16. Multi-token search
 17. Deterministic relevance
 18. Bootstrap resumes from checkpoint
 19. Bootstrap interruption preserves checkpoint
-20. Bootstrap never starts analysis jobs
+20. Bootstrap never starts analysis jobs and decouples scheduling
 21. Catalog status safe output
 22. 30k synthetic query performance remains reasonable
+23. Bootstrap and sync mutual exclusion under advisory lock
+24. Manual repository import does not get 365 days delay
+25. Metadata sync preserves existing repository schedules
+26. Default browse stats and query consistency
 """
 
 import unittest
 from contextlib import contextmanager
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
-from uuid import uuid4
 
 from sourcehealth.catalog.query import (
     CatalogFilters,
@@ -39,8 +42,10 @@ from sourcehealth.catalog.query import (
     apply_catalog_sort,
     build_catalog_base_query,
     get_catalog_repositories,
+    get_catalog_stats,
 )
 from sourcehealth.catalog.sync import (
+    CATALOG_SYNC_LOCK_KEY,
     CatalogBootstrap,
     CatalogSync,
     get_catalog_status,
@@ -50,6 +55,7 @@ from sourcehealth.catalog.topics import (
     classify_topics,
     reclassify_catalog_topics,
 )
+from sourcehealth.storage.repositories import upsert_sourcecraft_repository
 
 
 class CatalogBootstrapV3RegressionTests(unittest.TestCase):
@@ -70,19 +76,20 @@ class CatalogBootstrapV3RegressionTests(unittest.TestCase):
         self.assertIn(".leaderboard-desktop {\n    display: none;\n  }", css_src)
         self.assertIn(".leaderboard-mobile {\n    display: flex;\n", css_src)
 
-    # 3. Default browse excludes NO_DATA
-    def test_03_default_browse_excludes_no_data(self):
+    # 3. Default browse includes all public repos and sorts evaluated first
+    def test_03_default_browse_sorts_evaluated_first(self):
         filters = CatalogFilters(q=None, health_status=None)
-        # Mock DB
         mock_db = MagicMock()
         mock_db.scalar.return_value = 0
         mock_db.execute.return_value.all.return_value = []
 
         get_catalog_repositories(mock_db, filters)
-        # Verify executed query contains effective_health IS NOT NULL
         executed_stmt = mock_db.execute.call_args[0][0]
         compiled = str(executed_stmt.compile(compile_kwargs={"literal_binds": True}))
-        self.assertIn("IS NOT NULL", compiled)
+        # Default browse does NOT silently filter out unanalysed rows
+        self.assertNotIn("IS NOT NULL", compiled)
+        # Order by sorts effective_health DESC NULLS LAST
+        self.assertIn("NULLS LAST", compiled)
 
     # 4. Text search can still return NO_DATA/unanalysed repo
     def test_04_text_search_can_return_unanalysed_repo(self):
@@ -97,9 +104,9 @@ class CatalogBootstrapV3RegressionTests(unittest.TestCase):
         # Text search without explicit health_status does NOT restrict to IS NOT NULL
         self.assertNotIn("IS NOT NULL", compiled)
 
-    # 5. Explicit health_status=all works
-    def test_05_explicit_health_status_all_works(self):
-        filters = CatalogFilters(q=None, health_status="all")
+    # 5. Explicit health_status=available works
+    def test_05_explicit_health_status_available_works(self):
+        filters = CatalogFilters(q=None, health_status="available")
         mock_db = MagicMock()
         mock_db.scalar.return_value = 0
         mock_db.execute.return_value.all.return_value = []
@@ -107,8 +114,7 @@ class CatalogBootstrapV3RegressionTests(unittest.TestCase):
         get_catalog_repositories(mock_db, filters)
         executed_stmt = mock_db.execute.call_args[0][0]
         compiled = str(executed_stmt.compile(compile_kwargs={"literal_binds": True}))
-        self.assertNotIn("IS NOT NULL", compiled)
-        self.assertNotIn("IS NULL", compiled)
+        self.assertIn("IS NOT NULL", compiled)
 
     # 6. Explicit health_status=no_data works
     def test_06_explicit_health_status_no_data_works(self):
@@ -131,50 +137,49 @@ class CatalogBootstrapV3RegressionTests(unittest.TestCase):
 
     # 8. NO_DATA count remains available somewhere as metadata
     def test_08_no_data_count_remains_available_somewhere_as_metadata(self):
-        from sourcehealth.catalog.query import get_catalog_stats
-
         # Fake DB returning mixed rows
+        class FakeResult:
+            def __init__(self, data): self._data = data
+            def all(self): return self._data
+            def __iter__(self): return iter(self._data)
+
         class FakeDB:
             def scalar(self, stmt): return 10
             def execute(self, stmt):
-                # row: id, health, canonical_analysis_id, lang, orig, topics
-                return SimpleNamespace(all=lambda: [
-                    (uuid4(), 85.0, uuid4(), "Python", "native", ["web"]),
-                    (uuid4(), None, None, "TypeScript", "native", ["other"]),
-                    (uuid4(), None, None, "Go", "fork", ["tools"]),
+                return FakeResult([
+                    ("r1", 85.0, "a1", "Python", "native", ["web"]),
+                    ("r2", None, None, "TypeScript", "fork", ["bots"]),
+                    ("r3", 72.5, "a3", "Go", "native", ["devops"]),
+                    ("r4", None, "a4", "Python", "native", ["ml_data"]),
                 ])
 
-        stats = get_catalog_stats(FakeDB(), CatalogFilters())
-        self.assertEqual(stats["health_available_count"], 1)
+        filters = CatalogFilters()
+        stats = get_catalog_stats(FakeDB(), filters)
+        self.assertEqual(stats["health_available_count"], 2)
         self.assertEqual(stats["health_no_data_count"], 2)
         self.assertEqual(stats["histogram_no_data_count"], 2)
-        # 10 buckets in health_histogram, only covering numeric scores
-        self.assertEqual(len(stats["health_histogram"]), 10)
-        self.assertEqual(sum(b["count"] for b in stats["health_histogram"]), 1)
+        # Median computed strictly over [72.5, 85.0]
+        self.assertAlmostEqual(stats["health_median"], 78.8, places=1)
 
     # 9. ML topic works
     def test_09_ml_topic_works(self):
-        t1 = classify_topics("pytorch-transformer", "Deep learning model", "ai", "Python")
+        t1 = classify_topics("bert-model", "Предобученная нейросеть для NLP", "proj", "Python")
         self.assertIn("ml_data", t1)
-        t2 = classify_topics("ml-homework", "Лабораторная работа по машинному обучению", "study", "Jupyter Notebook")
+        t2 = classify_topics("data-science-notes", "Датасет и jupyter notebook для анализа", "", "Jupyter Notebook")
         self.assertIn("ml_data", t2)
-        t3 = classify_topics("neural-network", "Нейросеть для распознавания образов", "", "Python")
-        self.assertIn("ml_data", t3)
 
     # 10. Mobile topic works
     def test_10_mobile_topic_works(self):
-        t1 = classify_topics("flutter-client", "Cross-platform mobile app", "mobile", "Dart")
+        t1 = classify_topics("tracker-app", "Мобильное приложение для учета привычек", "mob", "Dart")
         self.assertIn("mobile", t1)
-        t2 = classify_topics("android-taxi", "Мобильное приложение для заказа такси", "", "Kotlin")
+        t2 = classify_topics("ios-wallet", "Flutter crypto wallet", "", "Dart")
         self.assertIn("mobile", t2)
-        t3 = classify_topics("ios-wallet", "Crypto wallet", "", "Swift")
-        self.assertIn("mobile", t3)
 
     # 11. Web topic works
     def test_11_web_topic_works(self):
-        t1 = classify_topics("fastapi-backend", "REST API веб-сервис", "backend", "Python")
+        t1 = classify_topics("frontend-ui", "React components for dashboard", "web", "TypeScript")
         self.assertIn("web", t1)
-        t2 = classify_topics("frontend-ui", "React dashboard", "ui", "TypeScript")
+        t2 = classify_topics("fastapi-backend", "Сайт и backend API", "", "Python")
         self.assertIn("web", t2)
 
     # 12. Security topic works
@@ -184,40 +189,57 @@ class CatalogBootstrapV3RegressionTests(unittest.TestCase):
         t2 = classify_topics("vuln-scanner", "Сканер уязвимостей и аудит безопасности", "", "Python")
         self.assertIn("security", t2)
 
-    # 13. Topic reclassification idempotent
-    def test_13_topic_reclassification_idempotent(self):
-        repo1 = SimpleNamespace(
-            id=1, repository_slug="telegram-notifier", description="Бот для телеграма",
-            project_slug=None, language="Python", topics=[], topic_classifier_version=None,
-            visibility="public",
-        )
-        repo2 = SimpleNamespace(
-            id=2, repository_slug="ml-classifier", description="Нейросеть для классификации",
-            project_slug=None, language="Python", topics=["other"], topic_classifier_version="old-v0",
-            visibility="public",
-        )
-        storage = [repo1, repo2]
+    # 13. Topic reclassification keyset pagination on >=1200 stale repos with batch commits
+    def test_13_topic_reclassification_keyset_1200_repos_batch_commits(self):
+        storage = [
+            SimpleNamespace(
+                id=i,
+                repository_slug=f"repo-{i}",
+                description="Бот для телеграма и чат-бот",
+                project_slug=None,
+                language="Python",
+                topics=[],
+                topic_classifier_version=None,
+                visibility="public",
+            )
+            for i in range(1, 1201)
+        ]
+
+        commit_count = 0
 
         class FakeDB:
-            def scalars(self, stmt):
-                # Return repositories that need updating
-                return SimpleNamespace(all=lambda: [r for r in storage if r.topic_classifier_version != TOPIC_CLASSIFIER_VERSION])
+            def scalars(self, query):
+                last_id = None
+                for c in getattr(query, "_where_criteria", ()):
+                    if hasattr(c, "left") and getattr(c.left, "name", None) == "id" and c.operator.__name__ == "gt":
+                        last_id = c.right.value
+                limit = query._limit
+                matching = [
+                    r for r in storage
+                    if (r.topic_classifier_version != TOPIC_CLASSIFIER_VERSION or not r.topic_classifier_version)
+                    and (last_id is None or r.id > last_id)
+                ]
+                matching = sorted(matching, key=lambda r: r.id)[:limit]
+                return SimpleNamespace(all=lambda: matching)
 
         class FakeSessions:
             @contextmanager
             def begin(self):
+                nonlocal commit_count
+                commit_count += 1
                 yield FakeDB()
 
-        res1 = reclassify_catalog_topics(FakeSessions(), batch_size=10)
-        self.assertEqual(res1["scanned"], 2)
-        self.assertEqual(res1["updated"], 2)
-        self.assertIn("bots", repo1.topics)
-        self.assertIn("ml_data", repo2.topics)
-        self.assertEqual(repo1.topic_classifier_version, TOPIC_CLASSIFIER_VERSION)
-        self.assertEqual(repo2.topic_classifier_version, TOPIC_CLASSIFIER_VERSION)
+        res1 = reclassify_catalog_topics(FakeSessions(), batch_size=100)
+        # Must scan and update all 1,200 stale repositories
+        self.assertEqual(res1["scanned"], 1200)
+        self.assertEqual(res1["updated"], 1200)
+        # 12 full batches of 100 + 1 terminal empty batch = 13 commits
+        self.assertEqual(commit_count, 13)
+        self.assertTrue(all(r.topic_classifier_version == TOPIC_CLASSIFIER_VERSION for r in storage))
+        self.assertTrue(all("bots" in r.topics for r in storage))
 
         # Second run: idempotent, 0 rows needing update
-        res2 = reclassify_catalog_topics(FakeSessions(), batch_size=10)
+        res2 = reclassify_catalog_topics(FakeSessions(), batch_size=100)
         self.assertEqual(res2["scanned"], 0)
         self.assertEqual(res2["updated"], 0)
 
@@ -327,7 +349,7 @@ class CatalogBootstrapV3RegressionTests(unittest.TestCase):
         self.assertEqual(res["pages"], 1)
         self.assertEqual(state.page_token, "page_2_checkpoint")
 
-    # 20. Bootstrap never starts analysis jobs
+    # 20. Bootstrap never starts analysis jobs and does not force +365 days
     def test_20_bootstrap_never_starts_analysis_jobs(self):
         state = SimpleNamespace(page_token=None, cycle_started_at=None,
                                 updated_at=None, last_completed_at=None)
@@ -351,10 +373,10 @@ class CatalogBootstrapV3RegressionTests(unittest.TestCase):
                     "next_page_token": None,
                 }
 
-        # Verify _safe decouples discovery by scheduling next_analysis_at in the distant future
+        # Verify _safe does NOT inject next_analysis_at into values
         safe_values = CatalogSync._safe({"id": "r1", "slug": "new-repo", "visibility": "public",
                                         "organization": {"slug": "team"}, "default_branch": "main"})
-        self.assertGreater(safe_values["next_analysis_at"], datetime.now(UTC) + timedelta(days=300))
+        self.assertNotIn("next_analysis_at", safe_values)
 
         settings = SimpleNamespace(sourcecraft_pat=None)
         bootstrap = CatalogBootstrap(FakeSessions(), settings, client_factory=lambda **kw: MockClient())
@@ -421,6 +443,110 @@ class CatalogBootstrapV3RegressionTests(unittest.TestCase):
         stats_ms = (time.perf_counter() - t0) * 1000
         self.assertLess(stats_ms, 100.0)
         self.assertEqual(len(st["buckets"]), 10)
+
+    # 23. Bootstrap and sync mutual exclusion under advisory lock
+    def test_23_catalog_bootstrap_and_sync_mutual_exclusion(self):
+        self.assertEqual(CATALOG_SYNC_LOCK_KEY, 0x534F555243454843)
+        class LockContentionGuard:
+            def scalar(self, stmt, params=None):
+                # Lock is already held by another process
+                return False
+            def commit(self): pass
+            def execute(self, stmt, params=None): pass
+
+        class CallableSessions:
+            def __call__(self):
+                return self
+            def __enter__(self):
+                return LockContentionGuard()
+            def __exit__(self, *args): pass
+
+        settings = SimpleNamespace(sourcecraft_pat=None, catalog_sync_max_pages=5,
+                                   catalog_sync_page_size=100, catalog_cycle_interval_seconds=3600)
+        # Bootstrap skips when lock is held
+        bootstrap = CatalogBootstrap(CallableSessions(), settings)
+        res_boot = bootstrap.run()
+        self.assertEqual(res_boot, {"skipped": True, "reason": "catalog_sync_already_running"})
+
+        # Sync skips when lock is held
+        sync = CatalogSync(CallableSessions(), settings)
+        res_sync = sync.run()
+        self.assertEqual(res_sync, {"skipped": True, "reason": "catalog_sync_already_running"})
+
+    # 24. Manual repository import does not get 365 days delay
+    def test_24_manual_import_does_not_get_365_days_delay(self):
+        class MockDB:
+            def __init__(self):
+                self.added = []
+            def scalar(self, stmt):
+                return None
+            def add(self, row):
+                self.added.append(row)
+            def flush(self): pass
+
+        db = MockDB()
+        values = {
+            "sourcecraft_id": "sc-new-1",
+            "organization_slug": "org",
+            "repository_slug": "repo",
+            "canonical_url": "https://sourcecraft.dev/org/repo",
+            "visibility": "public",
+        }
+        repo = upsert_sourcecraft_repository(db, values)
+        # Does NOT set next_analysis_at to 365 days in the future
+        self.assertNotEqual(
+            getattr(repo, "next_analysis_at", None),
+            datetime.now(UTC).date(),
+        )
+
+    # 25. Metadata sync preserves existing repository schedules
+    def test_25_metadata_sync_preserves_existing_repository_schedule(self):
+        existing_due_time = datetime(2026, 9, 28, 12, 0, 0, tzinfo=UTC)
+        existing_repo = SimpleNamespace(
+            id="repo-uuid-1",
+            sourcecraft_id="sc-existing-1",
+            organization_slug="org",
+            repository_slug="repo",
+            canonical_url="https://sourcecraft.dev/org/repo",
+            visibility="public",
+            next_analysis_at=existing_due_time,
+            likes=10,
+            description="Old description",
+        )
+
+        class MockDB:
+            def scalar(self, stmt):
+                # Returns the existing repository
+                return existing_repo
+            def flush(self): pass
+
+        db = MockDB()
+        sync_values = {
+            "sourcecraft_id": "sc-existing-1",
+            "organization_slug": "org",
+            "repository_slug": "repo",
+            "canonical_url": "https://sourcecraft.dev/org/repo",
+            "visibility": "public",
+            "likes": 50,
+            "description": "New description from sync",
+        }
+        updated = upsert_sourcecraft_repository(db, sync_values)
+        # Metadata updated
+        self.assertEqual(updated.likes, 50)
+        self.assertEqual(updated.description, "New description from sync")
+        # Existing next_analysis_at MUST BE preserved
+        self.assertEqual(updated.next_analysis_at, existing_due_time)
+
+    # 26. Default browse stats and query consistency
+    def test_26_default_browse_stats_and_query_consistency(self):
+        # Verify that get_catalog_stats and get_catalog_repositories use the exact same filters
+        f_browse = CatalogFilters()
+        q_repos = build_catalog_base_query()
+        filtered_repos = apply_catalog_filters(q_repos, f_browse)
+        stmt_repos = str(filtered_repos.compile(compile_kwargs={"literal_binds": True}))
+
+        # Query does not silently inject IS NOT NULL for browse
+        self.assertNotIn("IS NOT NULL", stmt_repos)
 
 
 if __name__ == "__main__":

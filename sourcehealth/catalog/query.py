@@ -329,27 +329,16 @@ def get_catalog_repositories(
     db: Session, filters: CatalogFilters
 ) -> tuple[list[tuple[Repository, AnalysisRun | None]], int]:
     """Return paginated repositories and total matching count."""
-    clean_q = clean_query_term(filters.q)
-    effective_filters = filters
-    # Default browse excludes NO_DATA:
-    # If health_status is not explicitly set:
-    # - Default browse (no query term q): default to health_status='available'.
-    # - Search (q provided): search the entire metadata catalog (health_status=None).
-    if filters.health_status is None and not clean_q:
-        import copy
-        effective_filters = copy.copy(filters)
-        effective_filters.health_status = "available"
-
     base = build_catalog_base_query()
-    filtered = apply_catalog_filters(base, effective_filters)
+    filtered = apply_catalog_filters(base, filters)
 
     # Count total matching rows
     count_query = select(func.count()).select_from(filtered.subquery())
     total = db.scalar(count_query) or 0
 
     # Apply sort, limit, offset
-    sorted_query = apply_catalog_sort(filtered, effective_filters)
-    paginated_query = sorted_query.offset(effective_filters.offset).limit(effective_filters.limit)
+    sorted_query = apply_catalog_sort(filtered, filters)
+    paginated_query = sorted_query.offset(filters.offset).limit(filters.limit)
 
     rows = list(db.execute(paginated_query).all())
     return [(repo, run) for repo, run in rows], total
@@ -408,7 +397,8 @@ def get_catalog_stats(
         Repository.topics,
     )
 
-    rows = list(db.execute(stats_select).all())
+    raw_rows = db.execute(stats_select)
+    rows = list(raw_rows.all() if hasattr(raw_rows, "all") else raw_rows)
     matched_total = len(rows)
 
     analyzed_count = 0
