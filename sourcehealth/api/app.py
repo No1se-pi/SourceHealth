@@ -24,7 +24,6 @@ from .routers import (
     badges,
     catalog,
     compare,
-    demo,
     health,
     integrity,
     profile,
@@ -114,5 +113,4 @@ def create_app(settings: Settings | None = None, *, sessions=None, redis=None) -
     app.include_router(compare.router)
     app.include_router(integrity.router)
     app.include_router(ai_summary.router)
-    app.include_router(demo.router)
     return app

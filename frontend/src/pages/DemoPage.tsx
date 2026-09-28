@@ -1,15 +1,12 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Card } from '../components/common/Card';
 import { Badge } from '../components/common/Badge';
-import { ScoreDisplay } from '../components/common/ScoreDisplay';
 import { CopyButton } from '../components/common/CopyButton';
 import { getButtonStyles } from '../components/common/Button';
 import { usePageTitle } from '../utils/usePageTitle';
-import { CATEGORY_ORDER, CATEGORY_LABELS } from '../utils/analysis';
-import { api, type DemoPreset, type DemoSimulateResponse } from '../api/client';
 
-const CATEGORY_WEIGHTS: Record<string, number> = {
+export const CATEGORY_WEIGHTS: Record<string, number> = {
   documentation: 15,
   cicd: 15,
   security: 20,
@@ -17,6 +14,24 @@ const CATEGORY_WEIGHTS: Record<string, number> = {
   issues: 15,
   code_health: 20,
 };
+
+export const CATEGORY_LABELS: Record<string, string> = {
+  documentation: 'Documentation',
+  cicd: 'CI/CD',
+  security: 'Security',
+  activity: 'Activity',
+  issues: 'Issues',
+  code_health: 'Code Health',
+};
+
+export const CATEGORY_ORDER = [
+  'documentation',
+  'cicd',
+  'security',
+  'activity',
+  'issues',
+  'code_health',
+];
 
 const CATEGORY_DESCRIPTIONS: Record<string, string> = {
   documentation: 'README, установка, запуск, сборка, тесты, лицензия и быстрый старт.',
@@ -27,9 +42,260 @@ const CATEGORY_DESCRIPTIONS: Record<string, string> = {
   code_health: 'Плотность TODO/FIXME маркеров, крупные файлы и локальный SAST.',
 };
 
+export interface DemoPreset {
+  id: string;
+  name: string;
+  description: string;
+  scores: Record<string, number | null>;
+}
+
+export const DEMO_PRESETS: DemoPreset[] = [
+  {
+    id: 'healthy',
+    name: 'Здоровый проект',
+    description: 'Все 6 категорий измерены, высокие показатели качества и безопасности.',
+    scores: {
+      documentation: 95,
+      cicd: 90,
+      security: 100,
+      activity: 85,
+      issues: 90,
+      code_health: 95,
+    },
+  },
+  {
+    id: 'no_security',
+    name: 'Нет Security данных',
+    description: 'Анализ без AppSec токена: Security=NO_DATA. Балл ренормализуется без штрафа нулём.',
+    scores: {
+      documentation: 90,
+      cicd: 85,
+      security: null,
+      activity: 80,
+      issues: 85,
+      code_health: 90,
+    },
+  },
+  {
+    id: 'broken_ci',
+    name: 'Сломанный CI',
+    description: 'Сбои в пайплайнах CI/CD снижают надежность автоматизации.',
+    scores: {
+      documentation: 85,
+      cicd: 15,
+      security: 90,
+      activity: 75,
+      issues: 80,
+      code_health: 85,
+    },
+  },
+  {
+    id: 'poor_docs',
+    name: 'Плохая документация',
+    description: 'Отсутствуют инструкции по сборке, тестированию и быстрый старт.',
+    scores: {
+      documentation: 20,
+      cicd: 85,
+      security: 95,
+      activity: 80,
+      issues: 85,
+      code_health: 90,
+    },
+  },
+  {
+    id: 'high_debt',
+    name: 'Высокий техдолг',
+    description: 'Много TODO/FIXME маркеров, замечания SAST и проблемный код.',
+    scores: {
+      documentation: 80,
+      cicd: 80,
+      security: 85,
+      activity: 75,
+      issues: 70,
+      code_health: 25,
+    },
+  },
+  {
+    id: 'low_data',
+    name: 'Мало данных (Source Soul)',
+    description: '2 категории и 30% веса: Health=null, но активен предварительный Source Soul.',
+    scores: {
+      documentation: 70,
+      cicd: 65,
+      security: null,
+      activity: null,
+      issues: null,
+      code_health: null,
+    },
+  },
+];
+
 interface CategoryState {
   score: number;
   available: boolean;
+}
+
+interface DemoRecommendation {
+  id: string;
+  category: string;
+  priority: number;
+  title: string;
+  action: string;
+  impact: string;
+}
+
+interface SimulationResult {
+  policyVersion: string;
+  healthScore: number | null;
+  coverage: number;
+  isEligible: boolean;
+  measurableCount: number;
+  activeWeight: number;
+  totalNominalWeight: number;
+  explanation: string;
+  sourceSoulEligible: boolean;
+  sourceSoulScore: number | null;
+  sourceSoulExplanation: string;
+  recommendations: DemoRecommendation[];
+}
+
+function calculateSimulation(categories: Record<string, CategoryState>): SimulationResult {
+  let activeWeight = 0;
+  let weightedSum = 0;
+  let count = 0;
+
+  for (const [name, weight] of Object.entries(CATEGORY_WEIGHTS)) {
+    const item = categories[name];
+    if (item && item.available) {
+      activeWeight += weight;
+      weightedSum += weight * item.score;
+      count += 1;
+    }
+  }
+
+  // Official Health: >= 3 categories AND >= 50% nominal weight
+  const isEligible = count >= 3 && activeWeight >= 50;
+  const healthScore = isEligible ? Math.round((weightedSum / activeWeight) * 100) / 100 : null;
+
+  // Source Soul preview: >= 2 categories AND >= 30% nominal weight
+  const sourceSoulEligible = count >= 2 && activeWeight >= 30;
+  const sourceSoulScore = sourceSoulEligible ? Math.round((weightedSum / activeWeight) * 100) / 100 : null;
+
+  const explanation = isEligible
+    ? `Health Score = ${healthScore?.toFixed(1)}, рассчитан по ${count} доступным категориям с суммарным весом ${activeWeight}%. Формула: Σ(w_i × s_i) / Σ(w_i). Категории со статусом NO_DATA честно исключены из знаменателя и не штрафуют проект нулём.`
+    : `Health не рассчитывается (null). Не выполнен обязательный порог допуска методики mvp-score-v1.2: требуется не менее 3 доступных категорий и не менее 50% нормативного веса. Сейчас доступно: ${count} категорий (${activeWeight}% веса). Отсутствие данных не превращается в 0.`;
+
+  const sourceSoulExplanation = isEligible
+    ? 'Официальный Health рассчитан. Предварительный Source Soul уступает место официальному рейтингу качества.'
+    : sourceSoulEligible
+    ? `Предварительный Source Soul = ${sourceSoulScore?.toFixed(1)} (порог: ≥2 категорий и ≥30% веса). Является ориентировочным превью, не участвует в лидерборде и исчезает после накопления данных для официального Health.`
+    : `Недостаточно данных даже для Source Soul (доступно ${count} из требуемых 2 категорий или ${activeWeight}% из 30% веса).`;
+
+  // Dynamic simulation recommendations
+  const recommendations: DemoRecommendation[] = [];
+
+  if (categories.documentation?.available && categories.documentation.score < 70) {
+    recommendations.push({
+      id: 'rec_docs',
+      category: 'Documentation',
+      priority: 1,
+      title: 'Улучшить сопроводительную документацию',
+      action: 'Добавьте в README.md разделы Быстрый старт, Установка, Сборка, Тестирование и файл LICENSE.',
+      impact: `Потенциальный прирост Health: до +${(Math.round((100 - categories.documentation.score) * 0.15 * 10) / 10).toFixed(1)} б.`,
+    });
+  }
+
+  if (categories.cicd?.available && categories.cicd.score < 70) {
+    recommendations.push({
+      id: 'rec_cicd',
+      category: 'CI/CD',
+      priority: 1,
+      title: 'Стабилизировать автоматические пайплайны',
+      action: 'Устраните сбои в тестах CI/CD, чтобы процент успешных прогонов превышал 80%.',
+      impact: `Потенциальный прирост Health: до +${(Math.round((100 - categories.cicd.score) * 0.15 * 10) / 10).toFixed(1)} б.`,
+    });
+  }
+
+  if (categories.security?.available && categories.security.score < 70) {
+    recommendations.push({
+      id: 'rec_sec',
+      category: 'Security',
+      priority: 1,
+      title: 'Устранить дефекты безопасности AppSec',
+      action: 'Закройте критические и высокие уязвимости, обнаруженные сканером SourceCraft AppSec.',
+      impact: `Потенциальный прирост Health: до +${(Math.round((100 - categories.security.score) * 0.20 * 10) / 10).toFixed(1)} б.`,
+    });
+  }
+
+  if (categories.code_health?.available && categories.code_health.score < 70) {
+    recommendations.push({
+      id: 'rec_code',
+      category: 'Code Health',
+      priority: 2,
+      title: 'Снизить технический долг в кодовой базе',
+      action: 'Устраните заброшенные TODO/FIXME маркеры, разбейте файлы объемом >500 строк и исправьте замечания SAST.',
+      impact: `Потенциальный прирост Health: до +${(Math.round((100 - categories.code_health.score) * 0.20 * 10) / 10).toFixed(1)} б.`,
+    });
+  }
+
+  if (categories.issues?.available && categories.issues.score < 70) {
+    recommendations.push({
+      id: 'rec_issues',
+      category: 'Issues',
+      priority: 2,
+      title: 'Оптимизировать работу с баг-трекером',
+      action: 'Закройте или актуализируйте зависшие issues старше 90 дней и сократите время первого ответа.',
+      impact: `Потенциальный прирост Health: до +${(Math.round((100 - categories.issues.score) * 0.15 * 10) / 10).toFixed(1)} б.`,
+    });
+  }
+
+  if (categories.activity?.available && categories.activity.score < 70) {
+    recommendations.push({
+      id: 'rec_activity',
+      category: 'Activity',
+      priority: 3,
+      title: 'Поддерживать регулярный ритм релизов',
+      action: 'Оформляйте семантические релизы и избегайте пауз в разработке более 30 дней.',
+      impact: `Потенциальный прирост Health: до +${(Math.round((100 - categories.activity.score) * 0.15 * 10) / 10).toFixed(1)} б.`,
+    });
+  }
+
+  if (!categories.security?.available) {
+    recommendations.push({
+      id: 'rec_sec_nodata',
+      category: 'Security',
+      priority: 2,
+      title: 'Подключить официальный SourceCraft AppSec',
+      action: 'Добавьте персональный токен доступа (PAT) в профиле для сканирования уязвимостей без статуса NO_DATA.',
+      impact: 'Позволит включить официальный AppSec (вес 20%) в итоговую оценку.',
+    });
+  }
+
+  if (recommendations.length === 0) {
+    recommendations.push({
+      id: 'rec_perfect',
+      category: 'Общий статус',
+      priority: 3,
+      title: 'Высокое инженерное качество',
+      action: 'Все доступные категории находятся на высоком уровне. Поддерживайте регулярность аудитов.',
+      impact: 'Проект готов к получению высших инженерных достижений.',
+    });
+  }
+
+  return {
+    policyVersion: 'mvp-score-v1.2',
+    healthScore,
+    coverage: activeWeight,
+    isEligible,
+    measurableCount: count,
+    activeWeight,
+    totalNominalWeight: 100,
+    explanation,
+    sourceSoulEligible,
+    sourceSoulScore,
+    sourceSoulExplanation,
+    recommendations,
+  };
 }
 
 export const DemoPage: React.FC = () => {
@@ -44,76 +310,10 @@ export const DemoPage: React.FC = () => {
     code_health: { score: 95, available: true },
   });
 
-  const [simulation, setSimulation] = useState<DemoSimulateResponse | null>(null);
-  const [presets, setPresets] = useState<DemoPreset[]>([]);
   const [activePreset, setActivePreset] = useState<string>('healthy');
-  const [isSimulating, setIsSimulating] = useState<boolean>(false);
 
-  // Load presets on mount
-  useEffect(() => {
-    api.demoPresets().then((data) => {
-      if (Array.isArray(data) && data.length > 0) {
-        setPresets(data);
-      }
-    }).catch(() => {
-      // Fallback presets if offline
-    });
-  }, []);
-
-  // Run simulation whenever category state changes
-  const runSimulation = useCallback(async (state: Record<string, CategoryState>) => {
-    setIsSimulating(true);
-    const scoresPayload: Record<string, number | null> = {};
-    for (const [key, val] of Object.entries(state)) {
-      scoresPayload[key] = val.available ? val.score : null;
-    }
-
-    try {
-      const res = await api.demoSimulate(scoresPayload);
-      setSimulation(res);
-    } catch {
-      // Deterministic client fallback strictly matching mvp-score-v1.2 semantics
-      let activeWeight = 0;
-      let weightedSum = 0;
-      let count = 0;
-      const breakdown: DemoSimulateResponse['categories'] = {};
-
-      for (const [name, weight] of Object.entries(CATEGORY_WEIGHTS)) {
-        const item = state[name];
-        if (item && item.available) {
-          activeWeight += weight;
-          weightedSum += weight * item.score;
-          count += 1;
-          breakdown[name] = { score: item.score, weight, available: true };
-        } else {
-          breakdown[name] = { score: null, weight, available: false };
-        }
-      }
-
-      const eligible = count >= 3 && activeWeight >= 50;
-      const healthScore = eligible ? Math.round((weightedSum / activeWeight) * 100) / 100 : null;
-
-      setSimulation({
-        policy_version: 'mvp-score-v1.2',
-        health_score: healthScore,
-        coverage: activeWeight,
-        eligible,
-        measurable_count: count,
-        active_weight: activeWeight,
-        total_nominal_weight: 100,
-        categories: breakdown,
-        explanation: eligible
-          ? `Health Score = ${healthScore?.toFixed(2)}, рассчитан по ${count} доступным категориям с весом ${activeWeight}%.`
-          : `Health не рассчитывается (null). Не выполнен порог допуска: требуется ≥3 категорий и ≥50% веса. Сейчас: ${count} категорий (${activeWeight}%).`,
-      });
-    } finally {
-      setIsSimulating(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    runSimulation(categories);
-  }, [categories, runSimulation]);
+  // Pure deterministic instant simulation on client side — ZERO network requests
+  const simulation = useMemo(() => calculateSimulation(categories), [categories]);
 
   const handleScoreChange = (category: string, newScore: number) => {
     setActivePreset('');
@@ -134,8 +334,7 @@ export const DemoPage: React.FC = () => {
   const handlePresetSelect = (preset: DemoPreset) => {
     setActivePreset(preset.id);
     const nextState: Record<string, CategoryState> = {};
-    for (const [key, defaultWeight] of Object.entries(CATEGORY_WEIGHTS)) {
-      void defaultWeight;
+    for (const key of CATEGORY_ORDER) {
       const score = preset.scores[key];
       if (score !== null && score !== undefined) {
         nextState[key] = { score, available: true };
@@ -146,15 +345,17 @@ export const DemoPage: React.FC = () => {
     setCategories(nextState);
   };
 
-  const healthScore = simulation?.health_score ?? null;
-  const coveragePercent = simulation?.coverage ?? 0;
-  const isEligible = simulation?.eligible ?? false;
+  const healthScore = simulation.healthScore;
+  const coveragePercent = simulation.coverage;
+  const isEligible = simulation.isEligible;
+  const sourceSoulScore = simulation.sourceSoulScore;
+  const sourceSoulEligible = simulation.sourceSoulEligible;
 
-  const demoReadmeSnippet = `[![SourceHealth](https://sourcehealth.tech/api/v1/badges/demo-org/demo-repo.svg)](https://sourcehealth.tech/repositories/demo-org/demo-repo)`;
+  const demoReadmeSnippet = `[![SourceHealth](https://sourcehealth.tech/api/v1/badges/ORG/REPO.svg)](https://sourcehealth.tech/repositories/ORG/REPO)`;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-5)' }}>
-      {/* 1. Header & Banner */}
+      {/* 1. Header & Autonomous Offline Banner */}
       <div
         role="status"
         style={{
@@ -178,7 +379,7 @@ export const DemoPage: React.FC = () => {
               SourceHealth Lab
             </h1>
             <p style={{ margin: '0.2rem 0 0', fontSize: '0.88rem', color: 'var(--sh-text-secondary)' }}>
-              Это интерактивная симуляция методики <strong>mvp-score-v1.2</strong>, а не анализ реального репозитория.
+              Интерактивная симуляция скоринга <strong>mvp-score-v1.2</strong>. Работает полностью автономно в браузере без обращения к серверу или базам данных.
             </p>
           </div>
         </div>
@@ -226,7 +427,7 @@ export const DemoPage: React.FC = () => {
                 Покрытие: {coveragePercent}%
               </Badge>
               <span style={{ fontSize: '0.82rem', color: 'var(--sh-text-muted)' }}>
-                {simulation ? `${simulation.measurable_count} из 6 категорий (${simulation.active_weight} веса)` : ''}
+                {`${simulation.measurableCount} из 6 категорий (${simulation.activeWeight}% веса)`}
               </span>
             </div>
           </div>
@@ -247,7 +448,7 @@ export const DemoPage: React.FC = () => {
               Математика ренормализации:
             </div>
             <p style={{ margin: 0 }}>
-              {simulation?.explanation ?? 'Загрузка симуляции...'}
+              {simulation.explanation}
             </p>
             <div style={{ marginTop: '0.4rem', fontSize: '0.8rem', color: 'var(--sh-brand)' }}>
               Инвариант: <strong>NO_DATA ≠ 0</strong>. Если категория недоступна, она исключается из знаменателя.
@@ -256,7 +457,67 @@ export const DemoPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* 3. Presets Selector */}
+      {/* 3. Source Soul Preview & Explanation Card */}
+      <Card
+        title="Предварительный Source Soul vs Официальный Health"
+        subtitle="Разделение предварительного ориентира и официального рейтингового балла платформы"
+      >
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: 'var(--sh-space-4)',
+            alignItems: 'center',
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '1.25rem' }}>👻</span>
+              <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--sh-text-primary)' }}>
+                Source Soul Preview:
+              </span>
+              {sourceSoulEligible && sourceSoulScore !== null ? (
+                <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--sh-brand)' }}>
+                  {sourceSoulScore.toFixed(1)} / 100
+                </span>
+              ) : (
+                <Badge variant="neutral">Недоступен</Badge>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {isEligible ? (
+                <Badge variant="success">✓ Официальный Health активен (Source Soul уступил место)</Badge>
+              ) : sourceSoulEligible ? (
+                <Badge variant="brand">👻 Активен предварительный Source Soul</Badge>
+              ) : (
+                <Badge variant="neutral">Недостаточно данных (&lt; 2 категорий)</Badge>
+              )}
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: 'var(--sh-space-3) var(--sh-space-4)',
+              backgroundColor: 'var(--sh-bg-base)',
+              borderRadius: 'var(--sh-radius-sm)',
+              border: '1px solid var(--sh-border-subtle)',
+              fontSize: '0.82rem',
+              color: 'var(--sh-text-secondary)',
+              lineHeight: 1.45,
+            }}
+          >
+            <p style={{ margin: 0 }}>
+              {simulation.sourceSoulExplanation}
+            </p>
+            <div style={{ marginTop: '0.4rem', fontSize: '0.78rem', color: 'var(--sh-text-muted)' }}>
+              Правила допуска: <strong>Официальный Health</strong> требует ≥3 категорий и ≥50% номинального веса. <strong>Source Soul</strong> включается раньше (≥2 категорий и ≥30% веса), не участвует в лидерборде и исчезает при появлении официального Health.
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* 4. Presets Selector */}
       <Card title="Готовые пресеты сценариев" subtitle="Выберите типовую инженерную ситуацию в один клик">
         <div
           style={{
@@ -265,7 +526,7 @@ export const DemoPage: React.FC = () => {
             gap: 'var(--sh-space-3)',
           }}
         >
-          {presets.map((preset) => {
+          {DEMO_PRESETS.map((preset) => {
             const isSelected = activePreset === preset.id;
             return (
               <button
@@ -297,10 +558,10 @@ export const DemoPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* 4. Six Category Interactive Controls */}
+      {/* 5. Six Category Interactive Controls */}
       <Card
         title="Интерактивные контролы 6 категорий"
-        subtitle="Перемещайте слайдеры баллов или переключайте категорию в NO_DATA, чтобы наблюдать мгновенный перерасчёт Health Score"
+        subtitle="Перемещайте слайдеры баллов или переключайте категорию в NO_DATA, чтобы наблюдать мгновенный локальный перерасчёт"
       >
         <div
           style={{
@@ -417,10 +678,142 @@ export const DemoPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* 5. Visible Badge Preview Section */}
+      {/* 6. Dynamic Simulation Recommendations */}
       <Card
-        title="Как выглядит badge в README"
-        subtitle="Динамический SVG-бейдж обновляется в зависимости от текущего расчетного балла"
+        title="Динамические рекомендации симуляции"
+        subtitle="Рекомендации адаптируются в реальном времени при изменении баллов и доступности категорий"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-3)' }}>
+          <div
+            style={{
+              padding: 'var(--sh-space-2) var(--sh-space-3)',
+              backgroundColor: 'var(--sh-bg-surface)',
+              borderRadius: 'var(--sh-radius-sm)',
+              border: '1px solid var(--sh-border-subtle)',
+              fontSize: '0.78rem',
+              color: 'var(--sh-text-muted)',
+            }}
+          >
+            ℹ️ <strong>Примечание симулятора:</strong> Ниже представлены примеры рекомендаций симулятора (simulation/demo recommendations). В реальном отчёте анализа рекомендации строго привязаны к подтверждённым свидетельствам (evidence) из исходного кода и API.
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: 'var(--sh-space-3)',
+            }}
+          >
+            {simulation.recommendations.map((rec) => (
+              <div
+                key={rec.id}
+                style={{
+                  padding: 'var(--sh-space-3)',
+                  backgroundColor: 'var(--sh-bg-base)',
+                  border: '1px solid var(--sh-border-subtle)',
+                  borderRadius: 'var(--sh-radius-sm)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.35rem',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--sh-text-primary)' }}>
+                    {rec.title}
+                  </span>
+                  <Badge variant={rec.priority === 1 ? 'danger' : rec.priority === 2 ? 'warning' : 'brand'}>
+                    Приоритет {rec.priority}
+                  </Badge>
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--sh-text-secondary)', lineHeight: 1.4 }}>
+                  {rec.action}
+                </div>
+                <div style={{ fontSize: '0.76rem', color: 'var(--sh-brand)', fontWeight: 500, marginTop: '0.2rem' }}>
+                  {rec.impact}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      {/* 7. AI Teaser Card */}
+      <Card
+        title="Нейросетевое резюме (Yandex AI Teaser)"
+        subtitle="Архитектура интеграции генеративного AI со строгим заземлением (Grounding)"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-3)' }}>
+          <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--sh-text-secondary)', lineHeight: 1.5 }}>
+            В реальном анализе репозитория мейнтейнерам доступно структурированное AI-резюме на базе моделей <strong>Yandex AI</strong>. Генерация запускается по запросу и опирается исключительно на проверенные факты аудита:
+          </p>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: 'var(--sh-space-3)',
+            }}
+          >
+            <div style={{ padding: 'var(--sh-space-3)', backgroundColor: 'var(--sh-bg-base)', borderRadius: 'var(--sh-radius-sm)', border: '1px solid var(--sh-border-subtle)' }}>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--sh-brand)', marginBottom: '0.2rem' }}>
+                ⚡ «Мозг»
+              </div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--sh-text-muted)' }}>Alice AI Flash</div>
+              <p style={{ margin: '0.3rem 0 0', fontSize: '0.82rem', color: 'var(--sh-text-secondary)' }}>
+                Моментальная сводка для беглого ознакомления с состоянием репозитория.
+              </p>
+            </div>
+
+            <div style={{ padding: 'var(--sh-space-3)', backgroundColor: 'var(--sh-bg-base)', borderRadius: 'var(--sh-radius-sm)', border: '1px solid var(--sh-border-subtle)' }}>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--sh-brand)', marginBottom: '0.2rem' }}>
+                🎯 «Крутой мозг»
+              </div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--sh-text-muted)' }}>YandexGPT 5 Lite</div>
+              <p style={{ margin: '0.3rem 0 0', fontSize: '0.82rem', color: 'var(--sh-text-secondary)' }}>
+                Сбалансированный аудит инженерных практик и качества процессов разработки.
+              </p>
+            </div>
+
+            <div style={{ padding: 'var(--sh-space-3)', backgroundColor: 'var(--sh-bg-base)', borderRadius: 'var(--sh-radius-sm)', border: '1px solid var(--sh-border-subtle)' }}>
+              <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--sh-brand)', marginBottom: '0.2rem' }}>
+                🧠 «Мегамозг»
+              </div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--sh-text-muted)' }}>YandexGPT 5.1 Pro</div>
+              <p style={{ margin: '0.3rem 0 0', fontSize: '0.82rem', color: 'var(--sh-text-secondary)' }}>
+                Глубокий архитектурный анализ кодовой базы, рисков и масштабируемости.
+              </p>
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: 'var(--sh-space-2) var(--sh-space-3)',
+              backgroundColor: 'var(--sh-bg-base)',
+              borderRadius: 'var(--sh-radius-sm)',
+              border: '1px solid var(--sh-border-subtle)',
+              fontSize: '0.82rem',
+              color: 'var(--sh-text-muted)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '0.5rem',
+            }}
+          >
+            <span>
+              🛡️ <strong>Grounding Check:</strong> Нейросеть не вычисляет скор и валидируется против реальных фактов отчёта.
+            </span>
+            <Link to="/" style={{ color: 'var(--sh-brand)', fontWeight: 600, fontSize: '0.82rem' }}>
+              Посмотреть реальный анализ в каталоге →
+            </Link>
+          </div>
+        </div>
+      </Card>
+
+      {/* 8. Visible Badge Preview Section */}
+      <Card
+        title="Предпросмотр динамического бейджа качества"
+        subtitle="Интерактивный предварительный просмотр бейджа для README.md в светлой и тёмной темах"
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sh-space-4)' }}>
           <div
@@ -455,10 +848,6 @@ export const DemoPage: React.FC = () => {
                   role="img"
                   aria-label={`SourceHealth: ${healthScore !== null ? Math.round(healthScore) : 'no score'}`}
                 >
-                  <linearGradient id="demo-light-grad" x2="0" y2="100%">
-                    <stop offset="0" stopColor="#bbb" />
-                    <stop offset="1" stopColor="#999" />
-                  </linearGradient>
                   <rect width={healthScore !== null ? 118 : 142} height={20} rx={3} fill="#555" />
                   <rect
                     x={88}
@@ -524,7 +913,7 @@ export const DemoPage: React.FC = () => {
           {/* Copyable Markdown Box */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
             <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--sh-text-primary)' }}>
-              Код для вставки в README.md:
+              Код бейджа для вставки в README.md:
             </span>
             <div
               style={{
@@ -543,86 +932,14 @@ export const DemoPage: React.FC = () => {
               <code>{demoReadmeSnippet}</code>
               <CopyButton value={demoReadmeSnippet} />
             </div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--sh-text-muted)' }}>
+              💡 Замените <code>ORG/REPO</code> на путь вашего публичного репозитория в SourceCraft.
+            </div>
           </div>
         </div>
       </Card>
 
-      {/* 6. What Happens in Real Analysis */}
-      <Card title="Как устроен реальный анализ SourceHealth">
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-            gap: 'var(--sh-space-3)',
-          }}
-        >
-          <div
-            style={{
-              padding: 'var(--sh-space-3)',
-              backgroundColor: 'var(--sh-bg-base)',
-              borderRadius: 'var(--sh-radius-sm)',
-              border: '1px solid var(--sh-border-subtle)',
-            }}
-          >
-            <div style={{ fontWeight: 700, color: 'var(--sh-brand)', marginBottom: '0.2rem' }}>
-              1. Безопасный сбор фактов
-            </div>
-            <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--sh-text-secondary)', lineHeight: 1.4 }}>
-              Код репозитория никогда не исполняется. Анализ проводится статически в эфемерных контейнерах с ограничениями ресурсов.
-            </p>
-          </div>
-
-          <div
-            style={{
-              padding: 'var(--sh-space-3)',
-              backgroundColor: 'var(--sh-bg-base)',
-              borderRadius: 'var(--sh-radius-sm)',
-              border: '1px solid var(--sh-border-subtle)',
-            }}
-          >
-            <div style={{ fontWeight: 700, color: 'var(--sh-brand)', marginBottom: '0.2rem' }}>
-              2. Детерминированный скоринг
-            </div>
-            <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--sh-text-secondary)', lineHeight: 1.4 }}>
-              Шесть категорий оцениваются по математической формуле `mvp-score-v1.2`. Исключены субъективность и нейросетевые галлюцинации в баллах.
-            </p>
-          </div>
-
-          <div
-            style={{
-              padding: 'var(--sh-space-3)',
-              backgroundColor: 'var(--sh-bg-base)',
-              borderRadius: 'var(--sh-radius-sm)',
-              border: '1px solid var(--sh-border-subtle)',
-            }}
-          >
-            <div style={{ fontWeight: 700, color: 'var(--sh-brand)', marginBottom: '0.2rem' }}>
-              3. Свидетельства (Evidence)
-            </div>
-            <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--sh-text-secondary)', lineHeight: 1.4 }}>
-              Каждый балл подкреплён ссылками на проверенные факты: файлы, коммиты, маркеры техдолга и уязвимости AppSec.
-            </p>
-          </div>
-
-          <div
-            style={{
-              padding: 'var(--sh-space-3)',
-              backgroundColor: 'var(--sh-bg-base)',
-              borderRadius: 'var(--sh-radius-sm)',
-              border: '1px solid var(--sh-border-subtle)',
-            }}
-          >
-            <div style={{ fontWeight: 700, color: 'var(--sh-brand)', marginBottom: '0.2rem' }}>
-              4. План улучшений
-            </div>
-            <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--sh-text-secondary)', lineHeight: 1.4 }}>
-              Мейнтейнер получает четкий список рекомендаций по приоритетам с прямыми инструкциями по исправлению.
-            </p>
-          </div>
-        </div>
-      </Card>
-
-      {/* 7. Bottom Navigation */}
+      {/* 9. Bottom Navigation */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'var(--sh-space-2)' }}>
         <Link to="/" style={{ color: 'var(--sh-brand)', fontWeight: 500, fontSize: '0.9rem' }}>
           ← Вернуться к лидерборду репозиториев

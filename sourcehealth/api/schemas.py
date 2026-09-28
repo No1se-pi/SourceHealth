@@ -1,4 +1,4 @@
-﻿"""DTO — независимый HTTP-контракт. OpenAPI является источником TypeScript types."""
+"""DTO — независимый HTTP-контракт. OpenAPI является источником TypeScript types."""
 
 from datetime import datetime
 from typing import Any, Literal
@@ -316,32 +316,3 @@ class ProfileDTO(BaseModel):
     repositories: list[ProfileRepositoryDTO]
     achievements: list[AchievementDTO]
     summary: ProfileSummaryDTO | None = None
-
-
-class DemoCategoryDetail(BaseModel):
-    score: float | None = None
-    weight: int
-    available: bool
-
-
-class DemoSimulateRequest(BaseModel):
-    scores: dict[str, float | None]
-
-
-class DemoSimulateResponse(BaseModel):
-    policy_version: str = "mvp-score-v1.2"
-    health_score: float | None = None
-    coverage: float
-    eligible: bool
-    measurable_count: int
-    active_weight: int
-    total_nominal_weight: int
-    categories: dict[str, DemoCategoryDetail]
-    explanation: str
-
-
-class DemoPresetDTO(BaseModel):
-    id: str
-    name: str
-    description: str
-    scores: dict[str, float | None]
