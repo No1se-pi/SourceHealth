@@ -120,7 +120,7 @@ export const AnalysisStack: React.FC<AnalysisStackProps> = ({
         </div>
 
         {/* 2D HUD Callout Overlay (Clear Conceptual Labels Aligned Beside the 3D Stack) */}
-        <aside className="sh-stack-hud" aria-label="Уровни планирования">
+        <aside className="sh-stack-hud" aria-label="Режимы обработки">
           {/* Priority Callout */}
           <div
             className={`sh-hud-tag is-priority ${selectedLevel === 'priority' ? 'is-active' : ''}`}
@@ -129,8 +129,8 @@ export const AnalysisStack: React.FC<AnalysisStackProps> = ({
             tabIndex={0}
             onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSelectLevel('priority')}
           >
-            <span className="sh-hud-tag-title">ПРИОРИТЕТ</span>
-            <span className="sh-hud-tag-count">Ручные проверки</span>
+            <span className="sh-hud-tag-title">РУЧНОЙ ЗАПУСК</span>
+            <span className="sh-hud-tag-count">По требованию</span>
           </div>
 
           {/* Timed Callout */}

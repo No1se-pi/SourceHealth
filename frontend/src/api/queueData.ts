@@ -5,7 +5,7 @@
  * - Real live values are strictly limited to verified catalog stats from /catalog/stats.
  * - If the API is unreachable, catalog metrics evaluate to null/unavailable ("—"),
  *   never falling back to stale historical production snapshots (e.g. 4829, 2995).
- * - Priority, Timed, and Planned tiers are explicitly typed as conceptual architecture models,
+ * - Manual, Timed, and Planned tiers are explicitly typed as conceptual processing modes,
  *   not live Redis/RQ queue telemetry.
  * - No fake repository names, mock statuses, or artificial countdown timers are generated.
  */
@@ -37,13 +37,13 @@ export interface QueuePageData {
 export const CONCEPTUAL_TIERS: Record<'priority' | 'timed' | 'planned', QueueTier> = {
   priority: {
     id: 'priority',
-    name: 'Приоритет',
-    badge: 'Срочные проверки',
+    name: 'Ручной запуск',
+    badge: 'По требованию',
     badgeVariant: 'priority',
-    role: 'Запуск по требованию',
-    subtitle: 'Ручные запуски пользователей — исполняются в первую очередь',
+    role: 'Запуск пользователем',
+    subtitle: 'Проверки, которые пользователь запускает вручную',
     description:
-      'Проверки, запущенные пользователем или мейнтейнером вручную через кнопку анализа. Они получают наивысший приоритет и обрабатываются в первую очередь в обход планового расписания, обеспечивая мгновенную обратную связь.',
+      'Ручной анализ позволяет запросить актуальную проверку репозитория по требованию. После создания задача попадает в общую систему обработки SourceHealth.',
     mode: 'conceptual',
   },
   timed: {
@@ -54,7 +54,7 @@ export const CONCEPTUAL_TIERS: Record<'priority' | 'timed' | 'planned', QueueTie
     role: 'Интервальный обход',
     subtitle: 'Репозитории с наступившим сроком межпроверочного интервала',
     description:
-      'Репозитории возвращаются в очередь, когда наступает срок их периодической актуализации (refresh interval). Проекты с высокой активностью коммитов и отслеживаемые репозитории проверяются чаще, экономя вычислительные ресурсы платформы.',
+      'Репозитории возвращаются для повторной проверки, когда истекает рассчитанный интервал актуализации. Недавно активные репозитории могут получать более короткий интервал.',
     mode: 'conceptual',
   },
   planned: {

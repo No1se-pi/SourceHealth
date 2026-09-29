@@ -29,14 +29,14 @@ export const StackCounters: React.FC<StackCountersProps> = ({
         onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSelectLevel('priority')}
       >
         <div className="sh-counter-header">
-          <span className="sh-counter-label">Приоритет</span>
-          <span className="sh-counter-badge is-priority">Срочные проверки</span>
+          <span className="sh-counter-label">Ручной запуск</span>
+          <span className="sh-counter-badge is-priority">По требованию</span>
         </div>
         <div className="sh-counter-value">
           Ручной запуск
         </div>
         <div className="sh-counter-caption">
-          Запросы пользователей исполняются в первую очередь
+          Проверки, которые пользователь запускает вручную
         </div>
       </div>
 

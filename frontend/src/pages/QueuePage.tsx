@@ -41,7 +41,7 @@ export const QueuePage: React.FC = () => {
         <div className="sh-queue-title-wrap">
           <h1 className="sh-queue-title">Очередь анализа</h1>
           <p className="sh-queue-subtitle">
-            Так SourceHealth распределяет проверки репозиториев между срочными запросами и плановым обходом каталога.
+            Так SourceHealth объединяет ручные запуски, повторные проверки по расписанию и плановый обход каталога.
           </p>
 
           <div className="sh-queue-status-bar" role="status" aria-live="polite">

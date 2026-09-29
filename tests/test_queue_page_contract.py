@@ -63,17 +63,17 @@ class QueuePageContractTests(unittest.TestCase):
         self.assertIn("priority", stack_content)
         self.assertIn("timed", stack_content)
         self.assertIn("planned", stack_content)
-        self.assertIn("ПРИОРИТЕТ", stack_content)
+        self.assertIn("РУЧНОЙ ЗАПУСК", stack_content)
         self.assertIn("ПО РАСПИСАНИЮ", stack_content)
         self.assertIn("ПЛАНОВЫЙ ОБХОД", stack_content)
 
         counters_content = counters_path.read_text(encoding="utf-8")
-        self.assertIn("Приоритет", counters_content)
+        self.assertIn("Ручной запуск", counters_content)
         self.assertIn("По расписанию", counters_content)
         self.assertIn("Плановый обход", counters_content)
 
         legend_content = legend_path.read_text(encoding="utf-8")
-        self.assertIn("Приоритетные проверки", legend_content)
+        self.assertIn("Режим: Ручной запуск", legend_content)
         self.assertIn("Проверки по расписанию", legend_content)
         self.assertIn("Плановый фоновый обход", legend_content)
 
@@ -113,6 +113,25 @@ class QueuePageContractTests(unittest.TestCase):
         self.assertNotIn("Планировщик активен", text, "Do not claim 'Планировщик активен' without API telemetry")
         self.assertIn("Схема обработки", text, "Page must use honest architecture wording")
         self.assertIn("Данные каталога недоступны", text, "Must gracefully handle unreachable API")
+
+    def test_no_unsupported_runtime_priority_claims(self):
+        queue_api = self.frontend / "api" / "queueData.ts"
+        queue_dir = self.frontend / "components" / "queue"
+        files_to_check = [queue_api, *queue_dir.glob("*.tsx")]
+        forbidden_claims = (
+            "Строгая приоритизация",
+            "Приоритет 1",
+            "Приоритет 2",
+            "Приоритет 3",
+            "исполняются в первую очередь",
+            "в обход планового расписания",
+            "получают наивысший приоритет",
+            "не стоят в хвосте очереди каталога",
+        )
+
+        combined = "\n".join(path.read_text(encoding="utf-8") for path in files_to_check)
+        for claim in forbidden_claims:
+            self.assertNotIn(claim, combined)
 
     def test_reduced_motion_styles_present(self):
         css_path = self.frontend / "styles" / "queue.css"

@@ -49,7 +49,7 @@ export const StackLayer: React.FC<StackLayerProps> = ({
           <div className="sh-slab-content">
             <div className="sh-top-slab-pill">
               <span className="sh-top-slab-dot" aria-hidden="true" />
-              <span>Приоритетный запуск</span>
+              <span>Ручной запуск</span>
             </div>
           </div>
         ) : null}
