@@ -18,13 +18,19 @@ AI-отчёт — отдельный reporting layer над завершённы
 исходники, snippets, raw SAST/AppSec payload, commit messages, имена/email авторов, PAT, cookies,
 OAuth данные и другие секреты. Checks с `NO_DATA`/`SOURCE_UNAVAILABLE` не создают assertion evidence.
 
+## Версии HTTP-контракта
+
+`POST /api/v1/analyses/{id}/ai-summary` сохраняет прежний `ai-summary-v1`: request содержит только
+`model`, а response — старые поля summary и actions. Новый структурированный контракт доступен через
+`POST /api/v1/analyses/{id}/ai-report`; только он принимает `detail`.
+
 ## Выход `ai-report-v2`
 
 Структура пригодна для последующего Markdown/PDF/DOCX export без изменения смысла:
 
 - `executive_summary`;
-- `category_analysis[]`: категория, точная сохранённая оценка и availability, assessment,
-  подтверждённые положительные наблюдения и проблемы;
+- `category_analysis[]`: категория, точная сохранённая оценка и availability, assessment и IDs findings;
+- `category_findings[]`: отдельные positive/problem утверждения с категорией и обязательными evidence refs;
 - `strengths[]`, `risks[]`;
 - `actions[]`: title, priority, why, action, implementation steps, expected result и grounding IDs;
 - `roadmap.immediate/short_term/later`: точные `action-N` IDs существующих actions;

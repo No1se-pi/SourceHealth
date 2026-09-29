@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from sourcehealth.ai.contracts import AISummaryResult
+from sourcehealth.ai.contracts import AISummaryResult, LegacyAISummaryResult
 from sourcehealth.core.domain import Category, DataAvailability, RunStatus
 
 
@@ -202,16 +202,23 @@ class AnalysisRequest(BaseModel):
 class AISummaryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     model: Literal["flash", "lite", "pro"]
+
+
+class AIReportRequest(AISummaryRequest):
     detail: Literal["brief", "detailed", "expert"] = "brief"
 
 
 class AISummaryResponse(BaseModel):
     provider: Literal["yandex-ai-studio"] = "yandex-ai-studio"
     mode: Literal["flash", "lite", "pro"]
-    detail: Literal["brief", "detailed", "expert"]
     model_name: str
     grounding_validated: Literal[True] = True
     cached: bool
+    summary: LegacyAISummaryResult
+
+
+class AIReportResponse(AISummaryResponse):
+    detail: Literal["brief", "detailed", "expert"]
     summary: AISummaryResult
 
 

@@ -384,7 +384,8 @@ SourceHealth спроектирован по принципу API-First. Пол�
 - `GET /api/v1/analyses/{id}/report.md` — экспорт отчёта в Markdown;
 - `GET /api/v1/badges/{org}/{repo}.svg` — генерация SVG-бейджа;
 - `GET /api/v1/compare?repo1=...&repo2=...` — сравнение двух проектов;
-- `POST /api/v1/analyses/{id}/ai-summary` — генерация аналитического AI-резюме.
+- `POST /api/v1/analyses/{id}/ai-summary` — совместимое аналитическое AI-резюме `ai-summary-v1`;
+- `POST /api/v1/analyses/{id}/ai-report` — структурированный grounded-отчёт `ai-report-v2`.
 
 ---
 

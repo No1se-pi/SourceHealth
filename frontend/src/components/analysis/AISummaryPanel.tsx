@@ -34,7 +34,7 @@ export const AISummaryPanel: React.FC<{ analysisId: string }> = ({ analysisId })
 
   const generate = async () => {
     setLoading(true); setError(undefined); setResult(undefined);
-    try { setResult(await api.aiSummary(analysisId, mode, detail)); }
+    try { setResult(await api.aiReport(analysisId, mode, detail)); }
     catch (err) { setError(err); }
     finally { setLoading(false); }
   };
@@ -47,6 +47,7 @@ export const AISummaryPanel: React.FC<{ analysisId: string }> = ({ analysisId })
   };
   const roadmap = result?.summary.roadmap;
   const actionTitle = (id: string) => result?.summary.actions.find((item) => item.id === id)?.title ?? id;
+  const categoryFinding = (id: string) => result?.summary.category_findings.find((item) => item.id === id);
 
   return <section className="ai-summary" aria-labelledby="ai-summary-title">
     <div className="ai-summary__heading">
@@ -87,8 +88,8 @@ export const AISummaryPanel: React.FC<{ analysisId: string }> = ({ analysisId })
         <div className="ai-categories">{result.summary.category_analysis.map((category) => <article key={category.category} className="ai-category">
           <header><strong>{category.category}</strong><span>{category.score ?? 'Нет данных'} · {category.availability}</span></header>
           <p>{category.assessment}</p>
-          {category.positive_findings.length > 0 && <><h4>Положительные наблюдения</h4><ul>{category.positive_findings.map((item) => <li key={item}>{item}</li>)}</ul></>}
-          {category.problems.length > 0 && <><h4>Проблемы</h4><ul>{category.problems.map((item) => <li key={item}>{item}</li>)}</ul></>}
+          {category.positive_finding_ids.length > 0 && <><h4>Положительные наблюдения</h4><ul>{category.positive_finding_ids.map((id) => { const item = categoryFinding(id); return item && <li key={id}>{item.text}<Evidence refs={item.evidence_refs} /></li>; })}</ul></>}
+          {category.problem_finding_ids.length > 0 && <><h4>Проблемы</h4><ul>{category.problem_finding_ids.map((id) => { const item = categoryFinding(id); return item && <li key={id}>{item.text}<Evidence refs={item.evidence_refs} /></li>; })}</ul></>}
           <Evidence refs={category.evidence_refs} />
         </article>)}</div>
       </section>}

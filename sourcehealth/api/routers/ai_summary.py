@@ -9,6 +9,7 @@ from fastapi import APIRouter, Request
 from redis.exceptions import RedisError
 
 from sourcehealth.ai.context import build_ai_context
+from sourcehealth.ai.contracts import LegacyAISummaryResult, LegacyGroundedAction, LegacyGroundedStatement
 from sourcehealth.ai.prompt import PROMPT_VERSION, SCHEMA_VERSION
 from sourcehealth.ai.yandex import MODEL_NAMES, YandexAIError, YandexAISummaryProvider
 from sourcehealth.application.services import ServiceError
@@ -16,7 +17,7 @@ from sourcehealth.scoring.coverage import score_coverage
 from sourcehealth.storage.models import Repository
 
 from ..dependencies import check_origin, public_run, require_user
-from ..schemas import AISummaryRequest, AISummaryResponse
+from ..schemas import AIReportRequest, AIReportResponse, AISummaryRequest, AISummaryResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -26,11 +27,10 @@ def _cache_key(analysis_id: UUID, mode: str, detail: str = "brief") -> str:
     digest = hashlib.sha256(
         f"{analysis_id}:{mode}:{detail}:{PROMPT_VERSION}:{SCHEMA_VERSION}".encode(),
     ).hexdigest()
-    return f"ai-summary:{digest}"
+    return f"ai-report:{digest}"
 
 
-@router.post("/api/v1/analyses/{analysis_id}/ai-summary", response_model=AISummaryResponse)
-def ai_summary(analysis_id: UUID, body: AISummaryRequest, request: Request):
+def _generate_report(analysis_id: UUID, model: str, detail: str, request: Request) -> AIReportResponse:
     check_origin(request)
     user = require_user(request)
     settings, redis = request.app.state.settings, request.app.state.redis
@@ -50,13 +50,13 @@ def ai_summary(analysis_id: UUID, body: AISummaryRequest, request: Request):
             "score_coverage": score_coverage(run.scoring_policy_version, run.category_scores),
         })
 
-    key = _cache_key(analysis_id, body.model, body.detail)
+    key = _cache_key(analysis_id, model, detail)
     try:
         cached = redis.get(key)
         if cached:
             payload = json.loads(cached)
             payload["cached"] = True
-            return AISummaryResponse.model_validate(payload)
+            return AIReportResponse.model_validate(payload)
     except (RedisError, ValueError, TypeError):
         logger.warning("ai_cache_read_failed", extra={"component": "ai", "event": "cache_read_failed"})
 
@@ -70,23 +70,55 @@ def ai_summary(analysis_id: UUID, body: AISummaryRequest, request: Request):
     except RedisError:
         logger.warning("ai_rate_limit_unavailable", extra={"component": "ai", "event": "rate_limit_unavailable"})
 
-    context = build_ai_context(report, body.detail)
+    context = build_ai_context(report, detail)
     provider = getattr(request.app.state, "ai_provider", None) or YandexAISummaryProvider(
         settings.yandex_ai_api_key.get_secret_value(), settings.yandex_ai_folder_id,
         timeout=settings.yandex_ai_timeout,
     )
     try:
-        result = provider.summarize(context, body.model, body.detail)
+        result = provider.summarize(context, model, detail)
     except YandexAIError as exc:
         logger.warning("ai_request_failed", extra={
-            "component": "ai", "event": exc.code, "mode": body.model, "detail": body.detail,
+            "component": "ai", "event": exc.code, "mode": model, "detail": detail,
         })
         raise ServiceError(exc.code, exc.status) from None
-    response = AISummaryResponse(
-        mode=body.model, detail=body.detail, model_name=MODEL_NAMES[body.model], cached=False, summary=result,
+    response = AIReportResponse(
+        mode=model, detail=detail, model_name=MODEL_NAMES[model], cached=False, summary=result,
     )
     try:
         redis.set(key, response.model_dump_json(), ex=settings.yandex_ai_cache_ttl)
     except RedisError:
         logger.warning("ai_cache_write_failed", extra={"component": "ai", "event": "cache_write_failed"})
     return response
+
+
+def _legacy_statement(statement) -> LegacyGroundedStatement:
+    return LegacyGroundedStatement(text=statement.text[:500], evidence_refs=statement.evidence_refs)
+
+
+def _legacy_response(report: AIReportResponse) -> AISummaryResponse:
+    summary = report.summary
+    legacy = LegacyAISummaryResult(
+        executive_summary=summary.executive_summary[:1000],
+        strengths=[_legacy_statement(item) for item in summary.strengths[:5]],
+        risks=[_legacy_statement(item) for item in summary.risks[:5]],
+        actions=[LegacyGroundedAction(
+            text=item.action[:500], recommendation_ids=item.recommendation_ids,
+            evidence_refs=item.evidence_refs,
+        ) for item in summary.actions[:5]],
+        limitations=[_legacy_statement(item) for item in summary.limitations[:5]],
+    )
+    return AISummaryResponse(
+        mode=report.mode, model_name=report.model_name, cached=report.cached, summary=legacy,
+    )
+
+
+@router.post("/api/v1/analyses/{analysis_id}/ai-summary", response_model=AISummaryResponse)
+def ai_summary(analysis_id: UUID, body: AISummaryRequest, request: Request):
+    """Preserve the frozen v1 response for clients deployed before AI reports."""
+    return _legacy_response(_generate_report(analysis_id, body.model, "brief", request))
+
+
+@router.post("/api/v1/analyses/{analysis_id}/ai-report", response_model=AIReportResponse)
+def ai_report(analysis_id: UUID, body: AIReportRequest, request: Request):
+    return _generate_report(analysis_id, body.model, body.detail, request)

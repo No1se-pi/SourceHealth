@@ -30,9 +30,9 @@ def build_prompt(context: AISummaryContext, detail: AIReportDetail = "brief") ->
 
 Никогда не пересчитывай и не изменяй Health, category score, coverage, веса или deterministic recommendations. Не выводи score, availability и evidence_refs внутри category_analysis: backend добавит канонические значения. NO_DATA и SOURCE_UNAVAILABLE означают отсутствие данных: упоминай их только в limitations и what-to-verify, не как strength, risk или problem.
 
-Каждая strength, risk, positive_finding и problem обязана иметь реальные evidence_refs. Каждое action обязано иметь recommendation_id и/или evidence_refs. Implementation steps могут быть общей инженерной практикой, но только внутри действия, привязанного к подтверждённой проблеме. Не придумывай идентификаторы или наблюдения.
+Каждая strength, risk, category_finding обязана иметь реальные evidence_refs. Создавай только локальные finding IDs вида finding-1, finding-2 и ссылайся на них из category_analysis. Каждое action обязано иметь recommendation_id и/или evidence_refs. Implementation steps могут быть общей инженерной практикой, но только внутри действия, привязанного к подтверждённой проблеме. Не придумывай evidence IDs или наблюдения.
 
-Для detailed/expert включи category_analysis для каждой категории с численным score. Для NO_DATA категории не создавай positive_findings/problems; опиши нехватку данных только в limitations. Назначь actions последовательные id action-1, action-2 и так далее. Roadmap содержит только точные id уже созданных actions, без новых действий.
+Для detailed/expert включи category_analysis для каждой категории с численным score. Для NO_DATA категории не создавай category findings; опиши нехватку данных только в limitations. Назначь actions последовательные id action-1, action-2 и так далее. Roadmap содержит только точные id уже созданных actions, без новых действий.
 
 Никогда не выводи и не запрашивай PAT, API key, OAuth token, cookie, Authorization header, пароли, private keys, исходный код, snippets, raw SAST/AppSec payload, commit messages, имена или email авторов. Не восстанавливай [REDACTED].
 
@@ -91,12 +91,12 @@ def response_schema(context: AISummaryContext, detail: AIReportDetail = "brief")
         "type": "object", "additionalProperties": False,
         "properties": {
             "assessment": {"type": "string", "maxLength": min(3000, profile.statement_chars * 2)},
-            "positive_findings": {"type": "array", "items": {
-                "type": "string", "maxLength": profile.statement_chars}, "maxItems": 10},
-            "problems": {"type": "array", "items": {
-                "type": "string", "maxLength": profile.statement_chars}, "maxItems": 10},
+            "positive_finding_ids": {"type": "array", "items": {
+                "type": "string", "pattern": "^finding-[1-9][0-9]*$"}, "maxItems": 10},
+            "problem_finding_ids": {"type": "array", "items": {
+                "type": "string", "pattern": "^finding-[1-9][0-9]*$"}, "maxItems": 10},
         },
-        "required": ["assessment", "positive_findings", "problems"],
+        "required": ["assessment", "positive_finding_ids", "problem_finding_ids"],
     }
     roadmap = {
         "type": "object", "additionalProperties": False,
@@ -121,6 +121,17 @@ def response_schema(context: AISummaryContext, detail: AIReportDetail = "brief")
             "schema_version": {"type": "string", "const": SCHEMA_VERSION},
             "executive_summary": {"type": "string", "maxLength": profile.summary_chars},
             "category_analysis": category_analysis,
+            "category_findings": {"type": "array", "items": {
+                "type": "object", "additionalProperties": False,
+                "properties": {
+                    "id": {"type": "string", "pattern": "^finding-[1-9][0-9]*$", "maxLength": 20},
+                    "category": {"type": "string", "enum": selected_category_names},
+                    "kind": {"type": "string", "enum": ["positive", "problem"]},
+                    "text": {"type": "string", "maxLength": profile.statement_chars},
+                    "evidence_refs": required_refs,
+                },
+                "required": ["id", "category", "kind", "text", "evidence_refs"],
+            }, "maxItems": min(40, profile.strengths + profile.risks)},
             "strengths": {"type": "array", "items": statement,
                           "maxItems": profile.strengths if evidence_ids else 0},
             "risks": {"type": "array", "items": statement,
@@ -131,6 +142,6 @@ def response_schema(context: AISummaryContext, detail: AIReportDetail = "brief")
             "limitations": {"type": "array", "items": optional_statement,
                             "maxItems": profile.limitations},
         },
-        "required": ["schema_version", "executive_summary", "category_analysis", "strengths", "risks",
+        "required": ["schema_version", "executive_summary", "category_analysis", "category_findings", "strengths", "risks",
                      "actions", "roadmap", "limitations"],
     }

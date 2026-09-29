@@ -4,11 +4,14 @@ import unittest
 from copy import deepcopy
 from uuid import uuid4
 
+from pydantic import ValidationError
+
 from sourcehealth.ai.context import build_ai_context
 from sourcehealth.ai.contracts import (
     AISummaryResult,
     GroundedAction,
     GroundedCategoryAnalysis,
+    GroundedCategoryFinding,
     GroundedStatement,
 )
 from sourcehealth.ai.provider import (
@@ -510,6 +513,47 @@ class AIContractsTests(unittest.TestCase):
         )
         # Should validate successfully
         validate_ai_output(context, valid_result)
+
+    def test_category_finding_without_evidence_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            GroundedCategoryFinding(
+                id="finding-1", category="documentation", kind="positive",
+                text="README exists.", evidence_refs=[],
+            )
+
+    def test_category_finding_cannot_use_no_data_evidence(self):
+        report = deepcopy(self.raw_report)
+        report["category_scores"]["security"] = {
+            "score": None, "availability": "no_data", "explanation": "Unavailable",
+            "evidence_refs": ["security:unavailable"],
+        }
+        context = build_ai_context(report, "detailed")
+        result = AISummaryResult(
+            executive_summary="Summary",
+            category_findings=[GroundedCategoryFinding(
+                id="finding-1", category="security", kind="problem",
+                text="Unverified security problem.", evidence_refs=["security:unavailable"],
+            )],
+        )
+        with self.assertRaisesRegex(AIValidationError, "unavailable_category_assertion"):
+            validate_ai_output(context, result)
+
+    def test_category_finding_cannot_attach_to_another_category(self):
+        context = build_ai_context(self.raw_report, "detailed")
+        categories = [GroundedCategoryAnalysis(
+            category=category.name, score=category.score, availability=category.availability,
+            assessment="Grounded assessment.", evidence_refs=category.evidence_refs,
+            positive_finding_ids=["finding-1"] if category.name == "cicd" else [],
+        ) for category in context.categories]
+        result = AISummaryResult(
+            executive_summary="Summary", category_analysis=categories,
+            category_findings=[GroundedCategoryFinding(
+                id="finding-1", category="documentation", kind="positive",
+                text="README exists.", evidence_refs=["doc:readme"],
+            )],
+        )
+        with self.assertRaisesRegex(AIValidationError, "category_finding_mismatch"):
+            validate_ai_output(context, result, "detailed")
 
 
 if __name__ == "__main__":

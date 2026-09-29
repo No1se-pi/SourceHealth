@@ -3849,6 +3849,7 @@
     "/api/v1/analyses/{analysis_id}/ai-summary": {
       "post": {
         "summary": "Ai Summary",
+        "description": "Preserve the frozen v1 response for clients deployed before AI reports.",
         "operationId": "ai_summary_api_v1_analyses__analysis_id__ai_summary_post",
         "parameters": [
           {
@@ -3955,11 +3956,121 @@
           }
         }
       }
+    },
+    "/api/v1/analyses/{analysis_id}/ai-report": {
+      "post": {
+        "summary": "Ai Report",
+        "operationId": "ai_report_api_v1_analyses__analysis_id__ai_report_post",
+        "parameters": [
+          {
+            "name": "analysis_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Analysis Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AIReportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIReportResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
-      "AISummaryRequest": {
+      "AIReportRequest": {
         "properties": {
           "model": {
             "type": "string",
@@ -3986,6 +4097,79 @@
         "required": [
           "model"
         ],
+        "title": "AIReportRequest"
+      },
+      "AIReportResponse": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "const": "yandex-ai-studio",
+            "title": "Provider",
+            "default": "yandex-ai-studio"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "flash",
+              "lite",
+              "pro"
+            ],
+            "title": "Mode"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
+          "grounding_validated": {
+            "type": "boolean",
+            "const": true,
+            "title": "Grounding Validated",
+            "default": true
+          },
+          "cached": {
+            "type": "boolean",
+            "title": "Cached"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/AISummaryResult"
+          },
+          "detail": {
+            "type": "string",
+            "enum": [
+              "brief",
+              "detailed",
+              "expert"
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "model_name",
+          "cached",
+          "summary",
+          "detail"
+        ],
+        "title": "AIReportResponse"
+      },
+      "AISummaryRequest": {
+        "properties": {
+          "model": {
+            "type": "string",
+            "enum": [
+              "flash",
+              "lite",
+              "pro"
+            ],
+            "title": "Model"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "model"
+        ],
         "title": "AISummaryRequest"
       },
       "AISummaryResponse": {
@@ -4005,15 +4189,6 @@
             ],
             "title": "Mode"
           },
-          "detail": {
-            "type": "string",
-            "enum": [
-              "brief",
-              "detailed",
-              "expert"
-            ],
-            "title": "Detail"
-          },
           "model_name": {
             "type": "string",
             "title": "Model Name"
@@ -4029,13 +4204,12 @@
             "title": "Cached"
           },
           "summary": {
-            "$ref": "#/components/schemas/AISummaryResult"
+            "$ref": "#/components/schemas/LegacyAISummaryResult"
           }
         },
         "type": "object",
         "required": [
           "mode",
-          "detail",
           "model_name",
           "cached",
           "summary"
@@ -4062,6 +4236,14 @@
             "type": "array",
             "maxItems": 12,
             "title": "Category Analysis"
+          },
+          "category_findings": {
+            "items": {
+              "$ref": "#/components/schemas/GroundedCategoryFinding"
+            },
+            "type": "array",
+            "maxItems": 40,
+            "title": "Category Findings"
           },
           "strengths": {
             "items": {
@@ -5344,21 +5526,21 @@
             "maxLength": 3000,
             "title": "Assessment"
           },
-          "positive_findings": {
+          "positive_finding_ids": {
             "items": {
               "type": "string"
             },
             "type": "array",
             "maxItems": 10,
-            "title": "Positive Findings"
+            "title": "Positive Finding Ids"
           },
-          "problems": {
+          "problem_finding_ids": {
             "items": {
               "type": "string"
             },
             "type": "array",
             "maxItems": 10,
-            "title": "Problems"
+            "title": "Problem Finding Ids"
           },
           "evidence_refs": {
             "items": {
@@ -5377,6 +5559,52 @@
           "assessment"
         ],
         "title": "GroundedCategoryAnalysis"
+      },
+      "GroundedCategoryFinding": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 20,
+            "pattern": "^finding-[1-9][0-9]*$",
+            "title": "Id"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "positive",
+              "problem"
+            ],
+            "title": "Kind"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 1500,
+            "title": "Text"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Evidence Refs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "category",
+          "kind",
+          "text",
+          "evidence_refs"
+        ],
+        "title": "GroundedCategoryFinding"
       },
       "GroundedRoadmap": {
         "properties": {
@@ -5570,6 +5798,111 @@
           "facts"
         ],
         "title": "IntegritySignal"
+      },
+      "LegacyAISummaryResult": {
+        "properties": {
+          "schema_version": {
+            "type": "string",
+            "const": "ai-summary-v1",
+            "title": "Schema Version",
+            "default": "ai-summary-v1"
+          },
+          "executive_summary": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Executive Summary"
+          },
+          "strengths": {
+            "items": {
+              "$ref": "#/components/schemas/LegacyGroundedStatement"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Strengths"
+          },
+          "risks": {
+            "items": {
+              "$ref": "#/components/schemas/LegacyGroundedStatement"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Risks"
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/LegacyGroundedAction"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Actions"
+          },
+          "limitations": {
+            "items": {
+              "$ref": "#/components/schemas/LegacyGroundedStatement"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Limitations"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "executive_summary"
+        ],
+        "title": "LegacyAISummaryResult",
+        "description": "Frozen response contract of POST /ai-summary for existing clients."
+      },
+      "LegacyGroundedAction": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Text"
+          },
+          "recommendation_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Recommendation Ids"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence Refs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "LegacyGroundedAction"
+      },
+      "LegacyGroundedStatement": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Text"
+          },
+          "evidence_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evidence Refs"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "LegacyGroundedStatement"
       },
       "ProfileDTO": {
         "properties": {

@@ -55,8 +55,25 @@ def validate_ai_output(context: AISummaryContext, result: AISummaryResult,
     _validate_statements(result.limitations, valid_evidence_ids, optional=True)
 
     source_categories = {category.name: category for category in context.categories}
+    category_evidence = {
+        name: set(category.evidence_refs) | {fact.id for fact in context.facts if fact.kind == name}
+        for name, category in source_categories.items()
+    }
     numeric_names = {category.name for category in context.categories if category.score is not None}
     seen_categories: set[str] = set()
+    finding_by_id = {}
+    for finding in result.category_findings:
+        if finding.id in finding_by_id:
+            raise AIValidationError("duplicate_category_finding_id")
+        source = source_categories.get(finding.category)
+        if source is None:
+            raise AIValidationError("unknown_category")
+        if source.availability in {"no_data", "source_unavailable"}:
+            raise AIValidationError("unavailable_category_assertion")
+        if any(ref not in valid_evidence_ids or ref not in category_evidence[finding.category]
+               for ref in finding.evidence_refs):
+            raise AIValidationError("category_finding_evidence_mismatch")
+        finding_by_id[finding.id] = finding
     for category in result.category_analysis:
         source = source_categories.get(category.category)
         if source is None or category.category in seen_categories:
@@ -65,13 +82,18 @@ def validate_ai_output(context: AISummaryContext, result: AISummaryResult,
         if category.score != source.score or category.availability != source.availability:
             raise AIValidationError("category_value_mutated")
         if source.availability in {"no_data", "source_unavailable"}:
-            if category.positive_findings or category.problems or category.evidence_refs:
+            if category.positive_finding_ids or category.problem_finding_ids or category.evidence_refs:
                 raise AIValidationError("unavailable_category_assertion")
         else:
             if category.evidence_refs != source.evidence_refs:
                 raise AIValidationError("category_evidence_mutated")
-            if (category.positive_findings or category.problems) and not category.evidence_refs:
-                raise AIValidationError("missing_statement_evidence")
+        for finding_id, expected_kind in (
+            *((item, "positive") for item in category.positive_finding_ids),
+            *((item, "problem") for item in category.problem_finding_ids),
+        ):
+            finding = finding_by_id.get(finding_id)
+            if finding is None or finding.category != category.category or finding.kind != expected_kind:
+                raise AIValidationError("category_finding_mismatch")
     if detail in {"detailed", "expert"} and not numeric_names.issubset(seen_categories):
         raise AIValidationError("missing_category_analysis")
 

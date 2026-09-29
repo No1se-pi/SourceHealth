@@ -29,11 +29,14 @@ export type IntegrityResponse = components['schemas']['IntegrityResponse'];
 export type AISummaryMode = 'flash' | 'lite' | 'pro';
 export type AISummaryDetail = 'brief' | 'detailed' | 'expert';
 export interface GroundedStatement { text: string; evidence_refs: string[] }
+export interface CategoryFinding { id: string; category: string; kind: 'positive' | 'problem';
+  text: string; evidence_refs: string[] }
 export interface AISummaryResult {
   schema_version: 'ai-report-v2'; executive_summary: string;
   category_analysis: Array<{ category: string; score: number | null; availability: string;
-    assessment: string; positive_findings: string[]; problems: string[];
+    assessment: string; positive_finding_ids: string[]; problem_finding_ids: string[];
     evidence_refs: string[] }>;
+  category_findings: CategoryFinding[];
   strengths: GroundedStatement[];
   risks: GroundedStatement[];
   actions: Array<{ id: string; title: string; priority: number; why: string; action: string;
@@ -147,8 +150,8 @@ export const api = {
     request<AnalysisPage>(`/repositories/${encodeURIComponent(repositoryId)}/analyses?limit=${limit}&offset=${offset}`),
   analysis: (id: string) =>
     request<Analysis>(`/analyses/${encodeURIComponent(id)}`),
-  aiSummary: (id: string, model: AISummaryMode, detail: AISummaryDetail = 'brief') =>
-    request<AISummaryResponse>(`/analyses/${encodeURIComponent(id)}/ai-summary`, {
+  aiReport: (id: string, model: AISummaryMode, detail: AISummaryDetail = 'brief') =>
+    request<AISummaryResponse>(`/analyses/${encodeURIComponent(id)}/ai-report`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model, detail }),
     }),
   publicity: (repositoryId: string) =>

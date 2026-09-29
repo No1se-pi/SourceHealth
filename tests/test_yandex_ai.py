@@ -28,9 +28,10 @@ def valid_response(status=200, detail="brief"):
     body = {"schema_version": "ai-report-v2", "executive_summary": "Документация в хорошем состоянии.",
             "category_analysis": ([{"category": "documentation", "score": 80.0,
                                      "availability": "available", "assessment": "README найден.",
-                                     "positive_findings": ["README найден."],
-                                     "problems": [], "evidence_refs": ["doc:readme"]}]
+                                     "positive_finding_ids": [],
+                                     "problem_finding_ids": [], "evidence_refs": ["doc:readme"]}]
                                   if detail != "brief" else []),
+            "category_findings": [],
             "strengths": [{"text": "README найден.", "evidence_refs": ["doc:readme"]}],
             "risks": [], "actions": [{"id": "action-1", "title": "Добавить запуск", "priority": 2,
                                         "why": "Раздел запуска требует улучшения.",

@@ -1,6 +1,6 @@
 # Yandex AI: grounded-отчёты
 
-`POST /api/v1/analyses/{analysis_id}/ai-summary` создаёт пользовательский отчёт поверх завершённого
+`POST /api/v1/analyses/{analysis_id}/ai-report` создаёт пользовательский отчёт поверх завершённого
 публичного анализа. Нужны авторизованная Яндекс ID session, корректный Origin и настроенные
 server-side credentials Yandex AI. AI не участвует в scoring и не изменяет Health.
 
@@ -12,7 +12,8 @@ Request:
 {"model":"lite","detail":"detailed"}
 ```
 
-`detail` по умолчанию равен `brief`, поэтому прежний request только с `model` совместим.
+`detail` по умолчанию равен `brief`. Старый `/ai-summary` остаётся отдельным совместимым endpoint:
+request только с `model` возвращает прежний `ai-summary-v1` без новых required-полей.
 
 | Model | Provider model |
 |---|---|
@@ -33,7 +34,7 @@ Request:
 
 Prompt version: `sourcehealth-analyst-v2.0`; schema version: `ai-report-v2`. Ключ кеша включает
 analysis ID, model, detail и обе версии. Структура содержит резюме, разбор категорий, strengths,
-risks, actions с implementation steps, roadmap и limitations. Подробные правила и budgets:
+risks, grounded category findings, actions с implementation steps, roadmap и limitations. Подробные правила и budgets:
 [AI_SUMMARY_CONTRACT.md](AI_SUMMARY_CONTRACT.md).
 
 `NO_DATA`/`SOURCE_UNAVAILABLE` описываются только как ограничение данных. Numeric score и availability
