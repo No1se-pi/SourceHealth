@@ -9,6 +9,7 @@ import { AvailabilityBadge } from '../components/common/AvailabilityBadge';
 import { LoadingState } from '../components/common/LoadingState';
 import { ErrorState } from '../components/common/ErrorState';
 import { RecommendationCard } from '../components/common/RecommendationCard';
+import { ReportExportMenu } from '../components/common/ReportExportMenu';
 import { DeepAnalytics } from '../components/analysis/DeepAnalytics';
 import { AISummaryPanel } from '../components/analysis/AISummaryPanel';
 import { EvidenceList } from '../components/common/EvidenceList';
@@ -229,25 +230,7 @@ export const AnalysisPage: React.FC = () => {
               </div>
               {['completed', 'partial'].includes(run.status) && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <a
-                    href={`/api/v1/analyses/${encodeURIComponent(run.id)}/report.md`}
-                    download
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.4rem',
-                      backgroundColor: 'var(--sh-bg-surface-elevated)',
-                      color: 'var(--sh-text-primary)',
-                      border: '1px solid var(--sh-border-default)',
-                      padding: '0.45rem 0.85rem',
-                      borderRadius: 'var(--sh-radius-sm)',
-                      fontSize: '0.88rem',
-                      fontWeight: 500,
-                      textDecoration: 'none',
-                    }}
-                  >
-                    <span>⬇ Скачать отчёт (Markdown)</span>
-                  </a>
+                  <ReportExportMenu analysisId={run.id} />
                   <CopyButton
                     value={() => `${window.location.origin}/api/v1/analyses/${encodeURIComponent(run.id)}/report.md`}
                     label="Скопировать ссылку на отчёт"

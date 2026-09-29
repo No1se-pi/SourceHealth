@@ -17,6 +17,8 @@
 | POST `/api/v1/repositories/{repository_id}/analyses` | AnalysisSummary, 202 | Сессия Я ID + exact Origin; public repo |
 | GET `/api/v1/analyses/{analysis_id}` | AnalysisDetails, 200 | Повторная проверка visibility repo |
 | GET `/api/v1/analyses/{analysis_id}/report.md` | text/markdown, attachment | completed/partial; иначе 409 |
+| GET `/api/v1/analyses/{analysis_id}/report.pdf` | application/pdf, attachment | completed/partial; иначе 409 |
+| GET `/api/v1/analyses/{analysis_id}/report.docx` | OOXML Word, attachment | completed/partial; иначе 409 |
 | GET `/api/v1/auth/yandex/login` | 302 к Я ID + opaque state cookie | Без настройки 503 |
 | GET `/api/v1/auth/yandex/callback?code=…&state=…` | 303 `/auth/callback` + session cookie | State/PKCE + OAuth exchange |
 | POST `/api/v1/auth/logout` | 204 | Exact Origin; удаляет серверную сессию |

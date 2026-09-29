@@ -347,11 +347,13 @@ SourceHealth внедряет 14 инженерных достижений дл�
 
 ---
 
-## 25. Экспорт отчётов в Markdown
+## 25. Экспорт отчётов в Markdown, PDF и DOCX
 
-Любой результат анализа можно экспортировать в виде стандартизированного отчёта:
-- Эндпоинт `GET /api/v1/analyses/{id}/report.md`;
-- Формат: стандартизированный GitHub Flavored Markdown;
+Любой завершённый или частично завершённый результат анализа можно экспортировать
+из единой сохранённой модели отчёта:
+- `GET /api/v1/analyses/{id}/report.md` — GitHub Flavored Markdown;
+- `GET /api/v1/analyses/{id}/report.pdf` — многостраничный PDF A4;
+- `GET /api/v1/analyses/{id}/report.docx` — структурированный документ Word;
 - Содержит шапку отчёта, итоговый балл, разбивку по категориям, список рекомендаций с обоснованием и детализацию метрик;
 - Может быть сохранён в репозиторий, прикреплен к Issue или отправлен как артефакт в CI/CD пайплайн.
 
@@ -382,6 +384,8 @@ SourceHealth спроектирован по принципу API-First. Пол�
 - `POST /api/v1/repositories/{id}/analyses` — постановка задачи на аудит;
 - `GET /api/v1/analyses/{id}` — получение статуса и полных результатов анализа;
 - `GET /api/v1/analyses/{id}/report.md` — экспорт отчёта в Markdown;
+- `GET /api/v1/analyses/{id}/report.pdf` — экспорт отчёта в PDF;
+- `GET /api/v1/analyses/{id}/report.docx` — экспорт отчёта в Word;
 - `GET /api/v1/badges/{org}/{repo}.svg` — генерация SVG-бейджа;
 - `GET /api/v1/compare?repo1=...&repo2=...` — сравнение двух проектов;
 - `POST /api/v1/analyses/{id}/ai-summary` — совместимое аналитическое AI-резюме `ai-summary-v1`;
