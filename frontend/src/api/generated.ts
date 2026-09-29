@@ -397,8 +397,28 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ai Summary */
+        /**
+         * Ai Summary
+         * @description Preserve the frozen v1 response for clients deployed before AI reports.
+         */
         post: operations["ai_summary_api_v1_analyses__analysis_id__ai_summary_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analyses/{analysis_id}/ai-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ai Report */
+        post: operations["ai_report_api_v1_analyses__analysis_id__ai_report_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -409,6 +429,50 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AIReportRequest */
+        AIReportRequest: {
+            /**
+             * Model
+             * @enum {string}
+             */
+            model: "flash" | "lite" | "pro";
+            /**
+             * Detail
+             * @default brief
+             * @enum {string}
+             */
+            detail: "brief" | "detailed" | "expert";
+        };
+        /** AIReportResponse */
+        AIReportResponse: {
+            /**
+             * Provider
+             * @default yandex-ai-studio
+             * @constant
+             */
+            provider: "yandex-ai-studio";
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "flash" | "lite" | "pro";
+            /** Model Name */
+            model_name: string;
+            /**
+             * Grounding Validated
+             * @default true
+             * @constant
+             */
+            grounding_validated: true;
+            /** Cached */
+            cached: boolean;
+            summary: components["schemas"]["AISummaryResult"];
+            /**
+             * Detail
+             * @enum {string}
+             */
+            detail: "brief" | "detailed" | "expert";
+        };
         /** AISummaryRequest */
         AISummaryRequest: {
             /**
@@ -440,24 +504,29 @@ export interface components {
             grounding_validated: true;
             /** Cached */
             cached: boolean;
-            summary: components["schemas"]["AISummaryResult"];
+            summary: components["schemas"]["LegacyAISummaryResult"];
         };
         /** AISummaryResult */
         AISummaryResult: {
             /**
              * Schema Version
-             * @default ai-summary-v1
+             * @default ai-report-v2
              * @constant
              */
-            schema_version: "ai-summary-v1";
+            schema_version: "ai-report-v2";
             /** Executive Summary */
             executive_summary: string;
+            /** Category Analysis */
+            category_analysis?: components["schemas"]["GroundedCategoryAnalysis"][];
+            /** Category Findings */
+            category_findings?: components["schemas"]["GroundedCategoryFinding"][];
             /** Strengths */
             strengths?: components["schemas"]["GroundedStatement"][];
             /** Risks */
             risks?: components["schemas"]["GroundedStatement"][];
             /** Actions */
             actions?: components["schemas"]["GroundedAction"][];
+            roadmap?: components["schemas"]["GroundedRoadmap"];
             /** Limitations */
             limitations?: components["schemas"]["GroundedStatement"][];
         };
@@ -832,12 +901,64 @@ export interface components {
         };
         /** GroundedAction */
         GroundedAction: {
-            /** Text */
-            text: string;
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Priority */
+            priority: number;
+            /** Why */
+            why: string;
+            /** Action */
+            action: string;
+            /** Implementation Steps */
+            implementation_steps?: string[];
+            /** Expected Result */
+            expected_result: string;
             /** Recommendation Ids */
             recommendation_ids?: string[];
             /** Evidence Refs */
             evidence_refs?: string[];
+        };
+        /** GroundedCategoryAnalysis */
+        GroundedCategoryAnalysis: {
+            /** Category */
+            category: string;
+            /** Score */
+            score?: number | null;
+            /** Availability */
+            availability: string;
+            /** Positive Finding Ids */
+            positive_finding_ids?: string[];
+            /** Problem Finding Ids */
+            problem_finding_ids?: string[];
+            /** Evidence Refs */
+            evidence_refs?: string[];
+        };
+        /** GroundedCategoryFinding */
+        GroundedCategoryFinding: {
+            /** Id */
+            id: string;
+            /** Category */
+            category: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "positive" | "problem";
+            /** Text */
+            text: string;
+            /** Evidence Refs */
+            evidence_refs: string[];
+        };
+        /** GroundedRoadmap */
+        GroundedRoadmap: {
+            /** Immediate */
+            immediate?: string[];
+            /** Short Term */
+            short_term?: string[];
+            /** Later */
+            later?: string[];
         };
         /** GroundedStatement */
         GroundedStatement: {
@@ -909,6 +1030,44 @@ export interface components {
             facts: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * LegacyAISummaryResult
+         * @description Frozen response contract of POST /ai-summary for existing clients.
+         */
+        LegacyAISummaryResult: {
+            /**
+             * Schema Version
+             * @default ai-summary-v1
+             * @constant
+             */
+            schema_version: "ai-summary-v1";
+            /** Executive Summary */
+            executive_summary: string;
+            /** Strengths */
+            strengths?: components["schemas"]["LegacyGroundedStatement"][];
+            /** Risks */
+            risks?: components["schemas"]["LegacyGroundedStatement"][];
+            /** Actions */
+            actions?: components["schemas"]["LegacyGroundedAction"][];
+            /** Limitations */
+            limitations?: components["schemas"]["LegacyGroundedStatement"][];
+        };
+        /** LegacyGroundedAction */
+        LegacyGroundedAction: {
+            /** Text */
+            text: string;
+            /** Recommendation Ids */
+            recommendation_ids?: string[];
+            /** Evidence Refs */
+            evidence_refs?: string[];
+        };
+        /** LegacyGroundedStatement */
+        LegacyGroundedStatement: {
+            /** Text */
+            text: string;
+            /** Evidence Refs */
+            evidence_refs?: string[];
         };
         /** ProfileDTO */
         ProfileDTO: {
@@ -3816,6 +3975,95 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AISummaryResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ai_report_api_v1_analyses__analysis_id__ai_report_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                analysis_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AIReportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIReportResponse"];
                 };
             };
             /** @description Bad Request */

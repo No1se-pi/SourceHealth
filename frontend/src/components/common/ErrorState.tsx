@@ -22,6 +22,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   rate_limited: 'Слишком много запросов. Пожалуйста, подождите минуту.',
   service_unavailable: 'Сервис временно недоступен. Попробуйте обновить через пару минут.',
   request_failed: 'Не удалось получить ответ от сервиса. Проверьте соединение.',
+  ai_provider_unavailable: 'Yandex AI Studio временно недоступен. Попробуйте ещё раз.',
+  ai_rate_limited: 'Yandex AI Studio ограничил частоту запросов. Подождите и повторите попытку.',
+  ai_grounding_failed: 'Ответ модели не прошёл проверку фактов. Повторите генерацию.',
+  ai_response_too_large: 'Отчёт превысил безопасный размер. Выберите меньшую глубину.',
 };
 
 export const ErrorState: React.FC<ErrorStateProps> = ({
