@@ -37,6 +37,11 @@ Polling 2 секунды до completed/partial/failed, отменяется п�
 локализацию availability/category labels, language filter UI, retry и session menu/logout.
 Backend sort/filter/DTO уже позволяют делать это независимо.
 
+В деталях анализа CI/CD при `score=null`, `source_unavailable` и каноническом
+`cicd.metrics.configured=true` отдельно сообщает, что конфигурация обнаружена, а история запусков
+недоступна. Code Health всегда показывает статус выполненного/частичного local SAST и число находок;
+local SAST не обозначается как Security и не заменяет SourceCraft AppSec.
+
 ## Контракт и fixtures
 
 ```powershell

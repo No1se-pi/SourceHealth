@@ -159,6 +159,13 @@ button, select, input, textarea {
 .ai-roadmap { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.75rem; }
 .ai-roadmap > div { padding:.75rem; border-left:3px solid var(--sh-accent); background:var(--sh-bg-surface); }
 
+.analysis-source-note, .local-sast-status { margin-top:.65rem; padding:.7rem .8rem; border:1px solid var(--sh-border-subtle); border-radius:var(--sh-radius-sm); background:var(--sh-bg-surface-elevated); font-size:.8rem; line-height:1.45; }
+.analysis-source-note { display:flex; flex-direction:column; gap:.25rem; }
+.analysis-source-note--ci { border-left:3px solid var(--sh-accent); }
+.analysis-source-note__rows { display:flex; margin-top:.25rem; flex-wrap:wrap; gap:.35rem 1rem; color:var(--sh-text-muted); font-size:.74rem; }
+.local-sast-status > p { margin:.25rem 0 0; color:var(--sh-text-muted); }
+.local-sast-status .score-explanation { margin-top:.5rem; }
+
 .compare-page { padding:32px 16px 48px; }
 .compare-page__heading > span, .compare-section-heading > span { color:var(--sh-accent); font-size:.72rem; font-weight:800; letter-spacing:.12em; }
 .compare-page__heading h1, .compare-section-heading h2 { margin:.2rem 0 0; }

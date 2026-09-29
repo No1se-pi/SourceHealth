@@ -1,5 +1,6 @@
 import React from 'react';
 import type { AnalyzerResult, Category } from '../../api/client';
+import { hasDetectedCiConfiguration, localSastStatus } from './categoryDetailsModel';
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low'] as const;
 const PENALTIES = { critical: 40, high: 20, medium: 5, low: 1 };
@@ -10,6 +11,17 @@ export function CategoryDetails({ category, checks, score }: {
   score?: number | null;
 }) {
   const values = Object.values(checks ?? {});
+  if (category === 'cicd' && hasDetectedCiConfiguration(checks, score)) {
+    return (
+      <div className="analysis-source-note analysis-source-note--ci" role="note">
+        <strong>Конфигурация CI обнаружена</strong>
+        <span>SourceCraft не предоставил достаточно данных о запусках, поэтому численная оценка CI/CD сейчас не рассчитана.</span>
+        <div className="analysis-source-note__rows">
+          <span>✓ CI configuration — detected</span><span>— Run history — unavailable</span>
+        </div>
+      </div>
+    );
+  }
   if (category === 'security') {
     const appsec = values.find((check) => check.source === 'sourcecraft_appsec' && check.availability === 'available'
       && check.metrics.complete === true);
@@ -41,24 +53,28 @@ export function CategoryDetails({ category, checks, score }: {
   }
   if (category === 'code_health') {
     const sast = values.find((check) => check.source === 'sourcehealth_local');
-    if (!sast?.findings?.length) return null;
+    const status = localSastStatus(checks);
+    if (!status) return null;
     return (
-      <details className="score-explanation">
-        <summary>Безопасные находки local SAST ({sast.findings.length})</summary>
-        <p style={{ margin: '0.4rem 0 0.5rem 0', fontSize: '0.8rem', color: 'var(--sh-text-muted)' }}>
+      <div className="local-sast-status">
+        <strong>{status.label}</strong>
+        <p>
           Локальная статическая проверка влияет только на Code Health и не заменяет официальный AppSec.
         </p>
-        <ul className="safe-findings">
-          {sast.findings.map((finding, index) => (
-            <li key={`${String(finding.rule_id ?? 'finding')}-${index}`}>
-              <strong>{String(finding.rule_id ?? 'finding')}</strong> · {String(finding.severity ?? 'unknown')}
-              {finding.path ? ` · ${String(finding.path)}${finding.line ? `:${String(finding.line)}` : ''}` : ''}
-              {finding.message ? <span>{String(finding.message)}</span> : null}
-              {finding.recommendation ? <span>{String(finding.recommendation)}</span> : null}
-            </li>
-          ))}
-        </ul>
-      </details>
+        {sast?.findings?.length ? <details className="score-explanation">
+          <summary>Безопасные находки local SAST ({sast.findings.length})</summary>
+          <ul className="safe-findings">
+            {sast.findings.map((finding, index) => (
+              <li key={`${String(finding.rule_id ?? 'finding')}-${index}`}>
+                <strong>{String(finding.rule_id ?? 'finding')}</strong> · {String(finding.severity ?? 'unknown')}
+                {finding.path ? ` · ${String(finding.path)}${finding.line ? `:${String(finding.line)}` : ''}` : ''}
+                {finding.message ? <span>{String(finding.message)}</span> : null}
+                {finding.recommendation ? <span>{String(finding.recommendation)}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </details> : null}
+      </div>
     );
   }
   return null;
