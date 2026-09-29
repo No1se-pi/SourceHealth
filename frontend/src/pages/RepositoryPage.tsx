@@ -15,6 +15,7 @@ import { LoadingState } from '../components/common/LoadingState';
 import { EmptyState } from '../components/common/EmptyState';
 import { ErrorState } from '../components/common/ErrorState';
 import { RecommendationCard } from '../components/common/RecommendationCard';
+import { ReportExportMenu } from '../components/common/ReportExportMenu';
 import { Breadcrumbs } from '../components/common/Breadcrumbs';
 import { CopyButton } from '../components/common/CopyButton';
 import { ShareResult } from '../components/publicity/ShareResult';
@@ -383,26 +384,8 @@ export const RepositoryPage: React.FC = () => {
                     </Link>
                   )}
 
-                  {isReportReady && (
-                    <a
-                      href={`/api/v1/analyses/${encodeURIComponent(repo.latest_analysis_id ?? '')}/report.md`}
-                      download
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.35rem',
-                        fontSize: '0.88rem',
-                        fontWeight: 500,
-                        color: 'var(--sh-text-secondary)',
-                        padding: '0.45rem 0.85rem',
-                        borderRadius: 'var(--sh-radius-sm)',
-                        border: '1px solid var(--sh-border-default)',
-                        backgroundColor: 'var(--sh-bg-surface-elevated)',
-                        textDecoration: 'none',
-                      }}
-                    >
-                      <span>⬇ Скачать отчёт (Markdown)</span>
-                    </a>
+                  {isReportReady && repo.latest_analysis_id && (
+                    <ReportExportMenu analysisId={repo.latest_analysis_id} />
                   )}
 
                   <CopyButton

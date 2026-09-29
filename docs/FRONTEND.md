@@ -25,7 +25,7 @@ PUBLIC_ORIGIN/redirect/COOKIE_SECURE по [AUTH](AUTH.md), не редактир
 |---|---|
 | / | Repository list, sort, offset pagination, empty/loading/error |
 | /repositories/:id | Детали, последний report, async запуск |
-| /analyses/:id | Polling lifecycle, nullable categories, Markdown download |
+| /analyses/:id | Polling lifecycle, nullable categories, меню экспорта Markdown/PDF/DOCX |
 | /queue | Концептуальная визуализация режимов анализа (ручной / по расписанию / плановый) |
 | /auth/callback | Проверка server session через /me; code/token не читает |
 | * | 404 |

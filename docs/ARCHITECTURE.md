@@ -56,7 +56,8 @@ sourcehealth/
   api/                  composition root, dependencies, routers/, HTTP DTO, errors
   runtime.py            AnalysisRuntime и Docker adapter
   runtime_results.py    безопасный legacy 1.0 → AnalyzerResult converter
-  markdown.py           public report → Markdown
+  markdown.py           совместимый public report → Markdown adapter
+  reports/              единая report model → PDF/DOCX; встроенный шрифт
   runner.py             execution независимых analyzers
   reporting.py          сохранённый CLI/SARIF compatibility layer
   settings.py           typed process settings
@@ -113,7 +114,8 @@ POST создаёт/reuses run в транзакции. PostgreSQL row lock + pa
 
 ## Ограничения
 
-Не подключены private permissions, полный live каталог SourceCraft repo и PDF.
+Не подключены private permissions. Экспорт Markdown/PDF/DOCX строится только из
+сохранённого публичного отчёта и не является новым источником аналитики.
 Grounded Yandex AI подключен для генерации резюме и рекомендаций (см. [YANDEX_AI](YANDEX_AI.md)).
 Official AppSec клиент и authorization bridge Я ID → SourceCraft подключены (сбор при
 наличии валидного PAT; nullable baseline при отсутствии). Масштабирование worker-code

@@ -21,7 +21,7 @@ foundation-работы, последующий analytics batch реализов
 | 4 Публичный рейтинг | repositories, индексы, API, React | Список реальной БД и sort | Наполнение публичным каталогом, язык, лайки, активность, шкала Score |
 | 5 Я ID и собственный репозиторий | auth + будущая SourceCraft authorization | Я ID flow реализован; bridge открыт | Реальный вход, список доступных repo, проверка прав на каждом действии |
 | 6 Регулярный анализ | enqueue-due, RQ, PostgreSQL | Команда реализована | Cron каждую минуту, демонстрация первого/повторного run |
-| Markdown или PDF | markdown renderer + HTTP download | Markdown реализован | Сравнить отчёт с API по одному analysis_id |
+| Markdown или PDF | единая report model + Markdown/PDF/DOCX HTTP download | Все три формата реализованы | Сравнить отчёты с API по одному analysis_id |
 | 9.2 Большие repo | существующий sandbox + лимиты | Локальный runtime, ограничение истории описано | Реальный SourceCraft repo ≥10 000 tracked files ИЛИ ≥20 000 commits ИЛИ ≥500 МБ |
 | 9.2 Масштабирование | stateless API, shared PG/Redis, RQ workers | Foundation | Несколько workers; десять конкурентных запросов → один run |
 | 9.2 Приватность | deny-by-default visibility, public-only API | Закрытые repo запрещены | ACL bridge + scoped caches до включения private flow |

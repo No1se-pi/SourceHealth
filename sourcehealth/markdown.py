@@ -3,6 +3,7 @@
 import html
 import re
 
+from sourcehealth.reports.model import ReportDocument
 from sourcehealth.scoring.coverage import score_coverage, score_preview
 
 
@@ -14,10 +15,8 @@ def _text(value) -> str:
 
 def render_markdown(report) -> str:
     """Принимает AnalysisReport либо сохранённый публичный JSON. null не становится 0."""
-    if hasattr(report, "to_public_dict"):
-        report = report.to_public_dict()
-    if report.get("schema_version") != "3.0":
-        raise ValueError("Markdown requires public report schema 3.0")
+    document = report if isinstance(report, ReportDocument) else ReportDocument.from_report(report)
+    report = document.public_report
     repository = report["repository"]
     title = f"{repository['organization_slug']}/{repository['repository_slug']}"
     score = report.get("health_score")
@@ -25,6 +24,13 @@ def render_markdown(report) -> str:
              f"Анализ: {_text(report['completed_at'])}",
              f"Методика: {_text(report.get('scoring_policy_version', 'unconfigured-v1'))}", "",
              f"Repo Health Score: {score if score is not None else 'NO_DATA — итоговая оценка пока не рассчитана'}", ""]
+    metadata = []
+    if document.analysis_id:
+        metadata.append(f"Analysis ID: {_text(document.analysis_id)}")
+    if document.status:
+        metadata.append(f"Статус анализа: {_text(document.status)}")
+    if metadata:
+        lines[5:5] = metadata
     preview = score_preview(report.get("scoring_policy_version"), report.get("category_scores", {}))
     if score is None and preview:
         if preview["numeric"]:

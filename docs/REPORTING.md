@@ -1,40 +1,56 @@
-# Экспорт отчёта
+# Экспорт отчётов
 
-Обязательный baseline ТЗ — Markdown. `sourcehealth/markdown.py` принимает AnalysisReport
-либо сохранённый public JSON 3.0 и возвращает строку. Не читает БД/файлы/сеть и не
-использует текущие часы. Одинаковый report → одинаковый Markdown.
+SourceHealth экспортирует сохранённый публичный отчёт анализа в Markdown, PDF и
+DOCX. Все форматы строятся из единой allowlist-модели `ReportDocument`; renderer’ы
+не обращаются к БД, сети или текущим часам, не запускают анализ и не пересчитывают
+Health Score.
 
-## Содержание
+## Архитектура
 
-Repository и время анализа; версия методики; nullable Health Score; шесть категорий
-с availability/explanation; сильные стороны; проблемы/ограничения; рекомендации;
-evidence. Категории/checks/evidence сортируются, рекомендации — priority/id.
-Отсутствующий Score явно NO_DATA. Нет recommendations — «не сформированы», а не
-«проблем не обнаружено». Сильные стороны — категории с сохранённым score ≥80;
-это характеристика текущей методики, не независимая гарантия качества. Отдельно
-показывается число рассчитанных категорий из шести и пояснение NO_DATA.
+```text
+AnalysisRun.results (public JSON 3.0)
+              ↓
+       ReportDocument
+       ↙      ↓      ↘
+ Markdown    PDF     DOCX
+```
 
-Raw HTML и Markdown delimiters пользовательского текста экранируются. Не делать
-repository descriptions исполняемым HTML. В отчёт не добавлять source snippets,
-secret values, абсолютный workspace и произвольные exception text.
+`sourcehealth/markdown.py` сохраняет прежний публичный контракт. PDF создаётся
+ReportLab в памяти на страницах A4; для воспроизводимой кириллицы пакет содержит
+DejaVu Sans 2.37 Regular/Bold и исходную лицензию. DOCX создаётся `python-docx` как
+настоящий OOXML-документ с заголовками, таблицами, списками и ссылкой SourceCraft.
+Chromium, LibreOffice, временные файлы и внешние конвертеры не используются.
+
+Модель допускает только известные публичные поля. Строки и коллекции ограничены,
+нулевые байты удаляются, неизвестные внутренние поля игнорируются. В документы не
+добавляются source snippets, PAT/OAuth tokens, environment values, workspace paths
+или произвольный exception text.
+
+## Содержание и семантика
+
+Форматы показывают identity и канонический URL репозитория, analysis ID/status при
+HTTP-экспорте, время сохранённого анализа, версию scoring policy, сохранённый Health
+Score, coverage, шесть категорий с нормативными весами, рекомендации, checks,
+evidence и ограничения данных. `NO_DATA` явно означает отсутствие подтверждённых
+данных, а не нулевую оценку. Security остаётся основанным только на официальном
+SourceCraft AppSec; local SAST относится к Code Health.
+
+Markdown дополнительно сохраняет прежние секции Source Soul, AppSec aggregates и
+deep analytics для обратной совместимости.
 
 ## HTTP
 
-`GET /api/v1/analyses/{id}/report.md` загружает уже сохранённый report, не инициирует
-новый анализ. Только completed/partial, иначе 409 report_not_ready. Private repo
-проверяется перед выдачей файла. Content-Disposition attachment с analysis UUID,
-Content-Type text/markdown UTF-8. Новый renderer не изменяет старые JSON 1.0/2.0 и SARIF.
+- `GET /api/v1/analyses/{id}/report.md` — `text/markdown; charset=utf-8`;
+- `GET /api/v1/analyses/{id}/report.pdf` — `application/pdf`;
+- `GET /api/v1/analyses/{id}/report.docx` —
+  `application/vnd.openxmlformats-officedocument.wordprocessingml.document`.
 
-## Расширение
+Файлы имеют имена `sourcehealth-{id}.{md|pdf|docx}` и создаются в памяти. Доступ
+проверяет существующая граница `public_run`. Экспорт разрешён только для
+`completed`/`partial`; остальные состояния возвращают `409 report_not_ready`.
 
-Первые recommendation/strength rules должны ссылаться на общий evidence contract.
-PDF позже строится из той же модели/Markdown: добавлять отдельный policy или повторно
-считать Score внутри PDF запрещено. PDF engine до конкретной задачи не добавлен.
-Renderer unit test проверяет deterministic output, null markers и escaping;
-интеграционный тест проверяет HTTP download реального сохранённого AnalysisRun.
-## Explainability
+## Проверка
 
-Если официальный Health Score ещё не рассчитан, Markdown показывает Source Soul как
-предварительный backend-derived preview с охватом и явным предупреждением об отсутствии
-в рейтинге. Для доступного official AppSec выводятся только агрегированные severity counts
-и формула штрафа; raw findings, snippets и secret values в отчёт не попадают.
+Renderer-тесты проверяют semantic parity трёх форматов, кириллицу, PDF signature и
+парсинг страниц, OOXML ZIP и `word/document.xml`, готовность отчёта и исключение
+неизвестных secret-полей. OpenAPI описывает PDF/DOCX как binary responses.

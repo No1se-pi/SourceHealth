@@ -6,7 +6,7 @@
 curl 'https://sourcehealth.tech/api/v1/repositories?sort=health_score'
 ```
 
-Основные endpoints: `GET /api/v1/repositories`, `GET /api/v1/repositories/{id}`, `GET /api/v1/repositories/{id}/analyses/latest`, `GET /api/v1/analyses/{id}`, `GET /api/v1/analyses/{id}/report.md`. Актуальная схема доступна в `/openapi.json`.
+Основные endpoints: `GET /api/v1/repositories`, `GET /api/v1/repositories/{id}`, `GET /api/v1/repositories/{id}/analyses/latest`, `GET /api/v1/analyses/{id}` и экспорт `report.md`, `report.pdf`, `report.docx`. Актуальная схема доступна в `/openapi.json`.
 
 `health_score=null` означает, что официальный Health ещё не рассчитан; это не ноль. `availability` описывает доступность фактов для категории. `score_preview` остаётся предварительным Source Soul и не является официальной оценкой.
 

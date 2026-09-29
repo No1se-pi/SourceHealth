@@ -1162,6 +1162,84 @@ select:focus-visible, input:focus-visible {
   animation: spin 1s linear infinite;
 }
 
+.report-export {
+  position: relative;
+}
+
+.report-export__trigger {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--sh-border-default);
+  border-radius: var(--sh-radius-sm);
+  background: var(--sh-bg-surface-elevated);
+  color: var(--sh-text-primary);
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 500;
+  list-style: none;
+  white-space: nowrap;
+}
+
+.report-export__trigger::-webkit-details-marker {
+  display: none;
+}
+
+.report-export__trigger::after {
+  content: '▾';
+  margin-left: 0.45rem;
+  color: var(--sh-text-muted);
+}
+
+.report-export[open] .report-export__trigger::after {
+  transform: rotate(180deg);
+}
+
+.report-export__menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 0.4rem);
+  z-index: 20;
+  display: grid;
+  min-width: 11rem;
+  padding: 0.35rem;
+  border: 1px solid var(--sh-border-default);
+  border-radius: var(--sh-radius-md);
+  background: var(--sh-bg-surface-elevated);
+  box-shadow: var(--sh-shadow-lg);
+}
+
+.report-export__option {
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--sh-radius-sm);
+  color: var(--sh-text-primary);
+  font-size: 0.86rem;
+  text-decoration: none;
+}
+
+.report-export__option:hover {
+  background: var(--sh-brand-subtle);
+  color: var(--sh-brand);
+}
+
+@media (max-width: 480px) {
+  .report-export,
+  .report-export__trigger {
+    width: 100%;
+  }
+
+  .report-export__trigger {
+    justify-content: center;
+  }
+
+  .report-export__menu {
+    right: auto;
+    left: 0;
+    width: 100%;
+  }
+}
+
 /* ==========================================================================
    Accessibility & Polish (Skip link, Focus-visible, Reduced Motion, Print)
    ========================================================================== */
