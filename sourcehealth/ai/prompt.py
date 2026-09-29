@@ -90,13 +90,12 @@ def response_schema(context: AISummaryContext, detail: AIReportDetail = "brief")
     category = {
         "type": "object", "additionalProperties": False,
         "properties": {
-            "assessment": {"type": "string", "maxLength": min(3000, profile.statement_chars * 2)},
             "positive_finding_ids": {"type": "array", "items": {
                 "type": "string", "pattern": "^finding-[1-9][0-9]*$"}, "maxItems": 10},
             "problem_finding_ids": {"type": "array", "items": {
                 "type": "string", "pattern": "^finding-[1-9][0-9]*$"}, "maxItems": 10},
         },
-        "required": ["assessment", "positive_finding_ids", "problem_finding_ids"],
+        "required": ["positive_finding_ids", "problem_finding_ids"],
     }
     roadmap = {
         "type": "object", "additionalProperties": False,

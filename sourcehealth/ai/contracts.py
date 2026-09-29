@@ -73,7 +73,6 @@ class GroundedCategoryAnalysis(BaseModel):
     category: str
     score: float | None = Field(default=None, ge=0, le=100)
     availability: str
-    assessment: str = Field(..., max_length=3000)
     positive_finding_ids: list[str] = Field(default_factory=list, max_length=10)
     problem_finding_ids: list[str] = Field(default_factory=list, max_length=10)
     evidence_refs: list[str] = Field(default_factory=list, max_length=20)

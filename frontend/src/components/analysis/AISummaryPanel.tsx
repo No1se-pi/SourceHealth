@@ -87,9 +87,10 @@ export const AISummaryPanel: React.FC<{ analysisId: string }> = ({ analysisId })
       {result.summary.category_analysis.length > 0 && <section><h3>Разбор категорий</h3>
         <div className="ai-categories">{result.summary.category_analysis.map((category) => <article key={category.category} className="ai-category">
           <header><strong>{category.category}</strong><span>{category.score ?? 'Нет данных'} · {category.availability}</span></header>
-          <p>{category.assessment}</p>
           {category.positive_finding_ids.length > 0 && <><h4>Положительные наблюдения</h4><ul>{category.positive_finding_ids.map((id) => { const item = categoryFinding(id); return item && <li key={id}>{item.text}<Evidence refs={item.evidence_refs} /></li>; })}</ul></>}
           {category.problem_finding_ids.length > 0 && <><h4>Проблемы</h4><ul>{category.problem_finding_ids.map((id) => { const item = categoryFinding(id); return item && <li key={id}>{item.text}<Evidence refs={item.evidence_refs} /></li>; })}</ul></>}
+          {category.positive_finding_ids.length === 0 && category.problem_finding_ids.length === 0
+            && <p>Дополнительных подтверждённых наблюдений нет.</p>}
           <Evidence refs={category.evidence_refs} />
         </article>)}</div>
       </section>}

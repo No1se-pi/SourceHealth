@@ -928,8 +928,6 @@ export interface components {
             score?: number | null;
             /** Availability */
             availability: string;
-            /** Assessment */
-            assessment: string;
             /** Positive Finding Ids */
             positive_finding_ids?: string[];
             /** Problem Finding Ids */

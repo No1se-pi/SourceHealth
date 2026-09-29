@@ -27,7 +27,7 @@ def context():
 def valid_response(status=200, detail="brief"):
     body = {"schema_version": "ai-report-v2", "executive_summary": "Документация в хорошем состоянии.",
             "category_analysis": ([{"category": "documentation", "score": 80.0,
-                                     "availability": "available", "assessment": "README найден.",
+                                     "availability": "available",
                                      "positive_finding_ids": [],
                                      "problem_finding_ids": [], "evidence_refs": ["doc:readme"]}]
                                   if detail != "brief" else []),

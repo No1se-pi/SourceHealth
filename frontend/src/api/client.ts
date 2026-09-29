@@ -34,7 +34,7 @@ export interface CategoryFinding { id: string; category: string; kind: 'positive
 export interface AISummaryResult {
   schema_version: 'ai-report-v2'; executive_summary: string;
   category_analysis: Array<{ category: string; score: number | null; availability: string;
-    assessment: string; positive_finding_ids: string[]; problem_finding_ids: string[];
+    positive_finding_ids: string[]; problem_finding_ids: string[];
     evidence_refs: string[] }>;
   category_findings: CategoryFinding[];
   strengths: GroundedStatement[];

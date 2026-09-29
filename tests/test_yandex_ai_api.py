@@ -112,6 +112,10 @@ class AISummaryAPITests(unittest.TestCase):
             _cache_key(self.analysis_id, "pro", "brief"),
             _cache_key(self.analysis_id, "pro", "expert"),
         )
+        self.assertNotEqual(
+            _cache_key(self.analysis_id, "flash", "brief"),
+            _cache_key(self.analysis_id, "pro", "brief"),
+        )
 
     def test_authentication_and_terminal_status_are_required(self):
         self.app.state.auth.current_user.return_value = None

@@ -29,7 +29,7 @@ OAuth данные и другие секреты. Checks с `NO_DATA`/`SOURCE_U
 Структура пригодна для последующего Markdown/PDF/DOCX export без изменения смысла:
 
 - `executive_summary`;
-- `category_analysis[]`: категория, точная сохранённая оценка и availability, assessment и IDs findings;
+- `category_analysis[]`: категория, точная сохранённая оценка и availability, canonical evidence и IDs findings;
 - `category_findings[]`: отдельные positive/problem утверждения с категорией и обязательными evidence refs;
 - `strengths[]`, `risks[]`;
 - `actions[]`: title, priority, why, action, implementation steps, expected result и grounding IDs;
@@ -41,6 +41,8 @@ OAuth данные и другие секреты. Checks с `NO_DATA`/`SOURCE_U
 по их локальным ID и не создаёт новые действия.
 `validate_ai_output()` отклоняет неизвестные IDs, изменение score/availability, утверждения по
 недоступной категории, незаземлённые actions и превышение depth budget.
+В `category_analysis` нет свободного модельного текста: все фактические утверждения категории живут
+только в `category_findings[]` и имеют обязательные category-scoped evidence refs.
 
 ## Бюджеты
 

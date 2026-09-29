@@ -472,7 +472,7 @@ class AIContractsTests(unittest.TestCase):
         context = build_ai_context(self.raw_report, "expert")
         categories = [GroundedCategoryAnalysis(
             category=category.name, score=category.score, availability=category.availability,
-            assessment="Grounded assessment.", evidence_refs=category.evidence_refs,
+            evidence_refs=category.evidence_refs,
         ) for category in context.categories]
         for detail in ("detailed", "expert"):
             with self.subTest(detail=detail):
@@ -521,6 +521,40 @@ class AIContractsTests(unittest.TestCase):
                 text="README exists.", evidence_refs=[],
             )
 
+    def test_category_analysis_has_no_free_prose_field(self):
+        self.assertNotIn("assessment", GroundedCategoryAnalysis.model_fields)
+        with self.assertRaises(ValidationError):
+            GroundedCategoryAnalysis(
+                category="documentation", score=90, availability="available",
+                evidence_refs=["doc:readme"], assessment="Unverified prose.",
+            )
+
+    def test_category_finding_rejects_unknown_and_cross_category_evidence(self):
+        context = build_ai_context(self.raw_report, "detailed")
+        for evidence_ref in ("unknown:evidence", "ci:pipeline"):
+            with self.subTest(evidence_ref=evidence_ref):
+                result = AISummaryResult(
+                    executive_summary="Summary",
+                    category_findings=[GroundedCategoryFinding(
+                        id="finding-1", category="documentation", kind="positive",
+                        text="Claim.", evidence_refs=[evidence_ref],
+                    )],
+                )
+                with self.assertRaisesRegex(AIValidationError, "category_finding_evidence_mismatch"):
+                    validate_ai_output(context, result)
+
+    def test_duplicate_category_finding_ids_are_rejected(self):
+        context = build_ai_context(self.raw_report, "detailed")
+        result = AISummaryResult(
+            executive_summary="Summary",
+            category_findings=[GroundedCategoryFinding(
+                id="finding-1", category="documentation", kind=kind,
+                text="Claim.", evidence_refs=["doc:readme"],
+            ) for kind in ("positive", "problem")],
+        )
+        with self.assertRaisesRegex(AIValidationError, "duplicate_category_finding_id"):
+            validate_ai_output(context, result)
+
     def test_category_finding_cannot_use_no_data_evidence(self):
         report = deepcopy(self.raw_report)
         report["category_scores"]["security"] = {
@@ -542,8 +576,25 @@ class AIContractsTests(unittest.TestCase):
         context = build_ai_context(self.raw_report, "detailed")
         categories = [GroundedCategoryAnalysis(
             category=category.name, score=category.score, availability=category.availability,
-            assessment="Grounded assessment.", evidence_refs=category.evidence_refs,
+            evidence_refs=category.evidence_refs,
             positive_finding_ids=["finding-1"] if category.name == "cicd" else [],
+        ) for category in context.categories]
+        result = AISummaryResult(
+            executive_summary="Summary", category_analysis=categories,
+            category_findings=[GroundedCategoryFinding(
+                id="finding-1", category="documentation", kind="positive",
+                text="README exists.", evidence_refs=["doc:readme"],
+            )],
+        )
+        with self.assertRaisesRegex(AIValidationError, "category_finding_mismatch"):
+            validate_ai_output(context, result, "detailed")
+
+    def test_category_finding_kind_link_must_match(self):
+        context = build_ai_context(self.raw_report, "detailed")
+        categories = [GroundedCategoryAnalysis(
+            category=category.name, score=category.score, availability=category.availability,
+            evidence_refs=category.evidence_refs,
+            problem_finding_ids=["finding-1"] if category.name == "documentation" else [],
         ) for category in context.categories]
         result = AISummaryResult(
             executive_summary="Summary", category_analysis=categories,

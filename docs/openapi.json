@@ -5521,11 +5521,6 @@
             "type": "string",
             "title": "Availability"
           },
-          "assessment": {
-            "type": "string",
-            "maxLength": 3000,
-            "title": "Assessment"
-          },
           "positive_finding_ids": {
             "items": {
               "type": "string"
@@ -5555,8 +5550,7 @@
         "type": "object",
         "required": [
           "category",
-          "availability",
-          "assessment"
+          "availability"
         ],
         "title": "GroundedCategoryAnalysis"
       },
