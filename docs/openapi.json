@@ -4324,7 +4324,6 @@
           },
           "grounding_validated": {
             "type": "boolean",
-            "const": true,
             "title": "Grounding Validated",
             "default": true
           },
@@ -4334,6 +4333,15 @@
           },
           "summary": {
             "$ref": "#/components/schemas/AISummaryResult"
+          },
+          "grounding_status": {
+            "type": "string",
+            "enum": [
+              "grounded",
+              "warning"
+            ],
+            "title": "Grounding Status",
+            "default": "grounded"
           },
           "detail": {
             "type": "string",

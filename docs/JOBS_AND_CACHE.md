@@ -95,6 +95,12 @@ dispatch recovery. Compose scheduler — one-shot profile, не скрытый l
 - `code-v1` → очередь `analysis-code` → отдельный `worker-code` на trusted Linux host/VM.
 - `mvp-v1` → та же `analysis-code` → полный analytics batch с `mvp-score-v1.2`.
 
+Dispatcher предпочитает `AnalysisRun.trigger` в порядке `manual`, `refresh`, затем
+`scheduled/system`, сохраняя FIFO внутри класса. Для уже заполненной RQ очереди manual/refresh jobs
+атомарно перемещаются перед background backlog в той же очереди; относительный порядок background
+jobs и сами jobs сохраняются. Это preference исполнения trigger, а не отдельная архитектура очередей:
+queue name по profile, single-flight, advisory locks и topology workers не меняются.
+
 Настройка `ANALYSIS_PROFILE` применяется при создании run; queued run сохраняет свой
 профиль даже после перезапуска API с другой настройкой. Worker читает профиль из БД.
 Code worker требует `CODE_RUNTIME_ENABLED=true`; если runtime недоступен во время job,

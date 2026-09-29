@@ -52,9 +52,9 @@ export const ComparePage: React.FC<ComparePageProps> = ({ comparison: propCompar
   }, [propComparison, searchParams]);
 
   return (
-    <main className="container" style={{ padding: '24px 16px' }}>
-      <h1>Сравнение репозиториев</h1>
-      <p style={{ color: 'var(--color-text-secondary)', marginBottom: 24 }}>
+    <main className="container compare-page">
+      <div className="compare-page__heading"><span>СРАВНЕНИЕ</span><h1>Репозитории рядом</h1></div>
+      <p className="compare-page__lead">
         Health, покрытие и шесть категорий из уже сохранённых результатов.
       </p>
 

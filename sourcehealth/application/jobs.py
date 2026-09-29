@@ -11,7 +11,7 @@ from redis.exceptions import LockError
 from rq import Queue
 from rq.exceptions import DuplicateJobError, NoSuchJobError
 from rq.job import Job
-from sqlalchemy import select, text
+from sqlalchemy import case, select, text
 
 from sourcehealth.auth.service import AuthService
 from sourcehealth.auth.sourcecraft import SourceCraftConnection
@@ -61,11 +61,18 @@ def queue_name(profile: str) -> str:
 
 def dispatch_pending(sessions, redis: Redis, timeout: int = 600) -> int:
     """Коммит queued уже существует. Повторная доставка безопасна для execute_analysis."""
+    priority = case(
+        (AnalysisRun.trigger == "manual", 0),
+        (AnalysisRun.trigger == "refresh", 1),
+        else_=2,
+    )
     with sessions() as db:
-        rows = list(db.execute(select(AnalysisRun.id, AnalysisRun.profile).where(AnalysisRun.status == "queued")
-                               .order_by(AnalysisRun.queued_at).limit(100)))
+        rows = list(db.execute(select(AnalysisRun.id, AnalysisRun.profile, AnalysisRun.trigger)
+                               .where(AnalysisRun.status == "queued")
+                               .order_by(priority, AnalysisRun.queued_at, AnalysisRun.id).limit(100)))
     count = 0
-    for run_id, profile in rows:
+    priority_jobs: dict[str, list[str]] = {}
+    for run_id, profile, trigger in rows:
         queue = Queue(queue_name(profile), connection=redis)
         job_id = str(run_id)
         lock = redis.lock(f"sourcehealth:dispatch:{job_id}", timeout=30, blocking_timeout=0)
@@ -86,7 +93,8 @@ def dispatch_pending(sessions, redis: Redis, timeout: int = 600) -> int:
                 pass
             try:
                 queue.enqueue(execute_analysis, job_id, job_id=job_id, job_timeout=timeout,
-                              result_ttl=0, failure_ttl=86400, unique=True)
+                              result_ttl=0, failure_ttl=86400, unique=True,
+                              at_front=trigger in {"manual", "refresh"})
                 count += 1
             except DuplicateJobError:
                 pass
@@ -95,7 +103,23 @@ def dispatch_pending(sessions, redis: Redis, timeout: int = 600) -> int:
                 lock.release()
             except LockError:
                 pass
+        if trigger in {"manual", "refresh"}:
+            priority_jobs.setdefault(queue.name, []).append(job_id)
+    for name, ordered_ids in priority_jobs.items():
+        _order_priority_jobs(Queue(name, connection=redis), ordered_ids)
     return count
+
+
+def _order_priority_jobs(queue: Queue, ordered_ids: list[str]) -> None:
+    """Atomically keep manual/refresh FIFO ahead of an already-dispatched backlog."""
+    script = """
+    for i = 1, #ARGV do
+      if redis.call('LREM', KEYS[1], 1, ARGV[i]) > 0 then
+        redis.call('LPUSH', KEYS[1], ARGV[i])
+      end
+    end
+    """
+    queue.connection.eval(script, 1, queue.key, *reversed(ordered_ids))
 
 
 def lock_key(analysis_id: UUID) -> int:

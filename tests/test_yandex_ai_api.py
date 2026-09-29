@@ -86,6 +86,17 @@ class AISummaryAPITests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["detail"], "detailed")
         self.assertEqual(response.json()["summary"]["schema_version"], "ai-report-v2")
+        self.assertEqual(response.json()["grounding_status"], "grounded")
+        self.assertTrue(response.json()["grounding_validated"])
+
+    def test_grounding_warning_keeps_ai_report_but_legacy_endpoint_stays_strict(self):
+        self.app.state.ai_provider.last_grounding_status = "warning"
+        response = self.post_report()
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["grounding_status"], "warning")
+        self.assertFalse(response.json()["grounding_validated"])
+        self.redis.get.return_value = None
+        self.assertEqual(self.post().status_code, 503)
 
     def test_second_same_depth_request_uses_cache(self):
         first = self.post_report({"model": "lite", "detail": "detailed"})

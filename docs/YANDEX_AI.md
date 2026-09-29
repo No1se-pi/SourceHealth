@@ -50,3 +50,11 @@ failure, не показывает raw provider body и всегда предл�
 
 Depth-aware timeout: 45/75/120 секунд для brief/detailed/expert. Completion ceilings:
 3 000/6 000/14 000 tokens. `YANDEX_AI_TIMEOUT` остаётся нижней границей операционного timeout.
+
+## Grounding warning
+
+`ai-report-v2` возвращает `grounding_status: grounded|warning`. После одной неудачной repair-попытки
+структурно корректный ответ сохраняется и показывается со статусом `warning`,
+`grounding_validated=false` и явным предупреждением. Health, category score, availability и category
+evidence принудительно берутся из детерминированного контекста SourceHealth. Невалидный JSON/schema
+и provider failure остаются ошибками. Замороженный `ai-summary-v1` сохраняет прежнее строгое поведение.

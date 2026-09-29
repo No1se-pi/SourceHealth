@@ -525,6 +525,67 @@ class SafeConcurrencyTests(unittest.TestCase):
             db.execute(delete(AnalysisRun).where(AnalysisRun.repository_id.in_(repos)))
             db.execute(delete(Repository).where(Repository.id.in_(repos)))
 
+    def test_13b_manual_runs_precede_dispatched_background_backlog_and_keep_fifo(self):
+        with self.sessions.begin() as db:
+            db.execute(delete(AnalysisRun).where(AnalysisRun.status == "queued"))
+        repo_ids, scheduled_ids, manual_ids = [], [], []
+        base = datetime.now(UTC) - timedelta(hours=2)
+        with self.sessions.begin() as db:
+            for i in range(100):
+                repo = Repository(
+                    organization_slug="priority",
+                    repository_slug=f"repo-{uuid4().hex[:8]}",
+                    canonical_url=f"https://sourcecraft.dev/priority/repo-{uuid4().hex[:8]}",
+                    visibility="public",
+                )
+                db.add(repo)
+                db.flush()
+                repo_ids.append(repo.id)
+                run = AnalysisRun(
+                    repository_id=repo.id, trigger="scheduled", profile="mvp-v1", status="queued",
+                    fingerprint=f"priority-{i}", queued_at=base + timedelta(seconds=i),
+                )
+                db.add(run)
+                db.flush()
+                scheduled_ids.append(str(run.id))
+
+        queue = Queue("analysis-code", connection=self.redis)
+        queue.empty()
+        self.assertEqual(dispatch_pending(self.sessions, self.redis), 100)
+        self.assertEqual(queue.job_ids, scheduled_ids)
+
+        with self.sessions.begin() as db:
+            for i in range(2):
+                repo = Repository(
+                    organization_slug="priority",
+                    repository_slug=f"manual-{uuid4().hex[:8]}",
+                    canonical_url=f"https://sourcecraft.dev/priority/manual-{uuid4().hex[:8]}",
+                    visibility="public",
+                )
+                db.add(repo)
+                db.flush()
+                repo_ids.append(repo.id)
+                run = AnalysisRun(
+                    repository_id=repo.id, trigger="manual", profile="mvp-v1", status="queued",
+                    fingerprint=f"priority-manual-{i}", queued_at=base + timedelta(minutes=30, seconds=i),
+                )
+                db.add(run)
+                db.flush()
+                manual_ids.append(str(run.id))
+
+        self.assertEqual(dispatch_pending(self.sessions, self.redis), 2)
+        self.assertEqual(queue.job_ids[:2], manual_ids)
+        self.assertEqual(queue.job_ids[2:], scheduled_ids)
+        self.assertEqual(len(queue.job_ids), 102)
+        with self.sessions() as db:
+            self.assertEqual(db.scalar(select(func.count()).select_from(AnalysisRun).where(
+                AnalysisRun.status == "queued", AnalysisRun.trigger == "scheduled")), 100)
+
+        queue.empty()
+        with self.sessions.begin() as db:
+            db.execute(delete(AnalysisRun).where(AnalysisRun.repository_id.in_(repo_ids)))
+            db.execute(delete(Repository).where(Repository.id.in_(repo_ids)))
+
     # 14. one failed job does not affect another
     def test_14_failure_isolation_between_concurrent_jobs(self):
         ref_fail = RepositoryRef.from_url(f"https://sourcecraft.dev/test/fail-{uuid4().hex[:8]}", visibility="public")
