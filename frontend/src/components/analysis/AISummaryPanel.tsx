@@ -81,8 +81,12 @@ export const AISummaryPanel: React.FC<{ analysisId: string }> = ({ analysisId })
     </button>
     {Boolean(error) && <ErrorState error={error} title="Не удалось сформировать AI-разбор" onRetry={() => void generate()} />}
     {result && <article className="ai-result" aria-live="polite">
+      {result.grounding_status === 'warning' && <div className="ai-grounding-warning" role="status">
+        <strong>AI-разбор может содержать неточности.</strong>
+        <span>Сверяйте выводы с исходными метриками и подтверждающими фактами SourceHealth.</span>
+      </div>}
       <div className="ai-result__meta">{result.model_name} · {DETAILS.find((item) => item.id === result.detail)?.label}
-        {' · '}{result.cached ? 'из кеша' : 'новый'} · факты проверены</div>
+        {' · '}{result.cached ? 'из кеша' : 'новый'} · {result.grounding_status === 'grounded' ? 'факты проверены' : 'требует проверки'}</div>
       <section><h3>Резюме</h3><p className="ai-result__lead">{result.summary.executive_summary}</p></section>
       {result.summary.category_analysis.length > 0 && <section><h3>Разбор категорий</h3>
         <div className="ai-categories">{result.summary.category_analysis.map((category) => <article key={category.category} className="ai-category">

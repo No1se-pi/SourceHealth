@@ -172,17 +172,35 @@ class YandexProviderTests(unittest.TestCase):
         self.assertTrue(any("ai_grounding_failed" in line for line in logs.output))
         self.assertTrue(any("ai_grounding_repair_succeeded" in line for line in logs.output))
 
-    def test_second_grounding_failure_stops_after_two_calls(self):
+    def test_category_score_availability_and_evidence_remain_backend_owned(self):
+        response = valid_response(detail="detailed")
+        body = response.json()
+        payload = json.loads(body["choices"][0]["message"]["content"])
+        payload["category_analysis"][0].update({
+            "score": 1, "availability": "partial", "evidence_refs": ["invented-evidence"],
+        })
+        response = httpx.Response(200, json={"choices": [{"message": {
+            "content": json.dumps(payload, ensure_ascii=False),
+        }}]}, request=httpx.Request("POST", "https://example.test"))
+
+        result = YandexAISummaryProvider._parse_and_validate(response, context(), "detailed")
+
+        category = result.category_analysis[0]
+        self.assertEqual(category.score, 80)
+        self.assertEqual(category.availability, "available")
+        self.assertEqual(category.evidence_refs, ["doc:readme"])
+
+    def test_second_grounding_failure_returns_structured_result_with_warning(self):
         client = Mock()
         client.post.return_value = grounded_response(recommendation="invented-rec")
 
         with self.assertLogs("sourcehealth.ai.yandex", level="WARNING") as logs:
-            with self.assertRaisesRegex(YandexAIError, "ai_grounding_failed"):
-                YandexAISummaryProvider("unit-key", "folder", client=client).summarize(
-                    context(), "lite",
-                )
+            provider = YandexAISummaryProvider("unit-key", "folder", client=client)
+            result = provider.summarize(context(), "lite")
 
         self.assertEqual(client.post.call_count, 2)
+        self.assertEqual(result.schema_version, "ai-report-v2")
+        self.assertEqual(provider.last_grounding_status, "warning")
         self.assertTrue(any("ai_grounding_repair_failed" in line for line in logs.output))
 
     def test_repair_keeps_each_selected_model_and_handles_unknown_recommendation(self):

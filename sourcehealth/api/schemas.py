@@ -218,6 +218,8 @@ class AISummaryResponse(BaseModel):
 
 
 class AIReportResponse(AISummaryResponse):
+    grounding_validated: bool = True
+    grounding_status: Literal["grounded", "warning"] = "grounded"
     detail: Literal["brief", "detailed", "expert"]
     summary: AISummaryResult
 

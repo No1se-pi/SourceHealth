@@ -82,8 +82,12 @@ def _generate_report(analysis_id: UUID, model: str, detail: str, request: Reques
             "component": "ai", "event": exc.code, "mode": model, "detail": detail,
         })
         raise ServiceError(exc.code, exc.status) from None
+    grounding_status = getattr(provider, "last_grounding_status", "grounded")
+    if grounding_status not in {"grounded", "warning"}:
+        grounding_status = "grounded"
     response = AIReportResponse(
         mode=model, detail=detail, model_name=MODEL_NAMES[model], cached=False, summary=result,
+        grounding_status=grounding_status, grounding_validated=grounding_status == "grounded",
     )
     try:
         redis.set(key, response.model_dump_json(), ex=settings.yandex_ai_cache_ttl)
@@ -97,6 +101,8 @@ def _legacy_statement(statement) -> LegacyGroundedStatement:
 
 
 def _legacy_response(report: AIReportResponse) -> AISummaryResponse:
+    if report.grounding_status != "grounded":
+        raise ServiceError("ai_grounding_failed", 503)
     summary = report.summary
     legacy = LegacyAISummaryResult(
         executive_summary=summary.executive_summary[:1000],

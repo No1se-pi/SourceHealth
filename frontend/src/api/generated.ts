@@ -495,12 +495,17 @@ export interface components {
             /**
              * Grounding Validated
              * @default true
-             * @constant
              */
-            grounding_validated: true;
+            grounding_validated: boolean;
             /** Cached */
             cached: boolean;
             summary: components["schemas"]["AISummaryResult"];
+            /**
+             * Grounding Status
+             * @default grounded
+             * @enum {string}
+             */
+            grounding_status: "grounded" | "warning";
             /**
              * Detail
              * @enum {string}

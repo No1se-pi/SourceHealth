@@ -37,6 +37,12 @@ REPAIR_INSTRUCTION = """Предыдущий ответ нарушил grounding
 Если утверждение нельзя обосновать — пропусти его.
 NO_DATA указывай только в limitations.
 Сохрани требуемую структуру отчёта и глубину."""
+GROUNDING_WARNING_CODES = {
+    "missing_statement_evidence", "unknown_evidence_ref", "unknown_recommendation_id",
+    "unavailable_category_assertion", "category_finding_evidence_mismatch",
+    "missing_action_grounding", "unknown_category", "category_finding_mismatch",
+    "ungrounded_roadmap_item",
+}
 
 
 class YandexAIError(RuntimeError):
@@ -51,6 +57,7 @@ class YandexAISummaryProvider:
     def __init__(self, api_key: str, folder_id: str, *, timeout: float = 45, client=None):
         self.api_key, self.folder_id, self.timeout, self.client = api_key, folder_id, timeout, client
         self.last_attempts = 0
+        self.last_grounding_status: Literal["grounded", "warning"] = "grounded"
 
     def summarize(self, context: AISummaryContext, mode: AIModelMode,
                   detail: AIReportDetail = "brief") -> AISummaryResult:
@@ -69,6 +76,7 @@ class YandexAISummaryProvider:
             }},
         }
         self.last_attempts = 0
+        self.last_grounding_status = "grounded"
         requests_left = MAX_PROVIDER_CALLS
         repair_reason = None
         for generation in range(2):
@@ -78,7 +86,8 @@ class YandexAISummaryProvider:
             )
             requests_left -= used
             try:
-                result = self._parse_and_validate(response, context, detail)
+                result = self._parse_response(response, context, detail)
+                validate_ai_output(context, result, detail)
                 if generation:
                     logger.info("ai_grounding_repair_succeeded", extra={
                         "component": "ai", "event": "ai_grounding_repair_succeeded", "mode": mode,
@@ -93,7 +102,10 @@ class YandexAISummaryProvider:
                     "attempt": self.last_attempts, "reason": exc.code,
                 })
                 if generation or requests_left == 0:
-                    raise YandexAIError("ai_grounding_failed") from None
+                    if exc.code not in GROUNDING_WARNING_CODES:
+                        raise YandexAIError("ai_grounding_failed") from None
+                    self.last_grounding_status = "warning"
+                    return result
                 repair_reason = exc.code
                 payload = dict(payload)
                 payload["messages"] = [
@@ -103,8 +115,8 @@ class YandexAISummaryProvider:
         raise YandexAIError("ai_grounding_failed")
 
     @staticmethod
-    def _parse_and_validate(response, context: AISummaryContext,
-                            detail: AIReportDetail = "brief") -> AISummaryResult:
+    def _parse_response(response, context: AISummaryContext,
+                        detail: AIReportDetail = "brief") -> AISummaryResult:
         try:
             text = response.json()["choices"][0]["message"]["content"]
             if len(text) > DETAIL_PROFILES[detail].hard_chars:
@@ -125,18 +137,27 @@ class YandexAISummaryProvider:
                         continue
                     seen_categories.add(category["category"])
                     canonical = canonical_categories[category["category"]]
-                    category.setdefault("score", canonical.score)
-                    category.setdefault("availability", canonical.availability)
-                    category.setdefault("evidence_refs", canonical.evidence_refs)
+                    # Deterministic values remain backend-owned even when the model
+                    # returns a structurally valid but insufficiently grounded report.
+                    category["score"] = canonical.score
+                    category["availability"] = canonical.availability
+                    category["evidence_refs"] = canonical.evidence_refs
                 deduplicated_categories.append(category)
             payload["category_analysis"] = deduplicated_categories
             result = AISummaryResult.model_validate(payload)
-            validate_ai_output(context, result, detail)
             if len(result.model_dump_json()) > DETAIL_PROFILES[detail].hard_chars:
                 raise YandexAIError("ai_response_too_large")
             return result
         except (KeyError, IndexError, TypeError, json.JSONDecodeError, ValidationError):
             raise YandexAIError("ai_invalid_response") from None
+
+    @staticmethod
+    def _parse_and_validate(response, context: AISummaryContext,
+                            detail: AIReportDetail = "brief") -> AISummaryResult:
+        """Compatibility helper used by focused contract tests."""
+        result = YandexAISummaryProvider._parse_response(response, context, detail)
+        validate_ai_output(context, result, detail)
+        return result
 
     @staticmethod
     def _retry_after(response, fallback: float) -> float:

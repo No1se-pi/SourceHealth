@@ -47,7 +47,8 @@ export interface AISummaryResult {
 }
 export interface AISummaryResponse {
   provider: 'yandex-ai-studio'; mode: AISummaryMode; detail: AISummaryDetail; model_name: string;
-  grounding_validated: true; cached: boolean; summary: AISummaryResult;
+  grounding_validated: boolean; grounding_status: 'grounded' | 'warning';
+  cached: boolean; summary: AISummaryResult;
 }
 
 export class ApiError extends Error {
