@@ -2,11 +2,14 @@
 
 import argparse
 import json
+import logging
 import os
 
-from sourcehealth.integrations.sourcecraft.client import SourceCraftClient
+from sourcehealth.integrations.sourcecraft.client import SourceCraftClient, SourceCraftError
 from sourcehealth.logging_config import configure_logging
 from sourcehealth.settings import Settings
+
+LOG = logging.getLogger(__name__)
 
 
 class SafeParser(argparse.ArgumentParser):
@@ -21,6 +24,25 @@ def worker_class(platform=None):
     from rq import SimpleWorker, Worker
 
     return SimpleWorker if (platform or os.name) == "nt" else Worker
+
+
+def _run_catalog_maintenance(command, catalog_sync, enqueue_due=None, dispatch_pending=None):
+    """Keep periodic analysis scheduling independent from expected catalog outages."""
+    if command == "catalog-sync":
+        return catalog_sync()
+    try:
+        result = catalog_sync()
+    except SourceCraftError as exc:
+        LOG.warning("catalog_sync_degraded", extra={
+            "component": "scheduler",
+            "event": "catalog_sync_degraded",
+            "sourcecraft_error_code": exc.code,
+        })
+        result = {"catalog_sync": {"ok": False, "error": exc.code}}
+    scheduled = enqueue_due()
+    result["scheduled"] = len(scheduled)
+    result["dispatched"] = dispatch_pending()
+    return result
 
 
 def main(argv=None):
@@ -107,14 +129,20 @@ def main(argv=None):
         elif args.command in {"catalog-sync", "maintain"}:
             from sourcehealth.catalog.sync import CatalogSync
 
-            result = CatalogSync(sessions, settings).run()
-            if args.command == "maintain":
+            catalog_sync = CatalogSync(sessions, settings).run
+            if args.command == "catalog-sync":
+                result = _run_catalog_maintenance(args.command, catalog_sync)
+            else:
                 from sourcehealth.auth.service import AuthService
                 from sourcehealth.auth.sourcecraft import SourceCraftConnection
 
-                scheduled = service.enqueue_due(SourceCraftConnection(AuthService(settings, redis, sessions)))
-                result["scheduled"] = len(scheduled)
-                result["dispatched"] = dispatch_pending(sessions, redis, settings.analysis_timeout)
+                connection = SourceCraftConnection(AuthService(settings, redis, sessions))
+                result = _run_catalog_maintenance(
+                    args.command,
+                    catalog_sync,
+                    lambda: service.enqueue_due(connection),
+                    lambda: dispatch_pending(sessions, redis, settings.analysis_timeout),
+                )
             print(json.dumps(result))
         elif args.command == "catalog-reclassify-topics":
             from sourcehealth.catalog.topics import reclassify_catalog_topics
@@ -140,16 +168,28 @@ def main(argv=None):
 
             result = get_catalog_status(sessions)
             print(json.dumps(result, indent=2, ensure_ascii=True))
+        elif args.command == "enqueue-due":
+            recover_abandoned(engine, sessions, settings)
+            from sourcehealth.auth.service import AuthService
+            from sourcehealth.auth.sourcecraft import SourceCraftConnection
+
+            if settings.catalog_sync_enabled:
+                from sourcehealth.catalog.sync import CatalogSync
+
+                catalog_sync = CatalogSync(sessions, settings).run
+            else:
+                def catalog_sync():
+                    return {"skipped": True, "reason": "catalog_sync_disabled"}
+            connection = SourceCraftConnection(AuthService(settings, redis, sessions))
+            result = _run_catalog_maintenance(
+                args.command,
+                catalog_sync,
+                lambda: service.enqueue_due(connection),
+                lambda: dispatch_pending(sessions, redis, settings.analysis_timeout),
+            )
+            print(f"enqueued={result['dispatched']}")
         else:
             recover_abandoned(engine, sessions, settings)
-            if args.command == "enqueue-due":
-                if settings.catalog_sync_enabled:
-                    from sourcehealth.catalog.sync import CatalogSync
-                    CatalogSync(sessions, settings).run()
-                from sourcehealth.auth.service import AuthService
-                from sourcehealth.auth.sourcecraft import SourceCraftConnection
-
-                service.enqueue_due(SourceCraftConnection(AuthService(settings, redis, sessions)))
             print(f"enqueued={dispatch_pending(sessions, redis, settings.analysis_timeout)}")
     finally:
         redis.close()
